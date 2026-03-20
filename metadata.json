@@ -1,0 +1,5 @@
+{
+  "name": "ITD Agentic TCP Drafter",
+  "description": "A POC app for drafting temporary traffic control plans.",
+  "requestFramePermissions": []
+}

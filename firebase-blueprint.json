@@ -1,0 +1,98 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "A user of the ITD Agentic CAD Generator",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The user's unique ID"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "The user's email address"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "The user's display name"
+        },
+        "photoURL": {
+          "type": "string",
+          "format": "uri",
+          "description": "The user's profile photo URL"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the user was created"
+        }
+      },
+      "required": ["uid", "email", "createdAt"]
+    },
+    "Plan": {
+      "title": "Plan",
+      "description": "A generated ITD Traffic Control Plan",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The ID of the user who generated the plan"
+        },
+        "operationType": {
+          "type": "string",
+          "description": "The type of operation (e.g., Median Crossover)"
+        },
+        "normalSpeed": {
+          "type": "number",
+          "description": "Normal speed limit in MPH"
+        },
+        "workZoneSpeed": {
+          "type": "number",
+          "description": "Work zone speed limit in MPH"
+        },
+        "laneWidth": {
+          "type": "number",
+          "description": "Lane width in feet"
+        },
+        "startLat": {
+          "type": "number"
+        },
+        "startLng": {
+          "type": "number"
+        },
+        "endLat": {
+          "type": "number"
+        },
+        "endLng": {
+          "type": "number"
+        },
+        "verifiedBlueprint": {
+          "type": "string",
+          "description": "The AI-generated verified math blueprint"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the plan was generated"
+        }
+      },
+      "required": ["userId", "operationType", "normalSpeed", "workZoneSpeed", "laneWidth", "startLat", "startLng", "endLat", "endLng", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/User"
+      },
+      "description": "User profiles"
+    },
+    "/plans/{planId}": {
+      "schema": {
+        "$ref": "#/entities/Plan"
+      },
+      "description": "Generated plans"
+    }
+  }
+}

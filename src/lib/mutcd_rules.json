@@ -1,0 +1,40 @@
+{
+  "taper_formulas": {
+    "high_speed": {
+      "condition": ">= 45 mph",
+      "formula": "L = W * S",
+      "description": "L is taper length in feet, W is width of offset in feet, S is posted speed limit or 85th-percentile speed in mph"
+    },
+    "low_speed": {
+      "condition": "<= 40 mph",
+      "formula": "L = W * S^2 / 60",
+      "description": "L is taper length in feet, W is width of offset in feet, S is posted speed limit or 85th-percentile speed in mph"
+    }
+  },
+  "advance_warning_sign_spacing": {
+    "urban_low_speed": {
+      "condition": "<= 40 mph",
+      "A": 100,
+      "B": 100,
+      "C": 100
+    },
+    "urban_high_speed": {
+      "condition": "> 40 mph",
+      "A": 350,
+      "B": 350,
+      "C": 350
+    },
+    "rural": {
+      "condition": "all speeds",
+      "A": 500,
+      "B": 500,
+      "C": 500
+    },
+    "expressway_freeway": {
+      "condition": "all speeds",
+      "A": 1000,
+      "B": 1500,
+      "C": 2640
+    }
+  }
+}
