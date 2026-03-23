@@ -1,0 +1,28 @@
+{
+  "name": "itd-tcp-backend",
+  "version": "1.0.0",
+  "description": "ITD Agentic TCP Drafter - Express Backend",
+  "main": "server.ts",
+  "scripts": {
+    "dev": "nodemon --exec tsx server.ts",
+    "start": "tsx server.ts"
+  },
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "@google/genai": "^1.46.0",
+    "archiver": "^7.0.1",
+    "dotenv": "^17.3.1",
+    "dxf-writer": "^1.18.4",
+    "express": "^5.2.1",
+    "pdfkit": "^0.18.0"
+  },
+  "devDependencies": {
+    "@types/archiver": "^7.0.0",
+    "@types/express": "^5.0.6",
+    "@types/node": "^25.5.0",
+    "nodemon": "^3.1.14",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
+}

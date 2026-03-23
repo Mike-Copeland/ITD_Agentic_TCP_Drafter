@@ -31,6 +31,7 @@ export default function App() {
 
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [areaAnalysis, setAreaAnalysis] = useState<string | null>(null);
+  const mapCaptureRef = useRef<(() => string | null) | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
@@ -71,21 +72,21 @@ export default function App() {
         }
 
         if (!speedLimitFound) {
-          const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || (import.meta as any).env.VITE_GEMINI_API_KEY });
-          const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: `What is the standard posted highway speed limit at coordinates ${coords.lat}, ${coords.lng} in Idaho? Use Google Search. Return ONLY the integer number in MPH. If you cannot find it, return 65.`,
-            config: { tools: [{ googleSearch: {} }] }
-          });
-
-          // Extract just the numbers from the AI's response
-          const speedStr = response.text?.replace(/[^0-9]/g, '') || '65';
-          const speed = parseInt(speedStr, 10);
-
-          if (!isNaN(speed) && speed > 0 && speed <= 85) {
-            setNormalSpeed(speed);
-            // Smart feature: Automatically drop the work zone speed by 10 MPH from the normal speed
-            setWorkZoneSpeed(speed >= 55 ? speed - 10 : speed - 5);
+          // Roads API speed limits require premium tier — use Gemini Flash with coordinates
+          try {
+            const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || (import.meta as any).env.VITE_GEMINI_API_KEY });
+            const response = await ai.models.generateContent({
+              model: 'gemini-3-flash-preview',
+              contents: `What is the posted speed limit on the road nearest to GPS ${coords.lat}, ${coords.lng} in Idaho? Idaho state highways are typically 55-65 MPH, US highways 55-65 MPH, interstates 65-80 MPH, local roads 25-45 MPH. Return ONLY the integer MPH.`,
+            });
+            const speedStr = response.text?.replace(/[^0-9]/g, '') || '';
+            const speed = parseInt(speedStr, 10);
+            if (!isNaN(speed) && speed > 0 && speed <= 85) {
+              setNormalSpeed(speed);
+              setWorkZoneSpeed(speed >= 55 ? speed - 10 : speed - 5);
+            }
+          } catch (flashErr) {
+            console.log("Speed limit fallback failed, keeping default.", flashErr);
           }
         }
       } catch (e) {
@@ -101,7 +102,6 @@ export default function App() {
   };
 
   const handleAnalyzeArea = async () => {
-    // Require BOTH pins so the AI knows the stretch of road
     if (!startCoords || !endCoords) {
       setError('Please drop BOTH Start and End pins on the map to analyze the route segment.');
       return null;
@@ -111,36 +111,52 @@ export default function App() {
     setAreaAnalysis(null);
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || (import.meta as any).env.VITE_GEMINI_API_KEY });
-
-      const prompt = `Analyze the highway route between Start Coordinates (${startCoords.lat}, ${startCoords.lng}) and End Coordinates (${endCoords.lat}, ${endCoords.lng}) in Idaho.
-
-      Use your Google Search tool to look up these coordinates and identify the location.
-
-      1. Identify the specific Highway Name or Route Number connecting these points.
-      2. Analyze the geographical terrain (e.g., mountains, canyons, rivers, curves). Will these physical features severely restrict sight distance or shoulder width for placing advance warning signs?
-      3. DO NOT guess traffic volume based on nearby commercial businesses. Rural highways in Idaho are often major, high-speed arterial corridors. 
-      4. Add a strict disclaimer reminding the designer to "Verify AADT (Annual Average Daily Traffic) and commercial truck percentages with ITD historical data."
-
-      Keep the response formatted cleanly with bullet points, brief, and highly relevant to Temporary Traffic Control planning.`;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.1-pro-preview', // Upgraded to 3.1 Pro for deeper reasoning
-        contents: prompt,
-        config: {
-          tools: [{ googleSearch: {} }] // Using Google Search instead of Google Maps Places
-        }
+      // Call our backend which fetches from Google Maps APIs (Directions, Elevation, Reverse Geocoding)
+      const res = await fetch('/api/site-context', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ startCoords, endCoords, normalSpeed })
       });
 
-      const text = response.text || 'No analysis available.';
+      if (!res.ok) throw new Error('Failed to fetch site context from backend.');
+      const data = await res.json();
+
+      // Format the API data into readable context for the engineer
+      const lines: string[] = [];
+
+      if (data.roadName) lines.push(`Road: ${data.roadName}`);
+      if (data.roadContext) lines.push(data.roadContext);
+      lines.push('');
+      lines.push(`Elevation & Grade: ${data.elevationContext || 'Unavailable'}`);
+      if (data.approachGradeContext) lines.push(`Grade Warning: ${data.approachGradeContext}`);
+      lines.push('');
+      if (data.crossStreets?.length > 0) {
+        lines.push(`Cross-Streets/Turns Detected:`);
+        data.crossStreets.forEach((cs: string) => lines.push(`  - ${cs}`));
+      } else {
+        lines.push('No cross-streets or intersections detected along route.');
+      }
+
+      // ITD authoritative data
+      if (data.itdContext) {
+        lines.push('');
+        lines.push(data.itdContext);
+      }
+
+      // Auto-populate speed and lane width from ITD
+      if (data.itdSpeedLimit) {
+        setNormalSpeed(data.itdSpeedLimit);
+        setWorkZoneSpeed(data.itdSpeedLimit >= 55 ? data.itdSpeedLimit - 10 : data.itdSpeedLimit - 5);
+      }
+      if (data.itdLaneWidth) {
+        setLaneWidth(data.itdLaneWidth);
+      }
+
+      const text = lines.join('\n');
       setAreaAnalysis(text);
       return text;
     } catch (err: any) {
-      if (err.message?.includes('429') || err.message?.includes('RESOURCE_EXHAUSTED')) {
-        setError('Rate limit exceeded. The default AI Studio API key only allows a few requests per minute for Pro models. Please wait a minute and try again, or add your own GEMINI_API_KEY in the Settings -> Secrets menu.');
-      } else {
-        setError(err.message);
-      }
+      setError(err.message || 'Area analysis failed.');
       return null;
     } finally {
       setAnalysisLoading(false);
@@ -153,11 +169,9 @@ export default function App() {
       return;
     }
 
-    let currentContext = areaAnalysis;
-    if (!currentContext || currentContext.trim() === '') {
-      await handleAnalyzeArea();
-      currentContext = areaAnalysis; // Will catch on next render, but we proceed anyway
-    }
+    // Use whatever area analysis text is available — don't block generation on it.
+    // The PE Agent still gets elevation, speed, and MUTCD rules from the backend.
+    const currentContext = areaAnalysis || '';
 
     setError(null);
     setVerifiedBlueprint(null);
@@ -180,13 +194,32 @@ export default function App() {
       });
       const contextData = contextRes.ok ? await contextRes.json() : null;
 
+      // Auto-populate from ITD authoritative data if available
+      if (contextData?.itdSpeedLimit && contextData.itdSpeedLimit !== normalSpeed) {
+        setNormalSpeed(contextData.itdSpeedLimit);
+        setWorkZoneSpeed(contextData.itdSpeedLimit >= 55 ? contextData.itdSpeedLimit - 10 : contextData.itdSpeedLimit - 5);
+      }
+      if (contextData?.itdLaneWidth && contextData.itdLaneWidth !== laneWidth) {
+        setLaneWidth(contextData.itdLaneWidth);
+      }
+
+      // Use ITD speed limit for calculations if available
+      const effectiveSpeed = contextData?.itdSpeedLimit || normalSpeed;
+      const effectiveLaneWidth = contextData?.itdLaneWidth || laneWidth;
+
       const elevationContext = contextData?.elevationContext || "Elevation data unavailable.";
       const speedLimitContext = contextData?.speedLimitContext || `User input speed: ${normalSpeed} MPH.`;
+      const roadContext = contextData?.roadContext || '';
+      const approachGradeContext = contextData?.approachGradeContext || '';
+      const itdContext = contextData?.itdContext || '';
 
       const siteContext = `
+        ROAD IDENTIFICATION: ${roadContext || 'Unknown road'}
         GEOGRAPHICAL CONTEXT: ${currentContext || 'None'}
-        ${elevationContext}
+        ELEVATION & GRADE: ${elevationContext}
+        ${approachGradeContext ? `GRADE WARNING: ${approachGradeContext}` : ''}
         ${speedLimitContext}
+        ${itdContext}
       `;
 
       // ---------------------------------------------------------
@@ -195,7 +228,7 @@ export default function App() {
       const ragRes = await fetch('/api/rag', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ operationType, speedLimit: normalSpeed, siteContext: currentContext || '' })
+        body: JSON.stringify({ operationType, speedLimit: effectiveSpeed, siteContext: currentContext || '', laneWidth: effectiveLaneWidth, duration })
       });
       const librarianOutput = ragRes.ok ? await ragRes.json() : { text: 'RAG failed. Rely on standard MUTCD math.', image_base64: null };
       console.log("🏆 RAG ENGINE MATCH:", librarianOutput.text);
@@ -205,11 +238,17 @@ export default function App() {
       // PILLAR 3: PHYSICS-AWARE FACT CHECKING (AGENT 2)
       // ---------------------------------------------------------
       let imageParts: any[] = [];
-      if (contextData?.streetViewBase64 && contextData?.staticMapBase64) {
-        imageParts = [
-          { inlineData: { data: contextData.streetViewBase64, mimeType: "image/jpeg" } },
-          { inlineData: { data: contextData.staticMapBase64, mimeType: "image/jpeg" } }
-        ];
+      // Primary approach Street View (facing toward work zone)
+      if (contextData?.streetViewBase64) {
+        imageParts.push({ inlineData: { data: contextData.streetViewBase64, mimeType: "image/jpeg" } });
+      }
+      // Opposing approach Street View (facing back toward work zone from end pin)
+      if (contextData?.streetViewEndBase64) {
+        imageParts.push({ inlineData: { data: contextData.streetViewEndBase64, mimeType: "image/jpeg" } });
+      }
+      // Satellite image
+      if (contextData?.staticMapBase64) {
+        imageParts.push({ inlineData: { data: contextData.staticMapBase64, mimeType: "image/jpeg" } });
       }
 
       if (librarianOutput.image_base64) {
@@ -218,24 +257,38 @@ export default function App() {
         });
       }
 
+      const crossStreetInfo = contextData?.crossStreets?.length > 0
+        ? `CROSS-STREETS DETECTED: ${contextData.crossStreets.join('; ')}. Consider additional intersection/cross-street signage if these intersections fall within the work zone.`
+        : 'No cross-streets or intersections detected along the route segment.';
+
       const pePrompt = `
         You are a Senior Professional Engineer. Fact-check the MUTCD rules:
         ${librarianOutput.text}
-        
+
         SITE CONTEXT: ${siteContext}
         OPERATION TYPE: ${operationType}
         PROJECT DURATION: ${duration}
-        SPEED: ${normalSpeed} MPH, Lane Width: ${laneWidth} FT
-        
+        SPEED: ${effectiveSpeed} MPH, Lane Width: ${effectiveLaneWidth} FT
+        ${crossStreetInfo}
+
+        IMAGES PROVIDED (in order):
+        ${contextData?.streetViewBase64 ? '- Image 1: Street View from PRIMARY APPROACH (start pin, facing toward work zone)' : ''}
+        ${contextData?.streetViewEndBase64 ? '- Image 2: Street View from OPPOSING APPROACH (end pin, facing back toward work zone)' : ''}
+        ${contextData?.staticMapBase64 ? '- Image 3: Satellite aerial view with route polyline overlay' : ''}
+        ${librarianOutput.image_base64 ? '- MUTCD Typical Application diagram from RAG database' : ''}
+        Analyze the Street View images for: sight distance obstructions, curve severity, shoulder width, guardrails, and terrain features that affect sign placement.
+
         TASKS:
-        1. Calculate Road Bearing (North/South vs East/West).
+        1. Calculate Road Bearing (North/South vs East/West) from the satellite image.
         2. Specify channelizing devices based on ${duration}.
-        3. Calculate advance warning sequence for BOTH approaches (Primary and Opposing). Add PCMS if high-speed/blind curves require it.
+        3. Calculate advance warning sequence for BOTH approaches (Primary and Opposing). You MUST include signs for BOTH approaches. Add PCMS if high-speed/blind curves require it.
         4. Calculate taper (L = W * S for >=45mph) and downstream taper lengths.
-        5. PHYSICS OVERRIDE: If the Elevation data shows a steep downgrade, increase sign spacing by 1.5x.
-        6. TRAFFIC VOLUME OVERRIDE: If the site context indicates a major arterial or high traffic volume, mandate Flagger Control (TA-10) and include 'Flagger Ahead' (W20-7a) for BOTH approaches.
+        5. PHYSICS OVERRIDE: If the GRADE WARNING indicates a steep downgrade on a specific approach, increase that approach's sign spacing by 1.5x.
+        6. TRAFFIC VOLUME OVERRIDE: If the site context indicates a major arterial, US highway, state highway, or high traffic volume, mandate Flagger Control (TA-10) and include 'Flagger Ahead' (W20-7a) for BOTH approaches.
         7. Calculate a downstream taper (50-100 ft).
-        
+
+        IMPORTANT: The opposing_approach array MUST contain at minimum a W20-1 sign. Two-lane two-way roads always require advance warning for BOTH directions.
+
         Output strict JSON matching the schema.
       `;
 
@@ -308,7 +361,17 @@ export default function App() {
           blueprint: blueprintJson,
           startCoords,
           endCoords,
-          staticMapBase64: contextData?.staticMapBase64 || ''
+          staticMapBase64: contextData?.staticMapBase64 || mapCaptureRef.current?.() || '',
+          normalSpeed,
+          workZoneSpeed,
+          laneWidth,
+          operationType,
+          duration,
+          routeDistanceFt: contextData?.routeDistanceFt || 0,
+          roadName: contextData?.roadName || '',
+          positionedCrossStreets: contextData?.positionedCrossStreets || [],
+          itdTerrain: contextData?.itdTerrain || '',
+          itdFuncClass: contextData?.itdFuncClass || ''
         }),
       });
 
@@ -603,7 +666,7 @@ export default function App() {
           animate={{ opacity: 1, x: 0 }}
           className="lg:col-span-8 h-[600px] lg:h-auto relative rounded-2xl overflow-hidden shadow-2xl border border-white/10"
         >
-          <Map startCoords={startCoords} endCoords={endCoords} onPinDrop={handlePinDrop} />
+          <Map startCoords={startCoords} endCoords={endCoords} onPinDrop={handlePinDrop} captureRef={mapCaptureRef} />
 
           <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[400] bg-zinc-900/90 backdrop-blur-md border border-white/10 px-4 py-2 rounded-full shadow-lg pointer-events-none">
             <p className="text-sm font-medium text-zinc-200">
