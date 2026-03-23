@@ -371,7 +371,8 @@ export default function App() {
           roadName: contextData?.roadName || '',
           positionedCrossStreets: contextData?.positionedCrossStreets || [],
           itdTerrain: contextData?.itdTerrain || '',
-          itdFuncClass: contextData?.itdFuncClass || ''
+          itdFuncClass: contextData?.itdFuncClass || '',
+          itdTotalLanes: contextData?.itdTotalLanes || 0
         }),
       });
 

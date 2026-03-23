@@ -164,6 +164,101 @@ function drawSignDiamond(doc: Doc, x: number, y: number, code: string, label: st
   doc.fontSize(6).text(label, x - 45, y + 32, { width: 90, align: 'center' });
 }
 
+// ===================================================================
+// MULTI-LANE ROADWAY DRAWING
+// Draws N lanes with correct edge lines, lane lines, centerline/median
+// Returns { topEdge, bottomEdge, centerY, laneWidth } for positioning
+// ===================================================================
+interface RoadGeometry {
+  topEdge: number;
+  bottomEdge: number;
+  centerY: number;
+  lanePixelW: number;
+  totalPixelH: number;
+  lanes: number;
+}
+
+function drawRoadway(doc: Doc, x1: number, x2: number, centerY: number, ctx: DrawContext): RoadGeometry {
+  const lanes = ctx.totalLanes || 2;
+  // Scale lane widths: for tabloid landscape, ~20px per lane looks good
+  const lanePixelW = lanes <= 3 ? 25 : lanes <= 5 ? 18 : 14;
+  const totalPixelH = lanes * lanePixelW;
+  const topEdge = centerY - totalPixelH / 2;
+  const bottomEdge = centerY + totalPixelH / 2;
+
+  // Edge lines (solid, thick)
+  doc.lineWidth(2).strokeColor('black');
+  doc.moveTo(x1, topEdge).lineTo(x2, topEdge).stroke();
+  doc.moveTo(x1, bottomEdge).lineTo(x2, bottomEdge).stroke();
+
+  if (lanes <= 2) {
+    // 2-lane: dashed centerline
+    doc.lineWidth(1).dash(8, { space: 8 }).strokeColor('#333');
+    doc.moveTo(x1, centerY).lineTo(x2, centerY).stroke();
+    doc.undash();
+  } else if (lanes === 3 && ctx.hasTWLTL) {
+    // 3-lane with TWLTL: two solid yellow lines with dashed inner
+    const turnTop = centerY - lanePixelW / 2;
+    const turnBot = centerY + lanePixelW / 2;
+    doc.lineWidth(1.5).strokeColor('#CC9900');
+    doc.moveTo(x1, turnTop).lineTo(x2, turnTop).stroke();
+    doc.moveTo(x1, turnBot).lineTo(x2, turnBot).stroke();
+    doc.lineWidth(0.5).dash(6, { space: 6 });
+    doc.moveTo(x1, centerY).lineTo(x2, centerY).stroke();
+    doc.undash();
+    // Label
+    doc.save();
+    doc.fontSize(5).fillColor('#666');
+    doc.text('TWLTL', (x1 + x2) / 2 - 10, centerY - 3, { lineBreak: false });
+    doc.restore();
+  } else if (ctx.isDivided) {
+    // Divided highway: hatched median
+    const medW = lanePixelW * 0.6;
+    doc.lineWidth(1.5).strokeColor('#CC9900');
+    doc.moveTo(x1, centerY - medW / 2).lineTo(x2, centerY - medW / 2).stroke();
+    doc.moveTo(x1, centerY + medW / 2).lineTo(x2, centerY + medW / 2).stroke();
+    // Hatching inside median
+    doc.save();
+    doc.rect(x1, centerY - medW / 2, x2 - x1, medW).clip();
+    doc.lineWidth(0.3).strokeColor('#CC9900');
+    for (let i = x1; i < x2; i += 12) {
+      doc.moveTo(i, centerY - medW / 2).lineTo(i + medW, centerY + medW / 2).stroke();
+    }
+    doc.restore();
+  } else {
+    // Multi-lane undivided: double yellow centerline
+    doc.lineWidth(1).strokeColor('#CC9900');
+    doc.moveTo(x1, centerY - 1.5).lineTo(x2, centerY - 1.5).stroke();
+    doc.moveTo(x1, centerY + 1.5).lineTo(x2, centerY + 1.5).stroke();
+  }
+
+  // Draw lane lines (white dashed) for each lane boundary except center/edge
+  doc.lineWidth(0.5).strokeColor('#666').dash(6, { space: 8 });
+  const lanesPerDir = ctx.hasTWLTL ? Math.floor((lanes - 1) / 2) : Math.floor(lanes / 2);
+  // Top half lanes (opposing direction)
+  for (let i = 1; i < lanesPerDir; i++) {
+    const y = topEdge + i * lanePixelW;
+    doc.moveTo(x1, y).lineTo(x2, y).stroke();
+  }
+  // Bottom half lanes (primary direction)
+  const bottomStart = ctx.hasTWLTL ? centerY + lanePixelW / 2 : centerY;
+  for (let i = 1; i < lanesPerDir; i++) {
+    const y = bottomStart + i * lanePixelW;
+    if (y < bottomEdge - 2) doc.moveTo(x1, y).lineTo(x2, y).stroke();
+  }
+  doc.undash();
+
+  // Lane count labels
+  doc.fontSize(5).fillColor('#999');
+  if (lanes > 2) {
+    doc.text(`${lanesPerDir} LN`, x1 + 5, bottomEdge - lanePixelW + 2, { lineBreak: false });
+    doc.text(`${lanesPerDir} LN`, x1 + 5, topEdge + 2, { lineBreak: false });
+    if (ctx.hasTWLTL) doc.text('TURN', x1 + 5, centerY - 3, { lineBreak: false });
+  }
+
+  return { topEdge, bottomEdge, centerY, lanePixelW, totalPixelH, lanes };
+}
+
 function drawCrosshatch(doc: Doc, x1: number, y1: number, x2: number, y2: number) {
   doc.lineWidth(0.5).strokeColor('black');
   doc.rect(x1, y1, x2 - x1, y2 - y1).stroke();
@@ -219,7 +314,8 @@ function drawCoverSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: Dr
     ['Start:', ctx.startCoords ? `${ctx.startCoords.lat.toFixed(5)}, ${ctx.startCoords.lng.toFixed(5)}` : 'N/A'],
     ['End:', ctx.endCoords ? `${ctx.endCoords.lat.toFixed(5)}, ${ctx.endCoords.lng.toFixed(5)}` : 'N/A'],
     ['Channelizing:', ctx.blueprint.taper.device_type],
-    ['Typical Application:', `${ctx.taCode} (${ctx.operationType})`],
+    ['Lane Configuration:', ctx.totalLanes > 0 ? `${ctx.totalLanes} lanes${ctx.hasTWLTL ? ' (with center turn lane)' : ''}${ctx.isDivided ? ' (divided)' : ''}` : 'Unknown — verify on-site'],
+    ['Typical Application:', `${ctx.taCode} — ${ctx.taDescription}`],
     ['Cross-Streets:', ctx.crossStreets.length > 0 ? ctx.crossStreets.map(c => c.name).join(', ') : 'None detected'],
   ];
   doc.fontSize(8);
@@ -285,15 +381,13 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
   doc.addPage({ size: 'tabloid', layout: 'landscape', margin: 0 });
 
   const spacing = getABCSpacing(ctx.speedMph, ctx.terrain, ctx.funcClass);
-  const taTitle = ctx.taCode === 'TA-22' ? `${ctx.taCode}: SHOULDER WORK` :
-                   ctx.taCode === 'TA-18' ? `${ctx.taCode}: MEDIAN CROSSOVER` :
-                   `${ctx.taCode}: LANE CLOSURE USING FLAGGERS`;
+  const taTitle = `${ctx.taCode}: ${ctx.taDescription.toUpperCase()}`;
   doc.fontSize(14).fillColor('black').text(`TYPICAL APPLICATION — ${taTitle}`, 0, 25, { align: 'center' });
   doc.fontSize(8).text(`MUTCD 11th Edition | ${spacing.classification} | A=${spacing.a}' B=${spacing.b}' C=${spacing.c}' | Buffer: ${getBufferSpaceFt(ctx.speedMph)}' min (Table 6C-2)`, 0, 44, { align: 'center' });
 
   // Layout: full MUTCD zones left to right
   // [Advance Warning (C,B,A)] [Transition] [Buffer] [Activity Area] [Buffer] [Termination] [Advance Warning (A,B,C)]
-  const roadY1 = 310, roadCL = 355, roadY2 = 400;
+  const roadCL = 355; // roadY1 and roadY2 computed by drawRoadway below
   const roadL = 30, roadR = 1194;
 
   // Zone boundaries (proportional)
@@ -316,11 +410,10 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
     oppWarningEnd: 1180,
   };
 
-  // Roadway edges
-  doc.lineWidth(2).strokeColor('black');
-  doc.moveTo(roadL, roadY1).lineTo(roadR, roadY1).stroke();
-  doc.lineWidth(1).dash(8, { space: 8 }).moveTo(roadL, roadCL).lineTo(roadR, roadCL).stroke();
-  doc.undash().lineWidth(2).moveTo(roadL, roadY2).lineTo(roadR, roadY2).stroke();
+  // Roadway — lane-aware drawing
+  const road = drawRoadway(doc, roadL, roadR, roadCL, ctx);
+  const roadY1 = road.topEdge;
+  const roadY2 = road.bottomEdge;
 
   // Zone labels at top
   doc.fontSize(6).fillColor('#333');
@@ -533,23 +626,26 @@ function drawIntersectionSheet(doc: Doc, sheetNum: number, totalSheets: number, 
   doc.fontSize(14).fillColor('black').text(`INTERSECTION DETAIL: ${cs.name.toUpperCase()}`, 0, 25, { align: 'center' });
   doc.fontSize(9).text(`${ctx.roadName || 'Main Road'} at ${cs.name} — Approximate Position: ${Math.round(cs.position * 100)}% along route`, 0, 45, { align: 'center' });
 
-  // Draw intersection diagram
-  const cx = 612, cy = 360; // center of page
-  const roadHalfW = 20;
+  // Draw intersection diagram — lane-aware
+  const cx = 612, cy = 360;
   const mainLen = 400, crossLen = 250;
 
-  // Main road (horizontal)
-  doc.lineWidth(2).strokeColor('black');
-  doc.moveTo(cx - mainLen / 2, cy - roadHalfW).lineTo(cx + mainLen / 2, cy - roadHalfW).stroke();
-  doc.moveTo(cx - mainLen / 2, cy + roadHalfW).lineTo(cx + mainLen / 2, cy + roadHalfW).stroke();
-  doc.lineWidth(0.5).dash(6, { space: 6 });
-  doc.moveTo(cx - mainLen / 2, cy).lineTo(cx + mainLen / 2, cy).stroke();
-  doc.undash();
+  // Main road (horizontal) — uses multi-lane drawing
+  const intRoad = drawRoadway(doc, cx - mainLen / 2, cx + mainLen / 2, cy, ctx);
+  const roadHalfW = intRoad.totalPixelH / 2;
 
-  // Cross-street (vertical)
-  doc.lineWidth(2);
-  doc.moveTo(cx - roadHalfW, cy - crossLen / 2).lineTo(cx - roadHalfW, cy + crossLen / 2).stroke();
-  doc.moveTo(cx + roadHalfW, cy - crossLen / 2).lineTo(cx + roadHalfW, cy + crossLen / 2).stroke();
+  // Cross-street (vertical) — always drawn as 2-lane
+  const csHalfW = 18;
+  doc.lineWidth(2).strokeColor('black');
+  doc.moveTo(cx - csHalfW, cy - crossLen / 2).lineTo(cx - csHalfW, cy - roadHalfW).stroke();
+  doc.moveTo(cx + csHalfW, cy - crossLen / 2).lineTo(cx + csHalfW, cy - roadHalfW).stroke();
+  doc.moveTo(cx - csHalfW, cy + roadHalfW).lineTo(cx - csHalfW, cy + crossLen / 2).stroke();
+  doc.moveTo(cx + csHalfW, cy + roadHalfW).lineTo(cx + csHalfW, cy + crossLen / 2).stroke();
+  // Cross-street centerline
+  doc.lineWidth(0.5).dash(5, { space: 5 }).strokeColor('#666');
+  doc.moveTo(cx, cy - crossLen / 2).lineTo(cx, cy - roadHalfW - 2).stroke();
+  doc.moveTo(cx, cy + roadHalfW + 2).lineTo(cx, cy + crossLen / 2).stroke();
+  doc.undash();
 
   // Labels
   doc.fontSize(10).fillColor('black');
@@ -729,7 +825,12 @@ interface DrawContext {
   terrain: string;
   funcClass: string;
   mainRoadNumber: string;
-  taCode: string; // TA-10, TA-11, TA-18, TA-22
+  taCode: string;
+  taDescription: string;
+  totalLanes: number;
+  hasTWLTL: boolean;
+  isDivided: boolean;
+  isMultiLane: boolean;
 }
 
 // ===================================================================
@@ -838,6 +939,7 @@ export async function generateCAD(
   crossStreets: CrossStreet[] = [],
   terrain = '',
   funcClass = '',
+  totalLanes = 0,
 ): Promise<void> {
   // === BLUEPRINT VALIDATION — ensure all required fields exist ===
   if (!blueprint.primary_approach || !Array.isArray(blueprint.primary_approach)) blueprint.primary_approach = [];
@@ -867,13 +969,37 @@ export async function generateCAD(
     if (!sign.label) sign.label = 'ROAD WORK AHEAD';
   }
 
-  // === TA SELECTION based on operation type ===
-  // TA-10: Single Lane Closure with Flaggers (two-lane roads)
-  // TA-11: Single Lane Closure with Yield (low volume)
-  // TA-22: Shoulder Work
-  // For now we support TA-10 layout; future: adapt schematic per TA
-  const taCode = operationType === 'Shoulder Work' ? 'TA-22' :
-                 operationType === 'Median Crossover' ? 'TA-18' : 'TA-10';
+  // === TA SELECTION based on lane count + operation type + functional class ===
+  const fcCode = funcClass ? parseInt(funcClass) || 99 : 99;
+  const isInterstate = fcCode <= 2;
+  const isDivided = fcCode <= 3 && totalLanes >= 4;
+  // Infer median type: 5 lanes = TWLTL (2+turn+2), 4 lanes could be divided or undivided
+  const hasTWLTL = totalLanes === 3 || totalLanes === 5;
+  const isMultiLane = totalLanes >= 4 || (totalLanes === 3 && !hasTWLTL);
+
+  let taCode: string;
+  let taDescription: string;
+  if (operationType === 'Shoulder Work') {
+    taCode = isMultiLane ? 'TA-23' : 'TA-22';
+    taDescription = isMultiLane ? 'Shoulder Work on Multi-Lane Road' : 'Shoulder Work on Two-Lane Road';
+  } else if (operationType === 'Median Crossover') {
+    taCode = 'TA-18';
+    taDescription = 'Median Crossover';
+  } else if (isInterstate) {
+    taCode = 'TA-35';
+    taDescription = 'Lane Closure on Interstate/Freeway';
+  } else if (isDivided) {
+    taCode = 'TA-33';
+    taDescription = 'Lane Closure on Divided Highway';
+  } else if (isMultiLane) {
+    taCode = hasTWLTL ? 'TA-31' : 'TA-30';
+    taDescription = hasTWLTL ? 'Lane Closure with Center Turn Lane' : 'Lane Closure on Multi-Lane Road';
+  } else {
+    // 2-lane road
+    taCode = 'TA-10';
+    taDescription = 'Lane Closure Using Flaggers (Two-Lane Road)';
+  }
+  console.log(`[cadGenerator] TA Selection: ${taCode} (${taDescription}) | Lanes: ${totalLanes} | FC: ${fcCode} | Op: ${operationType}`);
 
   // Taper length determination
   let taperLengthFt: number;
@@ -913,7 +1039,8 @@ export async function generateCAD(
     blueprint, staticMapBase64, startCoords, endCoords,
     speedMph, wzSpeedMph, laneWidthFt, operationType,
     routeDistanceFt, roadName, crossStreets: filteredCrossStreets, taperLengthFt,
-    terrain, funcClass, mainRoadNumber: mainRoadNum, taCode,
+    terrain, funcClass, mainRoadNumber: mainRoadNum, taCode, taDescription,
+    totalLanes, hasTWLTL, isDivided, isMultiLane,
   };
 
   return new Promise((resolve, reject) => {

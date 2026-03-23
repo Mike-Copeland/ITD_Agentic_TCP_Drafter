@@ -785,7 +785,7 @@ app.post('/api/rag', async (req, res) => {
 // ---------------------------------------------------------------------------
 app.post('/api/generate-plan', async (req, res) => {
   try {
-    const { blueprint, startCoords, endCoords, staticMapBase64, normalSpeed, workZoneSpeed, laneWidth, operationType, routeDistanceFt: rawRouteDist, roadName: rawRoadName, positionedCrossStreets: rawCrossStreets, itdTerrain: rawTerrain, itdFuncClass: rawFuncClass } = req.body;
+    const { blueprint, startCoords, endCoords, staticMapBase64, normalSpeed, workZoneSpeed, laneWidth, operationType, routeDistanceFt: rawRouteDist, roadName: rawRoadName, positionedCrossStreets: rawCrossStreets, itdTerrain: rawTerrain, itdFuncClass: rawFuncClass, itdTotalLanes: rawTotalLanes } = req.body;
     const speedMph: number = normalSpeed || 65;
     const wzSpeedMph: number = workZoneSpeed || 55;
     const laneWidthFt: number = laneWidth || 12;
@@ -832,6 +832,7 @@ app.post('/api/generate-plan', async (req, res) => {
       rawCrossStreets || [],
       rawTerrain || '',
       rawFuncClass || '',
+      parseInt(rawTotalLanes) || 0,
     );
 
     // Verify the generated files
