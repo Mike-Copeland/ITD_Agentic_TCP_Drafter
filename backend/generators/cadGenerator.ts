@@ -696,21 +696,21 @@ function drawSiteLayoutSheet(doc: Doc, sheetNum: number, totalSheets: number, ct
 // ===================================================================
 // SHEET: INTERSECTION DETAIL
 // ===================================================================
+// ===================================================================
+// SHEET: INTERSECTION DETAIL (ENGINEERING-GRADE GEOMETRY)
+// ===================================================================
 function drawIntersectionSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawContext, cs: CrossStreet) {
   doc.addPage({ size: 'tabloid', layout: 'landscape', margin: 0 });
 
   doc.fontSize(14).fillColor('black').text(`INTERSECTION DETAIL: ${cs.name.toUpperCase()}`, 0, 25, { align: 'center' });
   doc.fontSize(9).text(`${ctx.roadName || 'Main Road'} at ${cs.name} — Approximate Position: ${Math.round(cs.position * 100)}% along route`, 0, 45, { align: 'center' });
 
-  // Draw intersection diagram — geometry-aware
   const cx = 612, cy = 340;
-  const mainLen = 400, crossLen = 200;
-  const geo = cs.geometry || { type: '4-way' as const, hasSignal: false, hasStopSign: false, turnLanes: false, approachAngle: 0, legs: 4 };
+  const mainLen = 450, crossLen = 200;
+  const geo = cs.geometry || { type: '4-way', hasSignal: false, hasStopSign: false, turnLanes: false, approachAngle: 0, legs: 4 };
 
-  // Main road (horizontal) — uses multi-lane drawing
-  const intRoad = drawRoadway(doc, cx - mainLen / 2, cx + mainLen / 2, cy, ctx);
-  const roadHalfW = intRoad.totalPixelH / 2;
-  const csHalfW = 18;
+  const hasNorth = geo.type === 'T-north' || geo.type === '4-way' || geo.type === 'Y' || !geo.type.startsWith('T-');
+  const hasSouth = geo.type === 'T-south' || geo.type === '4-way' || geo.type === 'Y' || !geo.type.startsWith('T-');
 
   // Geometry type label
   const geoLabel = geo.type === '4-way' ? '4-WAY INTERSECTION' :
@@ -718,118 +718,148 @@ function drawIntersectionSheet(doc: Doc, sheetNum: number, totalSheets: number, 
     geo.type === 'Y' ? 'Y-INTERSECTION' : geo.type === 'roundabout' ? 'ROUNDABOUT' : 'INTERSECTION';
   doc.fontSize(8).fillColor('#666').text(geoLabel, 0, 60, { align: 'center' });
 
-  // Draw cross-street legs based on geometry type
+  // Main road (horizontal)
+  const intRoad = drawRoadway(doc, cx - mainLen / 2, cx + mainLen / 2, cy, ctx);
+  const mainHW = intRoad.totalPixelH / 2;
+  const crossHW = geo.turnLanes ? 30 : 20; // Wider cross street if turn lanes exist
+  const R = isHighway(cs.name) ? 35 : 20; // Corner radius (larger for state routes)
+
+  // 1. MASKING: Erase the mainline edge lines where the cross streets enter
+  doc.lineWidth(4).strokeColor('#ffffff');
+  if (hasNorth) doc.moveTo(cx - crossHW - R, cy - mainHW).lineTo(cx + crossHW + R, cy - mainHW).stroke();
+  if (hasSouth) doc.moveTo(cx - crossHW - R, cy + mainHW).lineTo(cx + crossHW + R, cy + mainHW).stroke();
+
+  // MASKING: Erase the mainline centerlines inside the intersection box
+  if (hasNorth || hasSouth) {
+    doc.rect(cx - crossHW - 2, cy - mainHW + 2, (crossHW * 2) + 4, (mainHW * 2) - 4).fill('#ffffff');
+  }
+
+  // 2. DRAW CURB RETURNS & CROSS STREET EDGES
   doc.lineWidth(2).strokeColor('black');
-
-  const drawNorthLeg = () => {
-    doc.moveTo(cx - csHalfW, cy - roadHalfW).lineTo(cx - csHalfW, cy - crossLen).stroke();
-    doc.moveTo(cx + csHalfW, cy - roadHalfW).lineTo(cx + csHalfW, cy - crossLen).stroke();
-    doc.lineWidth(0.5).dash(5, { space: 5 }).strokeColor('#666');
-    doc.moveTo(cx, cy - roadHalfW - 2).lineTo(cx, cy - crossLen).stroke();
-    doc.undash();
-  };
-  const drawSouthLeg = () => {
-    doc.lineWidth(2).strokeColor('black');
-    doc.moveTo(cx - csHalfW, cy + roadHalfW).lineTo(cx - csHalfW, cy + crossLen).stroke();
-    doc.moveTo(cx + csHalfW, cy + roadHalfW).lineTo(cx + csHalfW, cy + crossLen).stroke();
-    doc.lineWidth(0.5).dash(5, { space: 5 }).strokeColor('#666');
-    doc.moveTo(cx, cy + roadHalfW + 2).lineTo(cx, cy + crossLen).stroke();
-    doc.undash();
-  };
-
-  // Draw legs based on intersection type
-  if (geo.type === 'T-north' || geo.type === '4-way' || geo.type === 'Y') drawNorthLeg();
-  if (geo.type === 'T-south' || geo.type === '4-way' || geo.type === 'Y') drawSouthLeg();
-  if (geo.type === 'T-east') {
-    doc.lineWidth(2).strokeColor('black');
-    doc.moveTo(cx + roadHalfW + 2, cy - csHalfW).lineTo(cx + crossLen, cy - csHalfW).stroke();
-    doc.moveTo(cx + roadHalfW + 2, cy + csHalfW).lineTo(cx + crossLen, cy + csHalfW).stroke();
+  if (hasNorth) {
+    // Left North curb
+    doc.moveTo(cx - crossHW, cy - crossLen)
+       .lineTo(cx - crossHW, cy - mainHW - R)
+       .quadraticCurveTo(cx - crossHW, cy - mainHW, cx - crossHW - R, cy - mainHW).stroke();
+    // Right North curb
+    doc.moveTo(cx + crossHW, cy - crossLen)
+       .lineTo(cx + crossHW, cy - mainHW - R)
+       .quadraticCurveTo(cx + crossHW, cy - mainHW, cx + crossHW + R, cy - mainHW).stroke();
   }
-  if (geo.type === 'T-west') {
-    doc.lineWidth(2).strokeColor('black');
-    doc.moveTo(cx - roadHalfW - 2, cy - csHalfW).lineTo(cx - crossLen, cy - csHalfW).stroke();
-    doc.moveTo(cx - roadHalfW - 2, cy + csHalfW).lineTo(cx - crossLen, cy + csHalfW).stroke();
-  }
-  // Default: if no specific T type, draw both north and south
-  if (!geo.type.startsWith('T-') && geo.type !== '4-way' && geo.type !== 'Y') {
-    drawNorthLeg();
-    drawSouthLeg();
+  if (hasSouth) {
+    // Left South curb
+    doc.moveTo(cx - crossHW, cy + crossLen)
+       .lineTo(cx - crossHW, cy + mainHW + R)
+       .quadraticCurveTo(cx - crossHW, cy + mainHW, cx - crossHW - R, cy + mainHW).stroke();
+    // Right South curb
+    doc.moveTo(cx + crossHW, cy + crossLen)
+       .lineTo(cx + crossHW, cy + mainHW + R)
+       .quadraticCurveTo(cx + crossHW, cy + mainHW, cx + crossHW + R, cy + mainHW).stroke();
   }
 
-  // Traffic control indicators
-  if (geo.hasSignal) {
-    // Draw traffic signal symbol
-    doc.lineWidth(1).strokeColor('black');
-    doc.rect(cx - 6, cy - roadHalfW - 25, 12, 22).fillAndStroke('#333', 'black');
-    doc.circle(cx, cy - roadHalfW - 20, 3).fillAndStroke('#ff0000', '#333');
-    doc.circle(cx, cy - roadHalfW - 13, 3).fillAndStroke('#ffcc00', '#333');
-    doc.circle(cx, cy - roadHalfW - 6, 3).fillAndStroke('#00cc00', '#333');
-    doc.fontSize(5).fillColor('#cc0000').text('SIGNAL', cx - 15, cy - roadHalfW - 38, { lineBreak: false });
+  // 3. DRAW CROSS STREET CENTERLINES
+  doc.lineWidth(1).strokeColor('#CC9900');
+  if (hasNorth) {
+    doc.moveTo(cx - 1.5, cy - crossLen).lineTo(cx - 1.5, cy - mainHW).stroke();
+    doc.moveTo(cx + 1.5, cy - crossLen).lineTo(cx + 1.5, cy - mainHW).stroke();
   }
-  if (geo.hasStopSign && !geo.hasSignal) {
-    // Stop sign on cross-street approaches
-    doc.lineWidth(1).strokeColor('#cc0000');
-    const stopY1 = cy - roadHalfW - 18;
-    doc.save().translate(cx, stopY1).rotate(22.5);
-    const r = 7;
-    doc.moveTo(r, 0);
-    for (let i = 1; i <= 8; i++) {
-      const angle = (i * Math.PI * 2) / 8 - Math.PI / 8;
-      doc.lineTo(r * Math.cos(angle), r * Math.sin(angle));
+  if (hasSouth) {
+    doc.moveTo(cx - 1.5, cy + mainHW).lineTo(cx - 1.5, cy + crossLen).stroke();
+    doc.moveTo(cx + 1.5, cy + mainHW).lineTo(cx + 1.5, cy + crossLen).stroke();
+  }
+
+  // 4. STOP BARS & CROSSWALKS
+  if (geo.hasSignal || isHighway(cs.name)) {
+    doc.lineWidth(3).strokeColor('black');
+    if (hasNorth) doc.moveTo(cx - crossHW, cy - mainHW - R).lineTo(cx, cy - mainHW - R).stroke();
+    if (hasSouth) doc.moveTo(cx, cy + mainHW + R).lineTo(cx + crossHW, cy + mainHW + R).stroke();
+
+    doc.lineWidth(1.5).dash(4, { space: 4 }).strokeColor('#666');
+    const cwOffset = R + 10;
+    if (hasNorth) {
+      doc.moveTo(cx - crossHW, cy - mainHW - cwOffset).lineTo(cx + crossHW, cy - mainHW - cwOffset).stroke();
+      doc.moveTo(cx - crossHW, cy - mainHW - cwOffset - 10).lineTo(cx + crossHW, cy - mainHW - cwOffset - 10).stroke();
     }
-    doc.fillAndStroke('#cc0000', '#660000');
-    doc.restore();
-    doc.fontSize(3).fillColor('white').text('STOP', cx - 5, stopY1 - 2, { lineBreak: false });
+    if (hasSouth) {
+      doc.moveTo(cx - crossHW, cy + mainHW + cwOffset).lineTo(cx + crossHW, cy + mainHW + cwOffset).stroke();
+      doc.moveTo(cx - crossHW, cy + mainHW + cwOffset + 10).lineTo(cx + crossHW, cy + mainHW + cwOffset + 10).stroke();
+    }
+    doc.undash();
+  } else {
+    doc.lineWidth(2).strokeColor('black');
+    if (hasNorth) doc.moveTo(cx - crossHW, cy - mainHW - 5).lineTo(cx, cy - mainHW - 5).stroke();
+    if (hasSouth) doc.moveTo(cx, cy + mainHW + 5).lineTo(cx + crossHW, cy + mainHW + 5).stroke();
   }
 
-  // Turn lane indicator
+  // 5. TRAFFIC CONTROL SYMBOLS
+  if (geo.hasSignal) {
+    doc.lineWidth(1).strokeColor('black');
+    const sigY = hasNorth ? cy - mainHW - R - 25 : cy + mainHW + 5;
+    doc.rect(cx + crossHW + 8, sigY, 12, 22).fillAndStroke('#333', 'black');
+    doc.circle(cx + crossHW + 14, sigY + 4, 3).fillAndStroke('#ff0000', '#333');
+    doc.circle(cx + crossHW + 14, sigY + 11, 3).fillAndStroke('#ffcc00', '#333');
+    doc.circle(cx + crossHW + 14, sigY + 18, 3).fillAndStroke('#00cc00', '#333');
+    doc.fontSize(5).fillColor('#cc0000').text('SIGNAL', cx + crossHW + 22, sigY + 8, { lineBreak: false });
+  } else if (geo.hasStopSign) {
+    const drawStop = (x: number, y: number) => {
+      doc.save().translate(x, y).rotate(22.5);
+      doc.moveTo(7, 0);
+      for (let i = 1; i <= 8; i++) doc.lineTo(7 * Math.cos(i * Math.PI / 4), 7 * Math.sin(i * Math.PI / 4));
+      doc.fillAndStroke('#cc0000', '#660000');
+      doc.restore();
+      doc.fontSize(3).fillColor('white').text('STOP', x - 4.5, y - 1.5, { lineBreak: false });
+    };
+    if (hasNorth) drawStop(cx - crossHW - 12, cy - mainHW - R - 10);
+    if (hasSouth) drawStop(cx + crossHW + 12, cy + mainHW + R + 10);
+  }
+
   if (geo.turnLanes) {
     doc.fontSize(5).fillColor('#0066cc');
-    doc.text('TURN LANE', cx + csHalfW + 5, cy - roadHalfW - 10, { lineBreak: false });
+    if (hasNorth) doc.text('TURN LANE', cx + crossHW + 5, cy - mainHW - 20, { lineBreak: false });
     // Draw turn arrow
     doc.lineWidth(0.5).strokeColor('#0066cc');
-    doc.moveTo(cx + csHalfW + 3, cy - 5).lineTo(cx + csHalfW + 3, cy - roadHalfW + 5).stroke();
-    doc.moveTo(cx + csHalfW + 3, cy - roadHalfW + 5).lineTo(cx + csHalfW, cy - roadHalfW + 10).stroke();
-    doc.moveTo(cx + csHalfW + 3, cy - roadHalfW + 5).lineTo(cx + csHalfW + 6, cy - roadHalfW + 10).stroke();
+    const ty = hasNorth ? cy - mainHW - 15 : cy + mainHW + 15;
+    const dir = hasNorth ? 1 : -1;
+    doc.moveTo(cx + crossHW + 3, ty).lineTo(cx + crossHW + 3, ty + 10 * dir).stroke();
+    doc.moveTo(cx + crossHW + 3, ty + 10 * dir).lineTo(cx + crossHW, ty + 5 * dir).stroke();
+    doc.moveTo(cx + crossHW + 3, ty + 10 * dir).lineTo(cx + crossHW + 6, ty + 5 * dir).stroke();
   }
 
   // Labels
   doc.fontSize(10).fillColor('black');
   doc.text(ctx.roadName || 'MAIN ROAD', cx + mainLen / 2 + 10, cy - 5, { lineBreak: false });
-  // Cross-street label at top
   doc.fontSize(9);
-  if (geo.type === 'T-south' || geo.type === '4-way' || geo.type === 'Y' || !geo.type.startsWith('T-')) {
+  if (hasNorth) {
     doc.text(cs.name.toUpperCase(), cx - 60, cy - crossLen - 15, { width: 120, align: 'center', lineBreak: false });
   } else {
     doc.text(cs.name.toUpperCase(), cx - 60, cy + crossLen + 5, { width: 120, align: 'center', lineBreak: false });
   }
 
-  // Direction arrows
   doc.fontSize(6).fillColor('#444');
-  doc.text('>>> PRIMARY', cx - mainLen / 2, cy + roadHalfW + 8, { lineBreak: false });
-  doc.text('OPPOSING <<<', cx + mainLen / 2 - 60, cy - roadHalfW - 14, { lineBreak: false });
+  doc.text('>>> PRIMARY', cx - mainLen / 2, cy + mainHW + 8, { lineBreak: false });
+  doc.text('OPPOSING <<<', cx + mainLen / 2 - 60, cy - mainHW - 14, { lineBreak: false });
 
-  // W20-1 signs on cross-street approaches (only on legs that exist)
-  if (geo.type === '4-way' || geo.type === 'T-north' || geo.type === 'Y' || !geo.type.startsWith('T-')) {
-    drawSignDiamond(doc, cx, cy - crossLen + 25, 'W20-1', 'ROAD WORK\nAHEAD');
-  }
-  if (geo.type === '4-way' || geo.type === 'T-south' || geo.type === 'Y' || !geo.type.startsWith('T-')) {
-    drawSignDiamond(doc, cx, cy + crossLen - 25, 'W20-1', 'ROAD WORK\nAHEAD');
-  }
+  // 6. ADVANCE WARNING SIGNS (Standard US Right-Hand Shoulder Placement)
+  // North Leg (traffic moving down): Right shoulder is on the left (-X)
+  if (hasNorth) drawSignDiamond(doc, cx - crossHW - 35, cy - crossLen + 40, 'W20-1', 'ROAD WORK\nAHEAD');
 
-  // Determine intersection significance
+  // South Leg (traffic moving up): Right shoulder is on the right (+X)
+  if (hasSouth) drawSignDiamond(doc, cx + crossHW + 35, cy + crossLen - 40, 'W20-1', 'ROAD WORK\nAHEAD');
+
+  // Determine intersection significance and notes
   const isHwy = isHighway(cs.name);
   const isDriveway = /chevron|gas|station|driveway|parking|lot/i.test(cs.name) && !/state\s*park|national|public|forest|county/i.test(cs.name);
   const intType = isHwy ? 'STATE/US HIGHWAY INTERSECTION' : isDriveway ? 'COMMERCIAL ACCESS POINT' : 'LOCAL ROAD INTERSECTION';
   doc.fontSize(8).fillColor(isHwy ? '#cc0000' : '#333');
-  doc.text(`Classification: ${intType}`, cx - mainLen / 2, cy + crossLen / 2 + 25, { width: mainLen, align: 'center', lineBreak: false });
+  doc.text(`Classification: ${intType}`, cx - mainLen / 2, cy + crossLen + 15, { width: mainLen, align: 'center', lineBreak: false });
 
   // Notes for this intersection
-  const noteX = 50, noteY = 540;
-  doc.lineWidth(0.5).rect(noteX, noteY, 530, 140).stroke();
+  const noteX = 50, noteY = 560;
+  doc.lineWidth(0.5).rect(noteX, noteY, 530, 120).stroke();
   doc.font('Helvetica-Bold').fontSize(8).fillColor('black').text('INTERSECTION TRAFFIC CONTROL NOTES:', noteX + 10, noteY + 8);
   doc.font('Helvetica').fontSize(6.5);
-  const intNotes = isHwy ? [
+
+  const intNotes = isHwy ?[
     `1. THIS IS A STATE/US HIGHWAY INTERSECTION — requires enhanced traffic control measures.`,
     `2. Place W20-1 "ROAD WORK AHEAD" signs on ${cs.name} approaches at minimum ${getABCSpacing(ctx.speedMph, ctx.terrain, ctx.funcClass).a} ft from intersection.`,
     `3. CONSIDER ADDITIONAL FLAGGER at this intersection to manage cross-traffic from ${cs.name}.`,
@@ -837,14 +867,7 @@ function drawIntersectionSheet(doc: Doc, sheetNum: number, totalSheets: number, 
     `5. Sight distance at this intersection must accommodate ${ctx.speedMph} MPH mainline AND cross-street traffic.`,
     '6. Do not place channelizing devices where they block cross-street sight triangles.',
     '7. Consider advance warning signs on cross-street at greater distances due to higher approach speeds.',
-  ] : isDriveway ? [
-    `1. Place W20-1 "ROAD WORK AHEAD" sign visible from ${cs.name} access point.`,
-    '2. Maintain access at all times unless otherwise approved by property owner.',
-    '3. Flagger may need to manage vehicles entering/exiting during active work.',
-    '4. Sign may be post-mounted or on portable stand near the access point.',
-    `5. Sight distance at access must accommodate ${ctx.speedMph} MPH mainline traffic.`,
-    '6. Consider temporary "CONSTRUCTION AHEAD" sign at business entrance.',
-  ] : [
+  ] :[
     `1. Place W20-1 "ROAD WORK AHEAD" signs on ${cs.name} approaches at minimum ${getABCSpacing(ctx.speedMph, ctx.terrain, ctx.funcClass).a} ft from intersection.`,
     '2. Maintain access to and from cross-street at all times unless otherwise approved.',
     '3. If cross-street traffic volume is significant, consider an additional flagger at this intersection.',
@@ -855,11 +878,11 @@ function drawIntersectionSheet(doc: Doc, sheetNum: number, totalSheets: number, 
   intNotes.forEach((n, i) => doc.text(n, noteX + 10, noteY + 22 + i * 13, { width: 510 }));
 
   // Sign detail for this intersection
-  doc.lineWidth(0.5).rect(600, noteY, 400, 140).stroke();
+  doc.lineWidth(0.5).rect(600, noteY, 400, 120).stroke();
   doc.font('Helvetica-Bold').fontSize(8).text('SIGNS REQUIRED AT THIS INTERSECTION:', 610, noteY + 8);
   doc.font('Helvetica').fontSize(7);
-  const signQty = isDriveway ? 1 : 2;
-  doc.text(`W20-1 "ROAD WORK AHEAD" — Qty: ${signQty} (${isDriveway ? 'at access point' : 'one per cross-street approach'})`, 610, noteY + 28, { width: 380 });
+  const signQty = (hasNorth ? 1 : 0) + (hasSouth ? 1 : 0);
+  doc.text(`W20-1 "ROAD WORK AHEAD" — Qty: ${signQty} (one per cross-street approach)`, 610, noteY + 28, { width: 380 });
   const intSignSize = getSignSize(ctx.speedMph, ctx.roadName);
   doc.text(`Sign Size: ${intSignSize} diamond${isHighway(ctx.roadName) ? ' (ITD State/US Highway minimum)' : ''}`, 610, noteY + 44, { width: 380 });
   doc.text(`Mounting: Post-mounted, 7 ft minimum height to bottom of sign`, 610, noteY + 60, { width: 380 });
@@ -987,88 +1010,301 @@ interface DrawContext {
 }
 
 // ===================================================================
-// DXF GENERATOR (unchanged structure)
+// DXF GENERATOR (ENGINEERING-GRADE — mirrors PDF TA schematic)
 // ===================================================================
 export function generateDXF(
-  blueprint: Blueprint, dxfPath: string, speedMph = 65, _laneWidthFt = 12, operationType = 'Single Lane Closure',
-  startCoords: { lat: number; lng: number } | null = null, _routeDistanceFt = 0,
+  blueprint: Blueprint, dxfPath: string, speedMph = 65, laneWidthFt = 12, operationType = 'Single Lane Closure',
+  startCoords: { lat: number; lng: number } | null = null, routeDistanceFt = 0,
+  roadName = '', crossStreets: CrossStreet[] = [], terrain = '', funcClass = '',
+  totalLanes = 0, taCode = 'TA-10', taperLengthFt = 100, wzSpeedMph = 55,
 ): void {
-  // Taper: cap at 100 ft for TA-10 flagger operations
-  let taperLengthFt = blueprint.taper.length_ft > 0 ? blueprint.taper.length_ft : 100;
-  if (taperLengthFt > 100 && operationType === 'Single Lane Closure') taperLengthFt = 100;
-
   const origin = startCoords ? gpsToWebMercatorFt(startCoords.lat, startCoords.lng) : { x: 0, y: 0 };
   const ox = origin.x, oy = origin.y;
 
   const d = new Drawing();
   d.setUnits('Feet');
-  d.addLayer('L-ROAD-EDGE', Drawing.ACI.WHITE, 'CONTINUOUS');
-  d.addLayer('L-ROAD-CNTR', Drawing.ACI.YELLOW, 'CONTINUOUS');
-  d.addLayer('L-TTC-WORK', Drawing.ACI.RED, 'CONTINUOUS');
-  d.addLayer('L-TTC-TAPER', Drawing.ACI.MAGENTA, 'CONTINUOUS');
-  d.addLayer('L-TTC-SIGN', Drawing.ACI.GREEN, 'CONTINUOUS');
-  d.addLayer('L-ANNO-TEXT', Drawing.ACI.CYAN, 'CONTINUOUS');
-  d.addLayer('L-ANNO-DIMS', Drawing.ACI.WHITE, 'CONTINUOUS');
-  d.addLayer('L-GEO-REF', Drawing.ACI.YELLOW, 'CONTINUOUS');
-  d.addLayer('L-TITLE', Drawing.ACI.WHITE, 'CONTINUOUS');
 
+  // Standard CAD layers
+  d.addLayer('L-ROAD-EDGE',   Drawing.ACI.WHITE,   'CONTINUOUS');
+  d.addLayer('L-ROAD-CNTR',   Drawing.ACI.YELLOW,  'CONTINUOUS');
+  d.addLayer('L-ROAD-LANE',   Drawing.ACI.WHITE,   'CONTINUOUS');
+  d.addLayer('L-TTC-WORK',    Drawing.ACI.RED,     'CONTINUOUS');
+  d.addLayer('L-TTC-TAPER',   Drawing.ACI.MAGENTA, 'CONTINUOUS');
+  d.addLayer('L-TTC-BUFFER',  Drawing.ACI.YELLOW,  'CONTINUOUS');
+  d.addLayer('L-TTC-DEVICE',  Drawing.ACI.MAGENTA, 'CONTINUOUS');
+  d.addLayer('L-TTC-SIGN',    Drawing.ACI.GREEN,   'CONTINUOUS');
+  d.addLayer('L-TTC-FLAGGER', Drawing.ACI.RED,     'CONTINUOUS');
+  d.addLayer('L-XSTREET',     Drawing.ACI.CYAN,    'CONTINUOUS');
+  d.addLayer('L-ANNO-TEXT',   Drawing.ACI.CYAN,    'CONTINUOUS');
+  d.addLayer('L-ANNO-DIMS',   Drawing.ACI.WHITE,   'CONTINUOUS');
+  d.addLayer('L-GEO-REF',     Drawing.ACI.YELLOW,  'CONTINUOUS');
+  d.addLayer('L-TITLE',       Drawing.ACI.WHITE,   'CONTINUOUS');
+
+  // Lane geometry
+  const lanes = totalLanes || 2;
+  const halfRoad = (lanes * laneWidthFt) / 2;
+  const isDivided = ['TA-33', 'TA-35'].includes(taCode);
+  const hasTWLTL = lanes === 3 || lanes === 5;
+
+  // Zone layout (linear schematic in real-world feet)
+  const bufferFt = getBufferSpaceFt(speedMph);
+  const dnTaperFt = blueprint.downstream_taper.length_ft || 50;
+  const spacing = getABCSpacing(speedMph, terrain, funcClass);
+  const deviceSpacing = getDeviceSpacing(speedMph, taCode);
+  const workZoneFt = routeDistanceFt > 0 ? Math.min(routeDistanceFt, 2000) : 400;
+
+  // Linear stations (distance from upstream end)
+  // Signs go at their MUTCD distances from the taper
+  const maxSignDist = Math.max(...blueprint.primary_approach.map(s => s.distance_ft), spacing.a);
+  const roadStart = 0;
+  const taperStart = maxSignDist + 100;
+  const taperEnd = taperStart + taperLengthFt;
+  const workStart = taperEnd + bufferFt;
+  const workEnd = workStart + workZoneFt;
+  const dnTaperEnd = workEnd + dnTaperFt;
+  const maxOppDist = blueprint.opposing_approach.length > 0
+    ? Math.max(...blueprint.opposing_approach.map(s => s.distance_ft), spacing.a)
+    : spacing.a;
+  const roadEnd = dnTaperEnd + maxOppDist + 200;
+
+  // === GEO REFERENCE ===
   if (startCoords) {
     d.setActiveLayer('L-GEO-REF');
-    d.drawText(ox, oy + 70, 6, 0, `GEO ORIGIN: ${startCoords.lat.toFixed(6)}, ${startCoords.lng.toFixed(6)} (EPSG:3857)`);
+    d.drawText(ox, oy + halfRoad + 80, 8, 0, `GEO ORIGIN: ${startCoords.lat.toFixed(6)}, ${startCoords.lng.toFixed(6)} (EPSG:3857 ft)`);
+    d.drawText(ox, oy + halfRoad + 65, 6, 0, `Datum: NAD83 | Units: US Survey Feet`);
   }
 
-  // DXF layout with buffer space per MUTCD 11th Ed. Table 6C-2
-  const bufferFt = getBufferSpaceFt(speedMph);
-  const maxPriDist = Math.max(...blueprint.primary_approach.map(s => s.distance_ft), 500);
-  const maxOppDist = Math.max(...blueprint.opposing_approach.map(s => s.distance_ft), 500);
-  const upTaperStart = maxPriDist + 100; // Room for all primary advance warning signs
-  const taperEnd = upTaperStart + taperLengthFt;
-  const workStart = taperEnd + bufferFt;
-  const workEnd = workStart + (_routeDistanceFt > 0 ? Math.min(_routeDistanceFt, 1000) : 400);
-  const dnTaperEnd = workEnd + blueprint.downstream_taper.length_ft;
-  // Dynamically scale road length to fit all opposing signs
-  const roadLen = dnTaperEnd + bufferFt + maxOppDist + 200;
-
+  // === ROAD EDGES ===
   d.setActiveLayer('L-ROAD-EDGE');
-  d.drawLine(ox, oy + 50, ox + roadLen, oy + 50);
-  d.drawLine(ox, oy - 50, ox + roadLen, oy - 50);
-  d.setActiveLayer('L-ROAD-CNTR');
-  d.drawLine(ox, oy, ox + roadLen, oy);
+  d.drawLine(ox + roadStart, oy + halfRoad, ox + roadEnd, oy + halfRoad);
+  d.drawLine(ox + roadStart, oy - halfRoad, ox + roadEnd, oy - halfRoad);
+
+  // === LANE LINES ===
+  if (lanes <= 2) {
+    // 2-lane: centerline (dashed in reality, solid in DXF — annotate)
+    d.setActiveLayer('L-ROAD-CNTR');
+    d.drawLine(ox + roadStart, oy, ox + roadEnd, oy);
+  } else if (hasTWLTL) {
+    // TWLTL: double yellow bounding center turn lane
+    const turnHW = laneWidthFt / 2;
+    d.setActiveLayer('L-ROAD-CNTR');
+    d.drawLine(ox + roadStart, oy + turnHW, ox + roadEnd, oy + turnHW);
+    d.drawLine(ox + roadStart, oy - turnHW, ox + roadEnd, oy - turnHW);
+    d.setActiveLayer('L-ANNO-TEXT');
+    d.drawText(ox + roadStart + 20, oy - 2, 4, 0, 'TWLTL');
+  } else if (isDivided) {
+    // Divided: median gap
+    const medW = laneWidthFt; // assume median = 1 lane width
+    d.setActiveLayer('L-ROAD-CNTR');
+    d.drawLine(ox + roadStart, oy + medW / 2, ox + roadEnd, oy + medW / 2);
+    d.drawLine(ox + roadStart, oy - medW / 2, ox + roadEnd, oy - medW / 2);
+  } else {
+    // Multi-lane undivided: centerline + lane lines
+    d.setActiveLayer('L-ROAD-CNTR');
+    d.drawLine(ox + roadStart, oy, ox + roadEnd, oy);
+    d.setActiveLayer('L-ROAD-LANE');
+    const lanesPerDir = Math.floor(lanes / 2);
+    for (let i = 1; i < lanesPerDir; i++) {
+      d.drawLine(ox + roadStart, oy - i * laneWidthFt, ox + roadEnd, oy - i * laneWidthFt);
+      d.drawLine(ox + roadStart, oy + i * laneWidthFt, ox + roadEnd, oy + i * laneWidthFt);
+    }
+  }
+
+  // === WORK ZONE (hatched rectangle on closed lane) ===
   d.setActiveLayer('L-TTC-WORK');
-  d.drawRect(ox + workStart, oy - 50, ox + workEnd, oy);
+  d.drawRect(ox + workStart, oy - halfRoad, ox + workEnd, oy);
+  // Crosshatch lines inside work zone
+  const hatchStep = 40;
+  for (let hx = workStart; hx < workEnd; hx += hatchStep) {
+    const x1 = Math.max(hx, workStart);
+    const x2 = Math.min(hx + halfRoad, workEnd);
+    d.drawLine(ox + x1, oy - halfRoad, ox + x2, oy);
+  }
+  d.setActiveLayer('L-ANNO-TEXT');
+  d.drawText(ox + workStart + (workZoneFt / 2) - 40, oy - halfRoad / 2 - 3, 6, 0, 'WORK ZONE');
+
+  // === UPSTREAM TAPER ===
   d.setActiveLayer('L-TTC-TAPER');
-  d.drawLine(ox + upTaperStart, oy - 50, ox + taperEnd, oy);
-  d.drawLine(ox + workEnd, oy, ox + dnTaperEnd, oy - 50);
+  d.drawLine(ox + taperStart, oy - halfRoad, ox + taperEnd, oy);
 
+  // === DOWNSTREAM TAPER ===
+  d.drawLine(ox + workEnd, oy, ox + dnTaperEnd, oy - halfRoad);
+
+  // === BUFFER SPACE ===
+  d.setActiveLayer('L-TTC-BUFFER');
+  // Buffer zone markers (dashed-style boundary lines)
+  d.drawLine(ox + taperEnd, oy - halfRoad - 5, ox + taperEnd, oy + halfRoad + 5);
+  d.drawLine(ox + workStart, oy - halfRoad - 5, ox + workStart, oy + halfRoad + 5);
+
+  // === CHANNELIZING DEVICES ===
+  d.setActiveLayer('L-TTC-DEVICE');
+  // Taper devices
+  const numTaperDevices = Math.max(2, Math.floor(taperLengthFt / deviceSpacing.taperSpacingFt));
+  for (let i = 0; i <= numTaperDevices; i++) {
+    const frac = i / numTaperDevices;
+    const dx = taperStart + frac * taperLengthFt;
+    const dy = -halfRoad + frac * halfRoad; // linear interpolation from edge to center
+    d.drawCircle(ox + dx, oy + dy, 1.5);
+  }
+  // Tangent devices along work zone edge (centerline side)
+  for (let tx = workStart; tx <= workEnd; tx += deviceSpacing.tangentSpacingFt) {
+    d.drawCircle(ox + tx, oy, 1.5);
+  }
+  // Downstream taper devices
+  const numDnDevices = Math.max(2, Math.floor(dnTaperFt / deviceSpacing.taperSpacingFt));
+  for (let i = 0; i <= numDnDevices; i++) {
+    const frac = i / numDnDevices;
+    const dx = workEnd + frac * dnTaperFt;
+    const dy = frac * (-halfRoad); // center back to edge
+    d.drawCircle(ox + dx, oy + dy, 1.5);
+  }
+
+  // === PRIMARY APPROACH SIGNS (right shoulder, US driving) ===
+  d.setActiveLayer('L-TTC-SIGN');
+  const signOffset = halfRoad + 12; // 12 ft offset from road edge (shoulder)
+  blueprint.primary_approach.forEach((sign) => {
+    const sx = taperStart - sign.distance_ft;
+    // Sign diamond symbol (rotated square)
+    const sz = 4;
+    d.drawPolyline([
+      [ox + sx, oy - signOffset - sz],
+      [ox + sx + sz, oy - signOffset],
+      [ox + sx, oy - signOffset + sz],
+      [ox + sx - sz, oy - signOffset],
+    ], true);
+    d.setActiveLayer('L-ANNO-TEXT');
+    d.drawText(ox + sx - 15, oy - signOffset - sz - 12, 5, 0, sign.sign_code);
+    d.drawText(ox + sx - 25, oy - signOffset - sz - 20, 4, 0, sign.label);
+    d.setActiveLayer('L-TTC-SIGN');
+  });
+
+  // === OPPOSING APPROACH SIGNS (right shoulder for opposing traffic = top edge) ===
+  if (blueprint.opposing_approach.length > 0) {
+    blueprint.opposing_approach.forEach((sign) => {
+      const sx = dnTaperEnd + sign.distance_ft;
+      const sz = 4;
+      d.drawPolyline([
+        [ox + sx, oy + signOffset - sz],
+        [ox + sx + sz, oy + signOffset],
+        [ox + sx, oy + signOffset + sz],
+        [ox + sx - sz, oy + signOffset],
+      ], true);
+      d.setActiveLayer('L-ANNO-TEXT');
+      d.drawText(ox + sx - 15, oy + signOffset + sz + 5, 5, 0, sign.sign_code);
+      d.drawText(ox + sx - 25, oy + signOffset + sz + 13, 4, 0, sign.label);
+      d.setActiveLayer('L-TTC-SIGN');
+    });
+  }
+
+  // === FLAGGER SYMBOLS (TA-10 only) ===
+  if (taCode === 'TA-10') {
+    d.setActiveLayer('L-TTC-FLAGGER');
+    // Upstream flagger at taper start
+    d.drawCircle(ox + taperStart, oy + halfRoad + 8, 3);
+    d.drawLine(ox + taperStart, oy + halfRoad + 5, ox + taperStart, oy + halfRoad + 11);
+    d.setActiveLayer('L-ANNO-TEXT');
+    d.drawText(ox + taperStart - 15, oy + halfRoad + 15, 5, 0, 'FLAGGER');
+    // Downstream flagger at work zone end
+    d.setActiveLayer('L-TTC-FLAGGER');
+    d.drawCircle(ox + workEnd + 20, oy + halfRoad + 8, 3);
+    d.drawLine(ox + workEnd + 20, oy + halfRoad + 5, ox + workEnd + 20, oy + halfRoad + 11);
+    d.setActiveLayer('L-ANNO-TEXT');
+    d.drawText(ox + workEnd + 5, oy + halfRoad + 15, 5, 0, 'FLAGGER');
+  }
+
+  // === ARROW BOARD (TA-30/31/33/35) ===
+  if (['TA-30', 'TA-31', 'TA-33', 'TA-35'].includes(taCode)) {
+    d.setActiveLayer('L-TTC-DEVICE');
+    const abX = taperStart + taperLengthFt * 0.3; // Arrow board ~30% into taper
+    d.drawRect(ox + abX - 6, oy - halfRoad - 10, ox + abX + 6, oy - halfRoad - 4);
+    d.setActiveLayer('L-ANNO-TEXT');
+    d.drawText(ox + abX - 18, oy - halfRoad - 18, 4, 0, 'ARROW BOARD');
+  }
+
+  // === DIMENSION LINES ===
   d.setActiveLayer('L-ANNO-DIMS');
-  d.drawText(ox + upTaperStart, oy - 70, 8, 0, `TAPER: ${taperLengthFt} FT`);
-  d.drawText(ox + taperEnd + (bufferFt / 2) - 30, oy - 70, 8, 0, `BUFFER: ${bufferFt} FT`);
-  d.drawText(ox + workEnd, oy - 70, 8, 0, `DN TAPER: ${blueprint.downstream_taper.length_ft} FT`);
-
-  const priStep = blueprint.primary_approach.length > 1 ? 500 / (blueprint.primary_approach.length - 1) : 0;
-  blueprint.primary_approach.forEach((sign, i) => {
-    const x = ox + 50 + i * priStep;
-    d.setActiveLayer('L-TTC-SIGN');
-    d.drawRect(x - 5, oy - 95, x + 5, oy - 85);
-    d.setActiveLayer('L-ANNO-TEXT');
-    d.drawText(x - 20, oy - 110, 6, 0, sign.sign_code);
-    d.drawText(x - 20, oy - 120, 5, 0, sign.label);
+  const dimY = oy - halfRoad - 35;
+  // Taper length
+  d.drawLine(ox + taperStart, dimY, ox + taperEnd, dimY);
+  d.drawLine(ox + taperStart, dimY - 3, ox + taperStart, dimY + 3);
+  d.drawLine(ox + taperEnd, dimY - 3, ox + taperEnd, dimY + 3);
+  d.drawText(ox + taperStart + (taperLengthFt / 2) - 20, dimY + 5, 5, 0, `TAPER: ${taperLengthFt} FT`);
+  // Buffer
+  d.drawLine(ox + taperEnd, dimY - 15, ox + workStart, dimY - 15);
+  d.drawLine(ox + taperEnd, dimY - 18, ox + taperEnd, dimY - 12);
+  d.drawLine(ox + workStart, dimY - 18, ox + workStart, dimY - 12);
+  d.drawText(ox + taperEnd + (bufferFt / 2) - 20, dimY - 10, 5, 0, `BUFFER: ${bufferFt} FT`);
+  // Work zone
+  d.drawLine(ox + workStart, dimY, ox + workEnd, dimY);
+  d.drawLine(ox + workStart, dimY - 3, ox + workStart, dimY + 3);
+  d.drawLine(ox + workEnd, dimY - 3, ox + workEnd, dimY + 3);
+  d.drawText(ox + workStart + (workZoneFt / 2) - 25, dimY + 5, 5, 0, `WORK: ${workZoneFt} FT`);
+  // Downstream taper
+  d.drawLine(ox + workEnd, dimY - 15, ox + dnTaperEnd, dimY - 15);
+  d.drawLine(ox + workEnd, dimY - 18, ox + workEnd, dimY - 12);
+  d.drawLine(ox + dnTaperEnd, dimY - 18, ox + dnTaperEnd, dimY - 12);
+  d.drawText(ox + workEnd + (dnTaperFt / 2) - 20, dimY - 10, 5, 0, `DN TAPER: ${dnTaperFt} FT`);
+  // Sign distances
+  blueprint.primary_approach.forEach((sign) => {
+    const sx = taperStart - sign.distance_ft;
+    d.drawLine(ox + sx, dimY - 30, ox + taperStart, dimY - 30);
+    d.drawLine(ox + sx, dimY - 33, ox + sx, dimY - 27);
+    d.drawText(ox + sx + 5, dimY - 25, 4, 0, `${sign.sign_code}: ${sign.distance_ft} FT`);
   });
 
-  const oppStep = blueprint.opposing_approach.length > 1 ? 500 / (blueprint.opposing_approach.length - 1) : 0;
-  blueprint.opposing_approach.forEach((sign, i) => {
-    const x = ox + dnTaperEnd + 50 + i * oppStep;
-    d.setActiveLayer('L-TTC-SIGN');
-    d.drawRect(x - 5, oy + 85, x + 5, oy + 95);
-    d.setActiveLayer('L-ANNO-TEXT');
-    d.drawText(x - 20, oy + 100, 6, 0, sign.sign_code);
-    d.drawText(x - 20, oy + 110, 5, 0, sign.label);
-  });
+  // === CROSS-STREET STUBS ===
+  if (crossStreets && crossStreets.length > 0) {
+    d.setActiveLayer('L-XSTREET');
+    crossStreets.forEach((cs) => {
+      const csX = taperStart + cs.position * (workEnd - taperStart);
+      // Cross-street stub lines
+      d.drawLine(ox + csX, oy + halfRoad, ox + csX, oy + halfRoad + 80);
+      d.drawLine(ox + csX, oy - halfRoad, ox + csX, oy - halfRoad - 80);
+      // Cross-street edge lines (20ft wide default)
+      const csHW = 10;
+      d.drawLine(ox + csX - csHW, oy + halfRoad, ox + csX - csHW, oy + halfRoad + 60);
+      d.drawLine(ox + csX + csHW, oy + halfRoad, ox + csX + csHW, oy + halfRoad + 60);
+      d.drawLine(ox + csX - csHW, oy - halfRoad, ox + csX - csHW, oy - halfRoad - 60);
+      d.drawLine(ox + csX + csHW, oy - halfRoad, ox + csX + csHW, oy - halfRoad - 60);
+      // Label
+      d.setActiveLayer('L-ANNO-TEXT');
+      d.drawText(ox + csX - 30, oy + halfRoad + 85, 5, 0, cs.name.toUpperCase());
+      d.setActiveLayer('L-XSTREET');
+    });
+  }
 
+  // === DIRECTION ARROWS ===
+  d.setActiveLayer('L-ANNO-TEXT');
+  // Primary direction arrow (left to right)
+  d.drawLine(ox + roadStart + 30, oy + halfRoad + 20, ox + roadStart + 70, oy + halfRoad + 20);
+  d.drawLine(ox + roadStart + 65, oy + halfRoad + 17, ox + roadStart + 70, oy + halfRoad + 20);
+  d.drawLine(ox + roadStart + 65, oy + halfRoad + 23, ox + roadStart + 70, oy + halfRoad + 20);
+  d.drawText(ox + roadStart + 30, oy + halfRoad + 27, 5, 0, 'PRIMARY APPROACH >>>');
+  // Opposing direction arrow (right to left)
+  d.drawLine(ox + roadEnd - 70, oy - halfRoad - 20, ox + roadEnd - 30, oy - halfRoad - 20);
+  d.drawLine(ox + roadEnd - 65, oy - halfRoad - 17, ox + roadEnd - 70, oy - halfRoad - 20);
+  d.drawLine(ox + roadEnd - 65, oy - halfRoad - 23, ox + roadEnd - 70, oy - halfRoad - 20);
+  d.drawText(ox + roadEnd - 100, oy - halfRoad - 30, 5, 0, '<<< OPPOSING');
+
+  // === TITLE BLOCK ===
   d.setActiveLayer('L-TITLE');
-  d.drawRect(ox - 500, oy - 200, ox + roadLen + 300, oy - 180);
-  d.drawText(ox - 495, oy - 195, 8, 0, "IDAHO TRANSPORTATION DEPARTMENT — TEMPORARY TRAFFIC CONTROL PLAN");
-  d.drawText(ox + 800, oy - 195, 8, 0, operationType.toUpperCase());
+  const tbLeft = ox - 50;
+  const tbRight = ox + roadEnd + 50;
+  const tbTop = oy - halfRoad - 100;
+  const tbBot = tbTop - 50;
+  d.drawRect(tbLeft, tbBot, tbRight, tbTop);
+  d.drawText(tbLeft + 10, tbBot + 35, 10, 0, 'IDAHO TRANSPORTATION DEPARTMENT');
+  d.drawText(tbLeft + 10, tbBot + 20, 8, 0, `TEMPORARY TRAFFIC CONTROL PLAN — ${operationType.toUpperCase()}`);
+  d.drawText(tbLeft + 10, tbBot + 8, 6, 0, `${taCode}: ${roadName || 'PROJECT ROAD'} | Speed: ${speedMph} MPH | WZ Speed: ${wzSpeedMph} MPH | Lanes: ${lanes}`);
+  // Right-side info
+  const rbX = tbRight - 400;
+  d.drawText(rbX, tbBot + 35, 8, 0, `Sign Size: ${getSignSize(speedMph, roadName)}`);
+  d.drawText(rbX, tbBot + 20, 6, 0, `Device Spacing — Taper: ${deviceSpacing.taperSpacingFt} ft | Tangent: ${deviceSpacing.tangentSpacingFt} ft`);
+  d.drawText(rbX, tbBot + 8, 6, 0, `Buffer: ${bufferFt} ft (Table 6C-2) | Spacing Class: ${spacing.classification}`);
+
+  // === ROAD LABEL ===
+  d.setActiveLayer('L-ANNO-TEXT');
+  d.drawText(ox + roadEnd + 10, oy - 3, 8, 0, roadName || 'MAIN ROAD');
 
   fs.writeFileSync(dxfPath, d.toDxfString(), 'utf8');
 }
@@ -1244,7 +1480,7 @@ export async function generateCAD(
 
       pdfStream.on('finish', () => {
         try {
-          generateDXF(blueprint, dxfPath, speedMph, laneWidthFt, operationType, startCoords, routeDistanceFt);
+          generateDXF(blueprint, dxfPath, speedMph, laneWidthFt, operationType, startCoords, routeDistanceFt, roadName, filteredCrossStreets, terrain, funcClass, totalLanes, taCode, taperLengthFt, wzSpeedMph);
           console.log(`[cadGenerator] Complete. ${totalSheets} sheets. PDF: ${pdfPath} | DXF: ${dxfPath}`);
           resolve();
         } catch (dxfErr) {
