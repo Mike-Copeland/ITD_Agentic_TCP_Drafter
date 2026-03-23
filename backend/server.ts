@@ -78,7 +78,7 @@ async function queryITDLayer(serviceGroup: string, layerId: number, lat: number,
   const url = `${ITD_BASE}/${serviceGroup}/MapServer/${layerId}/query?geometry=${lng},${lat}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=${distanceMeters}&units=esriSRUnit_Meter&outFields=*&returnGeometry=false&f=json&resultRecordCount=${maxRecords}`;
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000); // 8s timeout per query
+    const timeout = setTimeout(() => controller.abort(), 12000); // 12s timeout per query
     const res = await fetch(url, { signal: controller.signal });
     clearTimeout(timeout);
     if (!res.ok) return [];
@@ -90,7 +90,10 @@ async function queryITDLayer(serviceGroup: string, layerId: number, lat: number,
 async function queryITDCount(serviceGroup: string, layerId: number, lat: number, lng: number, distanceMeters = 500): Promise<number> {
   const url = `${ITD_BASE}/${serviceGroup}/MapServer/${layerId}/query?geometry=${lng},${lat}&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects&distance=${distanceMeters}&units=esriSRUnit_Meter&returnGeometry=false&returnCountOnly=true&f=json`;
   try {
-    const res = await fetchWithRetry(url);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000); // 10s timeout
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeout);
     if (!res.ok) return 0;
     const data = await res.json() as any;
     return data.count || 0;
@@ -104,7 +107,7 @@ const FUNC_CLASS_NAMES: Record<number, string> = {
 };
 
 async function fetchITDContext(lat: number, lng: number) {
-  // Wrap entire ITD fetch in a 15-second timeout
+  // Wrap entire ITD fetch in a 25-second timeout
   const timeoutPromise = new Promise<never>((_, reject) =>
     setTimeout(() => reject(new Error('ITD query timeout')), 25000)
   );
@@ -616,7 +619,7 @@ If no intersections are visible, output: []` },
         const geoAi = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
         const csNames = positionedCrossStreets.slice(0, 6).map(cs => cs.name).join(', ');
-        const geoTimeout = new Promise<any>((_, rej) => setTimeout(() => rej(new Error('Geo vision timeout')), 25000));
+        const geoTimeout = new Promise<any>((_, rej) => setTimeout(() => rej(new Error('Geo vision timeout')), 35000));
         const geoRes = await Promise.race([geoAi.models.generateContent({
           model: 'gemini-3-flash-preview',
           contents: {
@@ -843,7 +846,7 @@ app.post('/api/rag', async (req, res) => {
 // ---------------------------------------------------------------------------
 app.post('/api/generate-plan', async (req, res) => {
   try {
-    const { blueprint, startCoords, endCoords, staticMapBase64, normalSpeed, workZoneSpeed, laneWidth, operationType, routeDistanceFt: rawRouteDist, roadName: rawRoadName, positionedCrossStreets: rawCrossStreets, itdTerrain: rawTerrain, itdFuncClass: rawFuncClass, itdTotalLanes: rawTotalLanes } = req.body;
+    const { blueprint, startCoords, endCoords, staticMapBase64, normalSpeed, workZoneSpeed, laneWidth, operationType, routeDistanceFt: rawRouteDist, roadName: rawRoadName, positionedCrossStreets: rawCrossStreets, itdTerrain: rawTerrain, itdFuncClass: rawFuncClass, itdTotalLanes: rawTotalLanes, itdAADT: rawAADT, itdTruckPct: rawTruckPct, itdCrashCount: rawCrashCount, itdBridges: rawBridges } = req.body;
     const speedMph: number = normalSpeed || 65;
     const wzSpeedMph: number = workZoneSpeed || 55;
     const laneWidthFt: number = laneWidth || 12;
@@ -891,6 +894,10 @@ app.post('/api/generate-plan', async (req, res) => {
       rawTerrain || '',
       rawFuncClass || '',
       parseInt(rawTotalLanes) || 0,
+      parseInt(rawAADT) || 0,
+      parseFloat(rawTruckPct) || 0,
+      parseInt(rawCrashCount) || 0,
+      rawBridges || [],
     );
 
     // Verify the generated files
@@ -918,6 +925,15 @@ app.post('/api/generate-plan', async (req, res) => {
       `Downstream Taper: ${blueprint.downstream_taper?.length_ft} ft`,
       `Primary Approach Signs: ${blueprint.primary_approach?.length}`,
       `Opposing Approach Signs: ${blueprint.opposing_approach?.length}`,
+      ``,
+      `ITD Data:`,
+      `  AADT: ${rawAADT || 'Not available'}`,
+      `  Truck %: ${rawTruckPct || 'Not available'}`,
+      `  Lanes: ${rawTotalLanes || 'Not available'}`,
+      `  Terrain: ${rawTerrain || 'Not available'}`,
+      `  Functional Class: ${rawFuncClass || 'Not available'}`,
+      `  Crash Count: ${rawCrashCount || 0}`,
+      `  Bridges: ${rawBridges?.length || 0}`,
       ``,
       `Output:`,
       `  PDF: ${pdfSize} bytes`,

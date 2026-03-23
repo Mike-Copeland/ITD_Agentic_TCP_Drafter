@@ -372,7 +372,11 @@ export default function App() {
           positionedCrossStreets: contextData?.positionedCrossStreets || [],
           itdTerrain: contextData?.itdTerrain || '',
           itdFuncClass: contextData?.itdFuncClass || '',
-          itdTotalLanes: contextData?.itdTotalLanes || 0
+          itdTotalLanes: contextData?.itdTotalLanes || 0,
+          itdAADT: contextData?.itdAADT || 0,
+          itdTruckPct: contextData?.itdTruckPct || 0,
+          itdCrashCount: contextData?.itdCrashCount || 0,
+          itdBridges: contextData?.itdBridges || []
         }),
       });
 

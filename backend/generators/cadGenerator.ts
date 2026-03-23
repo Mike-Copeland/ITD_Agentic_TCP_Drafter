@@ -429,6 +429,8 @@ function drawCoverSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: Dr
     `Typical Application (${ctx.taCode})`,
     'Site-Specific Work Zone Layout',
     ...ctx.crossStreets.map(cs => `Intersection Detail: ${cs.name}`),
+    'Traffic Data & Queue Analysis',
+    'Special Considerations',
     'Sign Schedule & Quantities',
   ];
   sheetNames.forEach((name, i) => {
@@ -1134,6 +1136,290 @@ function drawIntersectionSheet(doc: Doc, sheetNum: number, totalSheets: number, 
 }
 
 // ===================================================================
+// SHEET: TRAFFIC DATA & QUEUE ANALYSIS
+// ===================================================================
+function drawQueueAnalysisSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawContext) {
+  doc.addPage({ size: 'tabloid', layout: 'landscape', margin: 0 });
+
+  doc.fontSize(14).fillColor('black').text('TRAFFIC DATA & QUEUE ANALYSIS', 0, 25, { align: 'center' });
+  doc.fontSize(9).text(`${ctx.roadName || 'Project Road'} — ${ctx.operationType}`, 0, 45, { align: 'center' });
+
+  // Traffic Data Box
+  const tdX = 50, tdY = 80;
+  doc.lineWidth(1).rect(tdX, tdY, 520, 200).stroke();
+  doc.font('Helvetica-Bold').fontSize(10).text('TRAFFIC DATA', tdX + 10, tdY + 8, { underline: true });
+  doc.font('Helvetica').fontSize(8);
+
+  const aadtStr = ctx.aadt > 0 ? ctx.aadt.toLocaleString() : 'Not available';
+  const truckStr = ctx.truckPct > 0 ? `${ctx.truckPct.toFixed(1)}%` : 'Not available';
+  const peakHourVol = ctx.aadt > 0 ? Math.round(ctx.aadt * 0.09) : 0; // K-factor ~9%
+  const peakDirVol = peakHourVol > 0 ? Math.round(peakHourVol * 0.6) : 0; // D-factor ~60%
+  const truckVol = ctx.aadt > 0 && ctx.truckPct > 0 ? Math.round(ctx.aadt * ctx.truckPct / 100) : 0;
+
+  const tdRows: [string, string][] = [
+    ['AADT (Annual Average Daily Traffic):', aadtStr],
+    ['Truck Percentage:', truckStr],
+    ['Estimated Daily Truck Volume:', truckVol > 0 ? truckVol.toLocaleString() : 'N/A'],
+    ['Estimated Peak Hour Volume (K=0.09):', peakHourVol > 0 ? peakHourVol.toLocaleString() + ' vph' : 'N/A'],
+    ['Estimated Peak Directional Volume (D=0.60):', peakDirVol > 0 ? peakDirVol.toLocaleString() + ' vph' : 'N/A'],
+    ['Functional Classification:', ctx.funcClass || 'Not available'],
+    ['Terrain:', ctx.terrain || 'Not available'],
+    ['Number of Lanes:', ctx.totalLanes > 0 ? `${ctx.totalLanes}` : 'Not available'],
+    ['Speed Limit:', `${ctx.speedMph} MPH`],
+    ['Work Zone Speed:', `${ctx.wzSpeedMph} MPH`],
+  ];
+  let tdRow = tdY + 28;
+  for (const [label, value] of tdRows) {
+    doc.font('Helvetica-Bold').text(label, tdX + 10, tdRow, { continued: true, lineBreak: false });
+    doc.font('Helvetica').text(` ${value}`, { lineBreak: false });
+    tdRow += 16;
+  }
+
+  // Queue Length Analysis Box
+  const qaX = 600, qaY = 80;
+  doc.lineWidth(1).rect(qaX, qaY, 570, 200).stroke();
+  doc.font('Helvetica-Bold').fontSize(10).fillColor('black').text('QUEUE LENGTH ESTIMATE', qaX + 10, qaY + 8, { underline: true });
+  doc.font('Helvetica').fontSize(8);
+
+  if (ctx.aadt > 0 && peakDirVol > 0) {
+    // Simplified HCM queue analysis
+    // Work zone capacity: ~1,400 pcphpl for flagging, ~1,600 for lane closure with merge
+    const isFlagging = ctx.taCode === 'TA-10';
+    const wzCapacity = isFlagging ? 1400 : 1600;
+    const demandVol = peakDirVol;
+    const vcRatio = demandVol / wzCapacity;
+    // Average vehicle length = 25 ft (mix of cars and trucks)
+    const avgVehLen = 25 + (ctx.truckPct > 0 ? ctx.truckPct * 0.3 : 5);
+
+    let queueLenFt = 0;
+    let delayPerVeh = 0;
+    if (vcRatio >= 1.0) {
+      // Oversaturated: queue grows at (demand - capacity) vehicles per hour
+      const queueGrowthRate = demandVol - wzCapacity; // veh/hr
+      const analysisHr = 1; // 1-hour peak
+      queueLenFt = Math.round(queueGrowthRate * analysisHr * avgVehLen);
+      delayPerVeh = Math.round((queueLenFt / avgVehLen) / wzCapacity * 3600); // seconds
+    } else if (vcRatio > 0.7) {
+      // Near-capacity: some delay
+      delayPerVeh = Math.round(30 * (vcRatio - 0.7) / 0.3); // 0-30 sec range
+      queueLenFt = Math.round(delayPerVeh * demandVol / 3600 * avgVehLen);
+    }
+
+    const qaRows: [string, string][] = [
+      ['Analysis Method:', 'HCM Simplified Queue Estimation'],
+      ['Work Zone Capacity:', `${wzCapacity.toLocaleString()} pcphpl (${isFlagging ? 'flagging operation' : 'lane closure/merge'})`],
+      ['Peak Directional Demand:', `${demandVol.toLocaleString()} vph`],
+      ['Volume/Capacity Ratio:', vcRatio.toFixed(2)],
+      ['', ''],
+      ['Estimated Queue Length:', queueLenFt > 0 ? `${queueLenFt.toLocaleString()} ft (${(queueLenFt / 5280).toFixed(2)} mi)` : 'Minimal (free-flow conditions)'],
+      ['Estimated Delay Per Vehicle:', delayPerVeh > 0 ? `${delayPerVeh} seconds` : 'Minimal'],
+      ['', ''],
+    ];
+    let qaRow = qaY + 28;
+    for (const [label, value] of qaRows) {
+      if (!label && !value) { qaRow += 6; continue; }
+      doc.font('Helvetica-Bold').text(label, qaX + 10, qaRow, { continued: true, lineBreak: false });
+      doc.font('Helvetica').text(` ${value}`, { lineBreak: false });
+      qaRow += 16;
+    }
+
+    // Capacity assessment
+    doc.font('Helvetica-Bold').fontSize(9);
+    if (vcRatio >= 1.0) {
+      doc.fillColor('#cc0000').text('WARNING: DEMAND EXCEEDS CAPACITY', qaX + 10, qaRow + 5, { lineBreak: false });
+      doc.font('Helvetica').fontSize(7).fillColor('#cc0000');
+      doc.text('Consider off-peak work hours, phased operations, or detour routes.', qaX + 10, qaRow + 20, { width: 550 });
+      doc.text('Queue management plan required per MUTCD Section 6C.14.', qaX + 10, qaRow + 32, { width: 550 });
+    } else if (vcRatio > 0.85) {
+      doc.fillColor('#CC6600').text('CAUTION: NEAR-CAPACITY CONDITIONS', qaX + 10, qaRow + 5, { lineBreak: false });
+      doc.font('Helvetica').fontSize(7).fillColor('#CC6600');
+      doc.text('Monitor queue lengths during peak hours. Have contingency plan ready.', qaX + 10, qaRow + 20, { width: 550 });
+    } else {
+      doc.fillColor('#006B3F').text('ADEQUATE CAPACITY', qaX + 10, qaRow + 5, { lineBreak: false });
+      doc.font('Helvetica').fontSize(7).fillColor('#006B3F');
+      doc.text('Expected minimal delays under normal conditions.', qaX + 10, qaRow + 20, { width: 550 });
+    }
+    doc.fillColor('black');
+  } else {
+    doc.fontSize(9).fillColor('#666').text('AADT data not available — queue analysis cannot be performed.', qaX + 10, qaY + 35, { width: 550 });
+    doc.text('Obtain traffic counts before construction to assess capacity impacts.', qaX + 10, qaY + 50, { width: 550 });
+  }
+
+  // Crash History Box
+  const chX = 50, chY = 300;
+  doc.lineWidth(1).rect(chX, chY, 520, 130).stroke();
+  doc.font('Helvetica-Bold').fontSize(10).fillColor('black').text('CRASH HISTORY', chX + 10, chY + 8, { underline: true });
+  doc.font('Helvetica').fontSize(8);
+  if (ctx.crashCount > 0) {
+    doc.text(`Crashes within project limits (ITD database): ${ctx.crashCount}`, chX + 10, chY + 30);
+    if (ctx.crashCount >= 10) {
+      doc.font('Helvetica-Bold').fillColor('#cc0000');
+      doc.text('HIGH CRASH LOCATION — Enhanced traffic control measures recommended.', chX + 10, chY + 50);
+      doc.font('Helvetica').fontSize(7).fillColor('black');
+      doc.text('Consider additional advance warning signs, enhanced delineation, and law enforcement presence.', chX + 10, chY + 68, { width: 500 });
+      doc.text('Speed feedback signs may be warranted per ITD policy.', chX + 10, chY + 80, { width: 500 });
+    } else if (ctx.crashCount >= 5) {
+      doc.fillColor('#CC6600');
+      doc.text('Moderate crash history — exercise caution during setup and removal.', chX + 10, chY + 50);
+      doc.fillColor('black');
+    } else {
+      doc.text('Low crash history at this location.', chX + 10, chY + 50);
+    }
+  } else {
+    doc.text('No crash data available from ITD database for this location.', chX + 10, chY + 30);
+  }
+
+  // Bridge Data Box
+  const brX = 600, brY = 300;
+  doc.lineWidth(1).rect(brX, brY, 570, 130).stroke();
+  doc.font('Helvetica-Bold').fontSize(10).fillColor('black').text('BRIDGE & STRUCTURE DATA', brX + 10, brY + 8, { underline: true });
+  doc.font('Helvetica').fontSize(8);
+  if (ctx.bridges && ctx.bridges.length > 0) {
+    doc.text(`Bridges/structures within project limits: ${ctx.bridges.length}`, brX + 10, brY + 30);
+    let brRow = brY + 48;
+    ctx.bridges.slice(0, 4).forEach((br: any, i: number) => {
+      const name = br.STRUCTURE_NAME || br.name || `Structure ${i + 1}`;
+      const len = br.STRUCTURE_LENGTH || br.length || 'N/A';
+      const width = br.DECK_WIDTH || br.width || 'N/A';
+      doc.text(`${i + 1}. ${name} — Length: ${len} ft, Deck Width: ${width} ft`, brX + 10, brRow, { width: 550, lineBreak: false });
+      brRow += 14;
+    });
+    doc.fontSize(7).fillColor('#cc0000');
+    doc.text('NOTE: No work zone devices shall be placed on bridge decks without approval.', brX + 10, brRow + 5, { width: 550 });
+    doc.fillColor('black');
+  } else {
+    doc.text('No bridges or structures identified within project limits.', brX + 10, brY + 30);
+  }
+
+  // Work Window Recommendations
+  const wwX = 50, wwY = 450;
+  doc.lineWidth(1).rect(wwX, wwY, 1120, 100).stroke();
+  doc.font('Helvetica-Bold').fontSize(10).fillColor('black').text('RECOMMENDED WORK WINDOWS', wwX + 10, wwY + 8, { underline: true });
+  doc.font('Helvetica').fontSize(8);
+  if (ctx.aadt > 0) {
+    const isHighVol = ctx.aadt > 5000;
+    const isMedVol = ctx.aadt > 1500;
+    const windows = isHighVol ? [
+      'DAYTIME (Off-Peak): 9:00 AM — 3:00 PM weekdays (avoid AM/PM peak hours)',
+      'NIGHTTIME: 8:00 PM — 6:00 AM (preferred for minimal traffic impact)',
+      'WEEKEND: Saturday 6:00 AM — Sunday 6:00 PM (reduced volume)',
+      `Peak hour volume (~${peakHourVol} vph) may cause significant delays — coordinate with ITD Traffic Operations.`,
+    ] : isMedVol ? [
+      'DAYTIME: 7:00 AM — 5:00 PM weekdays (moderate traffic expected)',
+      'Extended hours acceptable with traffic management plan',
+      'Monitor queue lengths during peak commute periods',
+    ] : [
+      'DAYTIME: Standard work hours acceptable (low traffic volume)',
+      'No peak-hour restrictions anticipated',
+      `Low AADT (${ctx.aadt}) — minimal traffic impact expected`,
+    ];
+    windows.forEach((w, i) => {
+      doc.text(`• ${w}`, wwX + 10, wwY + 28 + i * 14, { width: 1100 });
+    });
+  } else {
+    doc.text('• Obtain traffic counts to determine optimal work windows.', wwX + 10, wwY + 28);
+    doc.text('• Default: Avoid AM peak (7-9 AM) and PM peak (4-6 PM) on arterial roads.', wwX + 10, wwY + 42);
+  }
+
+  // Disclaimer
+  doc.fontSize(6).fillColor('#999');
+  doc.text('Queue estimates are approximate and based on simplified HCM methodology. Actual conditions may vary. Field verification required.', 50, 570, { width: 1120, align: 'center' });
+
+  drawWatermark(doc);
+  drawTitleBlock(doc, sheetNum, totalSheets, ctx.operationType, ctx.roadName);
+}
+
+// ===================================================================
+// SHEET: SPECIAL CONSIDERATIONS
+// ===================================================================
+function drawSpecialConsiderationsSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawContext) {
+  doc.addPage({ size: 'tabloid', layout: 'landscape', margin: 0 });
+
+  doc.fontSize(14).fillColor('black').text('SPECIAL CONSIDERATIONS', 0, 25, { align: 'center' });
+  doc.fontSize(9).text(`${ctx.roadName || 'Project Road'} — ${ctx.operationType}`, 0, 45, { align: 'center' });
+
+  let yPos = 80;
+  const boxW = 1120, boxX = 52;
+
+  // 1. NIGHT OPERATIONS
+  const nightH = 90;
+  doc.lineWidth(1).rect(boxX, yPos, boxW, nightH).stroke();
+  doc.font('Helvetica-Bold').fontSize(10).fillColor('black').text('NIGHT OPERATIONS', boxX + 10, yPos + 8, { underline: true });
+  doc.font('Helvetica').fontSize(7);
+  const nightNotes = [
+    '• All advance warning signs shall be retroreflective or illuminated per MUTCD 6F.02.',
+    '• Flagger stations shall be illuminated with a minimum of 5 foot-candles at ground level (MUTCD 6E.02).',
+    '• Channelizing devices shall have retroreflective sheeting visible from minimum 1,000 ft.',
+    '• Arrow boards shall operate in flashing mode during nighttime operations.',
+    `• ${ctx.speedMph >= 55 ? 'HIGH-SPEED ROAD: Consider additional flashing beacons on advance warning signs.' : 'Standard nighttime delineation requirements apply.'}`,
+  ];
+  nightNotes.forEach((n, i) => doc.text(n, boxX + 10, yPos + 28 + i * 11, { width: boxW - 20 }));
+  yPos += nightH + 10;
+
+  // 2. PEDESTRIAN & BICYCLE ACCOMMODATIONS
+  const pedH = 90;
+  doc.lineWidth(1).rect(boxX, yPos, boxW, pedH).stroke();
+  doc.font('Helvetica-Bold').fontSize(10).fillColor('black').text('PEDESTRIAN & BICYCLE ACCOMMODATIONS', boxX + 10, yPos + 8, { underline: true });
+  doc.font('Helvetica').fontSize(7);
+  const isUrban = ctx.funcClass ? parseInt(ctx.funcClass) >= 5 : ctx.speedMph <= 35;
+  const pedNotes = isUrban ? [
+    '• Maintain ADA-compliant pedestrian access through or around the work zone at all times (MUTCD 6D.01).',
+    '• Provide temporary pedestrian signs (R9-9 SIDEWALK CLOSED, R9-11 USE OTHER SIDE) if sidewalks are impacted.',
+    '• Temporary pedestrian pathway shall be minimum 60 inches wide with detectable edges.',
+    '• Curb ramps and level landings required at all pedestrian crossings per ADA Standards.',
+    '• If bicycle lane is impacted, provide SHARE THE ROAD (W11-1) signs and maintain 4-ft minimum bicycle space.',
+  ] : [
+    '• Rural location — pedestrian traffic expected to be minimal.',
+    '• If pedestrians or bicyclists are observed, provide safe passage with flagger assistance.',
+    '• No sidewalk closures anticipated.',
+    `• ${ctx.speedMph >= 55 ? 'High-speed road — pedestrian/bicycle access not recommended through work zone.' : 'Maintain shoulder access for bicyclists where feasible.'}`,
+  ];
+  pedNotes.forEach((n, i) => doc.text(n, boxX + 10, yPos + 28 + i * 11, { width: boxW - 20 }));
+  yPos += pedH + 10;
+
+  // 3. EMERGENCY VEHICLE ACCESS
+  const evaH = 75;
+  doc.lineWidth(1).rect(boxX, yPos, boxW, evaH).stroke();
+  doc.font('Helvetica-Bold').fontSize(10).fillColor('black').text('EMERGENCY VEHICLE ACCESS', boxX + 10, yPos + 8, { underline: true });
+  doc.font('Helvetica').fontSize(7);
+  const evaNotes = [
+    '• Emergency vehicle access shall be maintained at all times per MUTCD 6C.01 and ITD Section 626.',
+    '• Channelizing devices shall be moveable to allow emergency vehicle passage within 3 minutes.',
+    '• Notify local fire, EMS, and law enforcement of work zone location and schedule prior to start of work.',
+    `• ${ctx.crossStreets.length > 0 ? `Maintain access to all ${ctx.crossStreets.length} intersecting roads for emergency vehicles.` : 'No cross-street access restrictions identified.'}`,
+  ];
+  evaNotes.forEach((n, i) => doc.text(n, boxX + 10, yPos + 28 + i * 11, { width: boxW - 20 }));
+  yPos += evaH + 10;
+
+  // 4. ENVIRONMENTAL & SEASONAL CONSIDERATIONS
+  const envH = 75;
+  doc.lineWidth(1).rect(boxX, yPos, boxW, envH).stroke();
+  doc.font('Helvetica-Bold').fontSize(10).fillColor('black').text('ENVIRONMENTAL & SEASONAL CONSIDERATIONS', boxX + 10, yPos + 8, { underline: true });
+  doc.font('Helvetica').fontSize(7);
+  const terrainStr = ctx.terrain || 'unknown';
+  const envNotes = [
+    `• Terrain: ${terrainStr.charAt(0).toUpperCase() + terrainStr.slice(1)}${/rolling|mountainous/i.test(terrainStr) ? ' — reduced sight distance may require additional advance warning.' : '.'}`,
+    '• Winter operations: Ensure all temporary signs and devices are visible above snow accumulation.',
+    '• Wet/icy conditions: Increase advance warning distances and reduce work zone speed limit.',
+    '• Wildlife corridor: If wildlife crossing signs exist, maintain visibility and do not remove.',
+  ];
+  envNotes.forEach((n, i) => doc.text(n, boxX + 10, yPos + 28 + i * 11, { width: boxW - 20 }));
+  yPos += envH + 10;
+
+  // 5. UTILITY CONSIDERATIONS
+  const utilH = 60;
+  doc.lineWidth(1).rect(boxX, yPos, boxW, utilH).stroke();
+  doc.font('Helvetica-Bold').fontSize(10).fillColor('black').text('UTILITY COORDINATION', boxX + 10, yPos + 8, { underline: true });
+  doc.font('Helvetica').fontSize(7);
+  doc.text('• Contact Dig Line (811) minimum 2 business days before excavation work begins.', boxX + 10, yPos + 28, { width: boxW - 20 });
+  doc.text('• Verify location of overhead utilities before positioning arrow boards and high-profile equipment.', boxX + 10, yPos + 39, { width: boxW - 20 });
+  doc.text('• Maintain clearance from utility poles — do not attach signs or devices to utility infrastructure.', boxX + 10, yPos + 50, { width: boxW - 20 });
+
+  drawWatermark(doc);
+  drawTitleBlock(doc, sheetNum, totalSheets, ctx.operationType, ctx.roadName);
+}
+
+// ===================================================================
 // SHEET: SIGN SCHEDULE
 // ===================================================================
 function drawSignScheduleSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawContext) {
@@ -1245,6 +1531,10 @@ interface DrawContext {
   hasTWLTL: boolean;
   isDivided: boolean;
   isMultiLane: boolean;
+  aadt: number;
+  truckPct: number;
+  crashCount: number;
+  bridges: any[];
 }
 
 // ===================================================================
@@ -1289,7 +1579,7 @@ export function generateDXF(
   const dnTaperFt = blueprint.downstream_taper.length_ft || 50;
   const spacing = getABCSpacing(speedMph, terrain, funcClass);
   const deviceSpacing = getDeviceSpacing(speedMph, taCode);
-  const workZoneFt = routeDistanceFt > 0 ? Math.min(routeDistanceFt, 2000) : 400;
+  const workZoneFt = routeDistanceFt > 0 ? Math.min(routeDistanceFt, 10000) : 400;
 
   // Linear stations (distance from upstream end)
   // Signs go at their MUTCD distances from the taper
@@ -1567,6 +1857,10 @@ export async function generateCAD(
   terrain = '',
   funcClass = '',
   totalLanes = 0,
+  aadt = 0,
+  truckPct = 0,
+  crashCount = 0,
+  bridges: any[] = [],
 ): Promise<void> {
   // === BLUEPRINT VALIDATION — ensure all required fields exist ===
   if (!blueprint.primary_approach || !Array.isArray(blueprint.primary_approach)) blueprint.primary_approach = [];
@@ -1701,7 +1995,7 @@ export async function generateCAD(
     return true;
   }).slice(0, 6);
 
-  const totalSheets = 3 + filteredCrossStreets.length + 1;
+  const totalSheets = 3 + filteredCrossStreets.length + 3; // +3 = queue analysis, special considerations, sign schedule
 
   const ctx: DrawContext = {
     blueprint, staticMapBase64, startCoords, endCoords,
@@ -1709,6 +2003,7 @@ export async function generateCAD(
     routeDistanceFt, roadName, crossStreets: filteredCrossStreets, taperLengthFt,
     terrain, funcClass, mainRoadNumber: mainRoadNum, taCode, taDescription,
     totalLanes, hasTWLTL, isDivided, isMultiLane,
+    aadt, truckPct, crashCount, bridges,
   };
 
   return new Promise((resolve, reject) => {
@@ -1744,6 +2039,12 @@ export async function generateCAD(
       for (const cs of filteredCrossStreets) {
         drawIntersectionSheet(doc, sheetNum++, totalSheets, ctx, cs);
       }
+
+      // Traffic Data & Queue Analysis
+      drawQueueAnalysisSheet(doc, sheetNum++, totalSheets, ctx);
+
+      // Special Considerations
+      drawSpecialConsiderationsSheet(doc, sheetNum++, totalSheets, ctx);
 
       // Last Sheet: Sign Schedule
       drawSignScheduleSheet(doc, sheetNum++, totalSheets, ctx);
