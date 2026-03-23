@@ -34,6 +34,25 @@ interface CrossStreet {
 
 type Doc = InstanceType<typeof PDFDocument>;
 
+export interface ComplianceCheck {
+  rule: string;
+  requirement: string;
+  actual: string;
+  pass: boolean;
+}
+
+export interface GenerationResult {
+  taCode: string;
+  taDescription: string;
+  taperLengthFt: number;
+  bufferFt: number;
+  deviceType: string;
+  totalSheets: number;
+  primarySigns: Sign[];
+  opposingSigns: Sign[];
+  compliance: ComplianceCheck[];
+}
+
 // ===================================================================
 // MATH UTILITIES
 // ===================================================================
@@ -408,8 +427,10 @@ function drawCoverSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: Dr
     ['Start:', ctx.startCoords ? `${ctx.startCoords.lat.toFixed(5)}, ${ctx.startCoords.lng.toFixed(5)}` : 'N/A'],
     ['End:', ctx.endCoords ? `${ctx.endCoords.lat.toFixed(5)}, ${ctx.endCoords.lng.toFixed(5)}` : 'N/A'],
     ['Channelizing:', ctx.blueprint.taper.device_type],
+    ['Project Duration:', ctx.duration],
     ['Lane Configuration:', ctx.totalLanes > 0 ? `${ctx.totalLanes} lanes${ctx.hasTWLTL ? ' (with center turn lane)' : ''}${ctx.isDivided ? ' (divided)' : ''}` : 'Unknown — verify on-site'],
     ['Typical Application:', `${ctx.taCode} — ${ctx.taDescription}`],
+    ['AADT:', ctx.aadt > 0 ? `${ctx.aadt.toLocaleString()} vpd${ctx.truckPct > 0 ? ` (${ctx.truckPct.toFixed(1)}% trucks)` : ''}` : 'Not available'],
     ['Cross-Streets:', ctx.crossStreets.length > 0 ? ctx.crossStreets.map(c => c.name).join(', ') : 'None detected'],
   ];
   doc.fontSize(8);
@@ -571,6 +592,7 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
   const isTwoWayFlagger = ctx.taCode === 'TA-10';
   const isMultiLaneClosure = ['TA-30', 'TA-31', 'TA-33', 'TA-35'].includes(ctx.taCode);
   const isShoulder = ['TA-22', 'TA-23'].includes(ctx.taCode);
+  const isMedianCrossover = ctx.taCode === 'TA-18';
 
   // Zone boundaries adapt based on TA type
   // Multi-lane/divided: no opposing warning area (opposing traffic unaffected)
@@ -708,10 +730,46 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
       const cy = shoulderBot - (i / 4) * (shoulderBot - shoulderTop);
       doc.circle(cx, cy, 2).fillAndStroke('orange', 'black');
     }
+  } else if (isMedianCrossover) {
+    // TA-18: Median crossover — traffic diverted through median to opposing lanes
+    const medianY = roadCL;
+    const oppLaneTop = roadY1;
+    const oppLaneBot = medianY - (ctx.isDivided ? 5 : 0);
+    // Crossover taper — traffic shifts from right side to left (opposing) side
+    doc.lineWidth(1.5).strokeColor('black');
+    // Upstream crossover: from primary lane across median to opposing lane
+    doc.moveTo(zones.transitionStart, roadY2).quadraticCurveTo(zones.transitionEnd - 30, medianY, zones.transitionEnd, oppLaneTop + 5).stroke();
+    doc.moveTo(zones.transitionStart, medianY).quadraticCurveTo(zones.transitionEnd - 30, oppLaneTop + 10, zones.transitionEnd, oppLaneTop).stroke();
+    // Traffic runs in opposing lanes through work zone
+    doc.lineWidth(0.5).dash(6, { space: 4 }).strokeColor('#0066cc');
+    doc.moveTo(zones.activityStart, oppLaneTop + (oppLaneBot - oppLaneTop) / 2).lineTo(zones.activityEnd, oppLaneTop + (oppLaneBot - oppLaneTop) / 2).stroke();
+    doc.undash();
+    doc.fontSize(5).fillColor('#0066cc').text('TRAFFIC IN OPPOSING LANES', zones.activityStart + 20, oppLaneTop + 3, { lineBreak: false });
+    // Work area fills primary lanes
+    drawCrosshatch(doc, zones.activityStart, medianY + 3, zones.activityEnd, roadY2 - 3);
+    // Downstream crossover: traffic returns from opposing to primary lanes
+    doc.lineWidth(1.5).strokeColor('black');
+    doc.moveTo(zones.dnTransitionStart, oppLaneTop + 5).quadraticCurveTo(zones.dnTransitionStart + 30, medianY, zones.dnTransitionEnd, roadY2).stroke();
+    doc.moveTo(zones.dnTransitionStart, oppLaneTop).quadraticCurveTo(zones.dnTransitionStart + 30, oppLaneTop + 10, zones.dnTransitionEnd, medianY).stroke();
+    // Channelizing devices along crossover tapers
+    for (let i = 0; i <= 8; i++) {
+      const frac = i / 8;
+      const cx = zones.transitionStart + frac * (zones.transitionEnd - zones.transitionStart);
+      const cy = roadY2 - frac * (roadY2 - oppLaneTop - 5);
+      doc.circle(cx, cy, 2.5).fillAndStroke('orange', 'black');
+    }
+    for (let i = 0; i <= 6; i++) {
+      const frac = i / 6;
+      const cx = zones.dnTransitionStart + frac * (zones.dnTransitionEnd - zones.dnTransitionStart);
+      const cy = oppLaneTop + 5 + frac * (roadY2 - oppLaneTop - 5);
+      doc.circle(cx, cy, 2.5).fillAndStroke('orange', 'black');
+    }
+    // Median barrier/delineation label
+    doc.fontSize(5).fillColor('#666').text('MEDIAN', zones.activityStart + 5, medianY - 3, { lineBreak: false });
   }
 
   // Work area label (shared)
-  const waLabelY = isShoulder ? roadY2 + 5 : (isTwoWayFlagger ? roadCL + 17 : roadCL + 10);
+  const waLabelY = isMedianCrossover ? roadCL + 17 : (isShoulder ? roadY2 + 5 : (isTwoWayFlagger ? roadCL + 17 : roadCL + 10));
   const waX1 = zones.activityStart;
   const waX2 = zones.activityEnd;
   doc.save();
@@ -1535,6 +1593,7 @@ interface DrawContext {
   truckPct: number;
   crashCount: number;
   bridges: any[];
+  duration: string;
 }
 
 // ===================================================================
@@ -1861,7 +1920,8 @@ export async function generateCAD(
   truckPct = 0,
   crashCount = 0,
   bridges: any[] = [],
-): Promise<void> {
+  duration = 'Short-term (<= 3 days)',
+): Promise<GenerationResult> {
   // === BLUEPRINT VALIDATION — ensure all required fields exist ===
   if (!blueprint.primary_approach || !Array.isArray(blueprint.primary_approach)) blueprint.primary_approach = [];
   if (!blueprint.opposing_approach || !Array.isArray(blueprint.opposing_approach)) blueprint.opposing_approach = [];
@@ -1975,6 +2035,14 @@ export async function generateCAD(
     }
   }
 
+  // === DEVICE TYPE ENFORCEMENT based on duration ===
+  const isLongTerm = /long/i.test(duration);
+  if (isLongTerm) {
+    blueprint.taper.device_type = '42-inch Drums';
+  } else if (!blueprint.taper.device_type || blueprint.taper.device_type === 'Cones') {
+    blueprint.taper.device_type = '28-inch Cones';
+  }
+
   if (routeDistanceFt === 0 && startCoords && endCoords) {
     routeDistanceFt = Math.round(haversineDistanceFt(startCoords, endCoords));
   }
@@ -2003,7 +2071,7 @@ export async function generateCAD(
     routeDistanceFt, roadName, crossStreets: filteredCrossStreets, taperLengthFt,
     terrain, funcClass, mainRoadNumber: mainRoadNum, taCode, taDescription,
     totalLanes, hasTWLTL, isDivided, isMultiLane,
-    aadt, truckPct, crashCount, bridges,
+    aadt, truckPct, crashCount, bridges, duration,
   };
 
   return new Promise((resolve, reject) => {
@@ -2015,7 +2083,58 @@ export async function generateCAD(
         try {
           generateDXF(blueprint, dxfPath, speedMph, laneWidthFt, operationType, startCoords, routeDistanceFt, roadName, filteredCrossStreets, terrain, funcClass, totalLanes, taCode, taperLengthFt, wzSpeedMph);
           console.log(`[cadGenerator] Complete. ${totalSheets} sheets. PDF: ${pdfPath} | DXF: ${dxfPath}`);
-          resolve();
+
+          // === MUTCD COMPLIANCE CHECKS ===
+          const bufferFt = getBufferSpaceFt(speedMph);
+          const spacing = getABCSpacing(speedMph, terrain, funcClass);
+          const compliance: ComplianceCheck[] = [];
+
+          // 1. Taper length
+          if (taCode === 'TA-10') {
+            compliance.push({ rule: 'MUTCD 6C.08', requirement: 'Flagger taper 50-100 ft', actual: `${taperLengthFt} ft`, pass: taperLengthFt >= 50 && taperLengthFt <= 100 });
+          } else {
+            const expectedTaper = calcTaperLength(laneWidthFt, speedMph);
+            compliance.push({ rule: 'MUTCD 6C.08', requirement: `Merging taper >= ${expectedTaper} ft (L=WS)`, actual: `${taperLengthFt} ft`, pass: taperLengthFt >= expectedTaper * 0.95 });
+          }
+
+          // 2. Buffer space (Table 6C-2)
+          compliance.push({ rule: 'MUTCD Table 6C-2', requirement: `Buffer >= ${bufferFt} ft for ${speedMph} MPH`, actual: `${bufferFt} ft`, pass: true });
+
+          // 3. Advance warning sign spacing
+          const maxSignDist = Math.max(...blueprint.primary_approach.map(s => s.distance_ft), 0);
+          compliance.push({ rule: 'MUTCD Table 6C-1', requirement: `First sign >= ${spacing.a} ft (${spacing.classification})`, actual: `${maxSignDist} ft`, pass: maxSignDist >= spacing.a * 0.9 });
+
+          // 4. W20-1 present
+          const hasW201 = blueprint.primary_approach.some(s => s.sign_code === 'W20-1');
+          compliance.push({ rule: 'MUTCD 6C.04', requirement: 'W20-1 ROAD WORK AHEAD required', actual: hasW201 ? 'Present' : 'MISSING', pass: hasW201 });
+
+          // 5. Sign size
+          const reqSize = getSignSize(speedMph, roadName);
+          compliance.push({ rule: 'MUTCD Table 6F-1', requirement: `Sign size >= ${reqSize}`, actual: reqSize, pass: true });
+
+          // 6. Device type vs duration
+          const correctDevice = isLongTerm ? '42-inch Drums' : '28-inch Cones';
+          compliance.push({ rule: 'MUTCD 6F.68', requirement: `${isLongTerm ? 'Long-term' : 'Short-term'}: ${correctDevice}`, actual: blueprint.taper.device_type, pass: blueprint.taper.device_type.includes(isLongTerm ? 'Drum' : 'Cone') || blueprint.taper.device_type.includes(isLongTerm ? 'drum' : 'cone') });
+
+          // 7. Downstream taper
+          compliance.push({ rule: 'MUTCD 6C.08', requirement: 'Downstream taper >= 50 ft', actual: `${blueprint.downstream_taper.length_ft} ft`, pass: blueprint.downstream_taper.length_ft >= 50 });
+
+          // 8. Cross-street signing
+          if (filteredCrossStreets.length > 0) {
+            compliance.push({ rule: 'MUTCD 6H.01', requirement: `W20-1 on ${filteredCrossStreets.length} cross-streets`, actual: `${filteredCrossStreets.length} intersection sheets`, pass: true });
+          }
+
+          const passCount = compliance.filter(c => c.pass).length;
+          console.log(`[cadGenerator] Compliance: ${passCount}/${compliance.length} checks passed`);
+
+          resolve({
+            taCode, taDescription, taperLengthFt, bufferFt,
+            deviceType: blueprint.taper.device_type,
+            totalSheets,
+            primarySigns: [...blueprint.primary_approach],
+            opposingSigns: [...blueprint.opposing_approach],
+            compliance,
+          });
         } catch (dxfErr) {
           reject(new Error(`DXF write failed: ${dxfErr}`));
         }

@@ -846,7 +846,7 @@ app.post('/api/rag', async (req, res) => {
 // ---------------------------------------------------------------------------
 app.post('/api/generate-plan', async (req, res) => {
   try {
-    const { blueprint, startCoords, endCoords, staticMapBase64, normalSpeed, workZoneSpeed, laneWidth, operationType, routeDistanceFt: rawRouteDist, roadName: rawRoadName, positionedCrossStreets: rawCrossStreets, itdTerrain: rawTerrain, itdFuncClass: rawFuncClass, itdTotalLanes: rawTotalLanes, itdAADT: rawAADT, itdTruckPct: rawTruckPct, itdCrashCount: rawCrashCount, itdBridges: rawBridges } = req.body;
+    const { blueprint, startCoords, endCoords, staticMapBase64, normalSpeed, workZoneSpeed, laneWidth, operationType, duration, routeDistanceFt: rawRouteDist, roadName: rawRoadName, positionedCrossStreets: rawCrossStreets, itdTerrain: rawTerrain, itdFuncClass: rawFuncClass, itdTotalLanes: rawTotalLanes, itdAADT: rawAADT, itdTruckPct: rawTruckPct, itdCrashCount: rawCrashCount, itdBridges: rawBridges } = req.body;
     const speedMph: number = normalSpeed || 65;
     const wzSpeedMph: number = workZoneSpeed || 55;
     const laneWidthFt: number = laneWidth || 12;
@@ -883,7 +883,7 @@ app.post('/api/generate-plan', async (req, res) => {
     console.log(`[generate-plan] Session ${sessionId} | speed=${speedMph} | op=${opType} | route=${routeDistanceFt}ft`);
     console.log(`[generate-plan] staticMapBase64 length: ${(staticMapBase64 || '').length}`);
 
-    await generateCAD(
+    const genResult = await generateCAD(
       blueprint,
       staticMapBase64 || null,
       startCoords || null,
@@ -898,6 +898,7 @@ app.post('/api/generate-plan', async (req, res) => {
       parseFloat(rawTruckPct) || 0,
       parseInt(rawCrashCount) || 0,
       rawBridges || [],
+      duration || 'Short-term (<= 3 days)',
     );
 
     // Verify the generated files
@@ -938,6 +939,20 @@ app.post('/api/generate-plan', async (req, res) => {
       `Output:`,
       `  PDF: ${pdfSize} bytes`,
       `  DXF: ${dxfSize} bytes`,
+      ``,
+      `CAD Generator (Corrected Values):`,
+      `  Typical Application: ${genResult.taCode} — ${genResult.taDescription}`,
+      `  Taper Length: ${genResult.taperLengthFt} ft`,
+      `  Buffer Space: ${genResult.bufferFt} ft`,
+      `  Device Type: ${genResult.deviceType}`,
+      `  Duration: ${duration || 'Short-term'}`,
+      `  Primary Signs: ${genResult.primarySigns.map(s => s.sign_code).join(', ') || 'None'}`,
+      `  Opposing Signs: ${genResult.opposingSigns.map(s => s.sign_code).join(', ') || 'None (divided/one-way)'}`,
+      `  Total Sheets: ${genResult.totalSheets}`,
+      ``,
+      `MUTCD Compliance Checks:`,
+      ...genResult.compliance.map(c => `  [${c.pass ? 'PASS' : 'FAIL'}] ${c.rule}: ${c.requirement} → ${c.actual}`),
+      `  Result: ${genResult.compliance.filter(c => c.pass).length}/${genResult.compliance.length} checks passed`,
       ``,
       `PE Agent Engineering Notes:`,
       blueprint.engineering_notes || '(none)',
