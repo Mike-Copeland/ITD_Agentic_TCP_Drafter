@@ -381,33 +381,42 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
   doc.addPage({ size: 'tabloid', layout: 'landscape', margin: 0 });
 
   const spacing = getABCSpacing(ctx.speedMph, ctx.terrain, ctx.funcClass);
+  const bufferFt = getBufferSpaceFt(ctx.speedMph);
   const taTitle = `${ctx.taCode}: ${ctx.taDescription.toUpperCase()}`;
   doc.fontSize(14).fillColor('black').text(`TYPICAL APPLICATION — ${taTitle}`, 0, 25, { align: 'center' });
-  doc.fontSize(8).text(`MUTCD 11th Edition | ${spacing.classification} | A=${spacing.a}' B=${spacing.b}' C=${spacing.c}' | Buffer: ${getBufferSpaceFt(ctx.speedMph)}' min (Table 6C-2)`, 0, 44, { align: 'center' });
+  doc.fontSize(8).text(`MUTCD 11th Edition | ${spacing.classification} | A=${spacing.a}' B=${spacing.b}' C=${spacing.c}' | Buffer: ${bufferFt}' min (Table 6C-2)`, 0, 44, { align: 'center' });
+  if (ctx.totalLanes > 0) {
+    doc.fontSize(7).text(`${ctx.totalLanes}-lane road${ctx.hasTWLTL ? ' with center turn lane' : ''}${ctx.isDivided ? ' (divided)' : ''}`, 0, 56, { align: 'center' });
+  }
 
-  // Layout: full MUTCD zones left to right
-  // [Advance Warning (C,B,A)] [Transition] [Buffer] [Activity Area] [Buffer] [Termination] [Advance Warning (A,B,C)]
-  const roadCL = 355; // roadY1 and roadY2 computed by drawRoadway below
+  const roadCL = 355;
   const roadL = 30, roadR = 1194;
+  const isTwoWayFlagger = ctx.taCode === 'TA-10';
+  const isMultiLaneClosure = ['TA-30', 'TA-31', 'TA-33', 'TA-35'].includes(ctx.taCode);
+  const isShoulder = ['TA-22', 'TA-23'].includes(ctx.taCode);
 
-  // Zone boundaries (proportional)
-  const zones = {
-    priWarningStart: 40,
-    priWarningEnd: 280,
-    transitionStart: 280,
-    transitionEnd: 355,
-    bufferStart: 355,
-    bufferEnd: 420,
-    activityStart: 420,
-    activityEnd: 630,
-    dnBufferStart: 630,   // Opposing buffer (symmetrical for TA-10)
-    dnBufferEnd: 695,
-    dnTransitionStart: 695, // Opposing taper
-    dnTransitionEnd: 740,
-    terminationStart: 740,
-    terminationEnd: 780,
-    oppWarningStart: 780,
-    oppWarningEnd: 1180,
+  // Zone boundaries adapt based on TA type
+  // Multi-lane/divided: no opposing warning area (opposing traffic unaffected)
+  // Shoulder: shorter taper, no lane closure
+  const zones = isTwoWayFlagger ? {
+    priWarningStart: 40, priWarningEnd: 280,
+    transitionStart: 280, transitionEnd: 355,
+    bufferStart: 355, bufferEnd: 420,
+    activityStart: 420, activityEnd: 630,
+    dnBufferStart: 630, dnBufferEnd: 695,
+    dnTransitionStart: 695, dnTransitionEnd: 740,
+    terminationStart: 740, terminationEnd: 780,
+    oppWarningStart: 780, oppWarningEnd: 1180,
+  } : {
+    // Multi-lane/shoulder: single-direction layout — more room for signs + longer taper
+    priWarningStart: 40, priWarningEnd: 340,
+    transitionStart: 340, transitionEnd: 500,  // Longer merging taper
+    bufferStart: 500, bufferEnd: 560,
+    activityStart: 560, activityEnd: 820,
+    dnBufferStart: 820, dnBufferEnd: 860,
+    dnTransitionStart: 860, dnTransitionEnd: 920, // Downstream taper
+    terminationStart: 920, terminationEnd: 980,
+    oppWarningStart: 980, oppWarningEnd: 1180, // END ROAD WORK area
   };
 
   // Roadway — lane-aware drawing
@@ -415,81 +424,133 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
   const roadY1 = road.topEdge;
   const roadY2 = road.bottomEdge;
 
-  // Zone labels at top
+  // Zone labels
   doc.fontSize(6).fillColor('#333');
   const zoneLabelY = roadY1 - 45;
-
-  // Advance Warning Area (Primary)
   doc.lineWidth(0.5).strokeColor('#999');
-  doc.rect(zones.priWarningStart, zoneLabelY, zones.priWarningEnd - zones.priWarningStart, 35).stroke();
-  doc.text('ADVANCE', zones.priWarningStart + 2, zoneLabelY + 3, { width: zones.priWarningEnd - zones.priWarningStart - 4, align: 'center', lineBreak: false });
-  doc.text('WARNING AREA', zones.priWarningStart + 2, zoneLabelY + 12, { width: zones.priWarningEnd - zones.priWarningStart - 4, align: 'center', lineBreak: false });
 
-  // Transition Area
-  doc.rect(zones.transitionStart, zoneLabelY, zones.transitionEnd - zones.transitionStart, 35).stroke();
-  doc.text('TRANSITION', zones.transitionStart + 2, zoneLabelY + 8, { width: zones.transitionEnd - zones.transitionStart - 4, align: 'center', lineBreak: false });
+  const drawZoneLabel = (x1: number, x2: number, label1: string, label2?: string) => {
+    doc.rect(x1, zoneLabelY, x2 - x1, 35).stroke();
+    if (label2) {
+      doc.text(label1, x1 + 2, zoneLabelY + 3, { width: x2 - x1 - 4, align: 'center', lineBreak: false });
+      doc.text(label2, x1 + 2, zoneLabelY + 12, { width: x2 - x1 - 4, align: 'center', lineBreak: false });
+    } else {
+      doc.text(label1, x1 + 2, zoneLabelY + 8, { width: x2 - x1 - 4, align: 'center', lineBreak: false });
+    }
+  };
 
-  // Buffer
-  doc.rect(zones.bufferStart, zoneLabelY, zones.bufferEnd - zones.bufferStart, 35).stroke();
-  doc.text('BUFFER', zones.bufferStart + 2, zoneLabelY + 8, { width: zones.bufferEnd - zones.bufferStart - 4, align: 'center', lineBreak: false });
-
-  // Activity Area
-  doc.rect(zones.activityStart, zoneLabelY, zones.activityEnd - zones.activityStart, 35).stroke();
-  doc.text('ACTIVITY AREA', zones.activityStart + 2, zoneLabelY + 8, { width: zones.activityEnd - zones.activityStart - 4, align: 'center', lineBreak: false });
-
-  // Opposing Buffer (symmetrical for TA-10 two-way flagger)
-  doc.rect(zones.dnBufferStart, zoneLabelY, zones.dnBufferEnd - zones.dnBufferStart, 35).stroke();
-  doc.text('BUFFER', zones.dnBufferStart + 2, zoneLabelY + 8, { width: zones.dnBufferEnd - zones.dnBufferStart - 4, align: 'center', lineBreak: false });
-
-  // Opposing Transition (downstream taper)
-  doc.rect(zones.dnTransitionStart, zoneLabelY, zones.dnTransitionEnd - zones.dnTransitionStart, 35).stroke();
-  doc.text('TRANS.', zones.dnTransitionStart + 2, zoneLabelY + 8, { width: zones.dnTransitionEnd - zones.dnTransitionStart - 4, align: 'center', lineBreak: false });
-
-  // Termination
-  doc.rect(zones.terminationStart, zoneLabelY, zones.terminationEnd - zones.terminationStart, 35).stroke();
-  doc.text('TERM.', zones.terminationStart + 2, zoneLabelY + 8, { width: zones.terminationEnd - zones.terminationStart - 4, align: 'center', lineBreak: false });
-
-  // Opposing Advance Warning
-  doc.rect(zones.oppWarningStart, zoneLabelY, zones.oppWarningEnd - zones.oppWarningStart, 35).stroke();
-  doc.text('ADVANCE', zones.oppWarningStart + 2, zoneLabelY + 3, { width: zones.oppWarningEnd - zones.oppWarningStart - 4, align: 'center', lineBreak: false });
-  doc.text('WARNING AREA', zones.oppWarningStart + 2, zoneLabelY + 12, { width: zones.oppWarningEnd - zones.oppWarningStart - 4, align: 'center', lineBreak: false });
-
-  // Upstream Taper (transition area)
-  doc.lineWidth(1).strokeColor('black');
-  doc.moveTo(zones.transitionStart, roadY2).lineTo(zones.transitionEnd, roadCL + 3).stroke();
-  for (let i = 0; i <= 8; i++) {
-    const cx = zones.transitionStart + (i / 8) * (zones.transitionEnd - zones.transitionStart);
-    const cy = roadY2 - (i / 8) * (roadY2 - roadCL - 3);
-    doc.circle(cx, cy, 2.5).fillAndStroke('orange', 'black');
+  drawZoneLabel(zones.priWarningStart, zones.priWarningEnd, 'ADVANCE', 'WARNING AREA');
+  drawZoneLabel(zones.transitionStart, zones.transitionEnd, isTwoWayFlagger ? 'TRANSITION' : 'MERGING TAPER');
+  drawZoneLabel(zones.bufferStart, zones.bufferEnd, 'BUFFER');
+  drawZoneLabel(zones.activityStart, zones.activityEnd, 'ACTIVITY AREA');
+  drawZoneLabel(zones.dnBufferStart, zones.dnBufferEnd, isTwoWayFlagger ? 'BUFFER' : 'BUFFER');
+  drawZoneLabel(zones.dnTransitionStart, zones.dnTransitionEnd, isTwoWayFlagger ? 'TRANS.' : 'DN TAPER');
+  drawZoneLabel(zones.terminationStart, zones.terminationEnd, 'TERM.');
+  if (isTwoWayFlagger) {
+    drawZoneLabel(zones.oppWarningStart, zones.oppWarningEnd, 'ADVANCE', 'WARNING AREA');
+  } else {
+    drawZoneLabel(zones.oppWarningStart, zones.oppWarningEnd, 'END ROAD', 'WORK AREA');
   }
 
-  // Work area (activity area)
-  drawCrosshatch(doc, zones.activityStart, roadCL + 3, zones.activityEnd, roadY2 - 3);
+  // === TA-SPECIFIC SCHEMATIC ELEMENTS ===
+
+  if (isTwoWayFlagger) {
+    // TA-10: Flagger taper (short, closes entire opposing lane)
+    doc.lineWidth(1).strokeColor('black');
+    doc.moveTo(zones.transitionStart, roadY2).lineTo(zones.transitionEnd, roadCL + 3).stroke();
+    for (let i = 0; i <= 8; i++) {
+      const cx = zones.transitionStart + (i / 8) * (zones.transitionEnd - zones.transitionStart);
+      const cy = roadY2 - (i / 8) * (roadY2 - roadCL - 3);
+      doc.circle(cx, cy, 2.5).fillAndStroke('orange', 'black');
+    }
+    // Work area fills opposing lane
+    drawCrosshatch(doc, zones.activityStart, roadCL + 3, zones.activityEnd, roadY2 - 3);
+    // Downstream taper
+    doc.moveTo(zones.dnTransitionStart, roadCL + 3).lineTo(zones.dnTransitionEnd, roadY2).stroke();
+    for (let i = 0; i <= 5; i++) {
+      const cx = zones.dnTransitionStart + (i / 5) * (zones.dnTransitionEnd - zones.dnTransitionStart);
+      const cy = roadCL + 3 + (i / 5) * (roadY2 - roadCL - 3);
+      doc.circle(cx, cy, 2.5).fillAndStroke('orange', 'black');
+    }
+    // Flaggers at both ends
+    drawFlaggerSymbol(doc, zones.transitionStart - 15, roadY2 + 15, 'FLAGGER');
+    drawFlaggerSymbol(doc, zones.dnBufferEnd + 15, roadY1 - 25, 'FLAGGER');
+  } else if (isMultiLaneClosure) {
+    // TA-30/31/33/35: Merging taper (shifts traffic left, right lane closed)
+    // Taper: diagonal from right edge to right lane line
+    const closedLaneTop = roadCL + (ctx.hasTWLTL ? road.lanePixelW / 2 : 0);
+    const closedLaneBot = roadY2;
+    doc.lineWidth(1).strokeColor('black');
+    // Merging taper — angled line from right edge to lane line
+    doc.moveTo(zones.transitionStart, closedLaneBot).lineTo(zones.transitionEnd, closedLaneTop).stroke();
+    for (let i = 0; i <= 10; i++) {
+      const cx = zones.transitionStart + (i / 10) * (zones.transitionEnd - zones.transitionStart);
+      const cy = closedLaneBot - (i / 10) * (closedLaneBot - closedLaneTop);
+      doc.circle(cx, cy, 2.5).fillAndStroke('orange', 'black');
+    }
+    // Work area in closed lane
+    drawCrosshatch(doc, zones.activityStart, closedLaneTop, zones.activityEnd, closedLaneBot - 3);
+    // Channelizing devices along tangent (closed lane boundary)
+    doc.lineWidth(0.5).strokeColor('black');
+    const tangentSpacing = Math.max(40, ctx.speedMph * 2);
+    for (let x = zones.activityStart; x <= zones.activityEnd; x += tangentSpacing) {
+      doc.circle(x, closedLaneTop, 2).fillAndStroke('orange', 'black');
+    }
+    // Downstream taper (shorter, shifts back to right)
+    doc.lineWidth(1);
+    doc.moveTo(zones.dnTransitionStart, closedLaneTop).lineTo(zones.dnTransitionEnd, closedLaneBot).stroke();
+    for (let i = 0; i <= 5; i++) {
+      const cx = zones.dnTransitionStart + (i / 5) * (zones.dnTransitionEnd - zones.dnTransitionStart);
+      const cy = closedLaneTop + (i / 5) * (closedLaneBot - closedLaneTop);
+      doc.circle(cx, cy, 2.5).fillAndStroke('orange', 'black');
+    }
+    // Arrow board (Type A for multi-lane)
+    const abX = zones.transitionStart - 30;
+    doc.lineWidth(1).strokeColor('#CC6600');
+    doc.rect(abX - 15, closedLaneBot - 18, 30, 12).fillAndStroke('#333', 'black');
+    doc.fontSize(4).fillColor('#FFAA00');
+    doc.text('>>>>', abX - 12, closedLaneBot - 16, { lineBreak: false });
+    doc.fillColor('black').fontSize(5);
+    doc.text('ARROW', abX - 12, closedLaneBot + 0, { lineBreak: false });
+    doc.text('BOARD', abX - 12, closedLaneBot + 7, { lineBreak: false });
+  } else if (isShoulder) {
+    // TA-22/23: Shoulder work — taper into shoulder, traffic stays in lane
+    const shoulderTop = roadY2;
+    const shoulderBot = roadY2 + 15;
+    // Shoulder area
+    doc.lineWidth(0.5).strokeColor('#999');
+    doc.moveTo(roadL, shoulderBot).lineTo(roadR, shoulderBot).stroke();
+    doc.fontSize(5).fillColor('#666').text('SHOULDER', roadL + 10, shoulderTop + 2, { lineBreak: false });
+    // Work in shoulder
+    drawCrosshatch(doc, zones.activityStart, shoulderTop + 1, zones.activityEnd, shoulderBot - 1);
+    // Shoulder taper (0.33 * L, short)
+    doc.lineWidth(1).strokeColor('black');
+    doc.moveTo(zones.transitionStart, shoulderBot).lineTo(zones.transitionEnd, shoulderTop).stroke();
+    for (let i = 0; i <= 4; i++) {
+      const cx = zones.transitionStart + (i / 4) * (zones.transitionEnd - zones.transitionStart);
+      const cy = shoulderBot - (i / 4) * (shoulderBot - shoulderTop);
+      doc.circle(cx, cy, 2).fillAndStroke('orange', 'black');
+    }
+  }
+
+  // Work area label (shared)
+  const waLabelY = isShoulder ? roadY2 + 5 : (isTwoWayFlagger ? roadCL + 17 : roadCL + 10);
+  const waX1 = zones.activityStart;
+  const waX2 = zones.activityEnd;
   doc.save();
   const waW = doc.widthOfString("WORK AREA");
-  doc.rect(zones.activityStart + (zones.activityEnd - zones.activityStart) / 2 - waW / 2 - 3, roadCL + 15, waW + 6, 12).fill('white');
+  doc.rect(waX1 + (waX2 - waX1) / 2 - waW / 2 - 3, waLabelY - 2, waW + 6, 12).fill('white');
   doc.restore();
-  doc.fillColor('black').fontSize(8).text("WORK AREA", zones.activityStart, roadCL + 17, { width: zones.activityEnd - zones.activityStart, align: 'center', lineBreak: false });
+  doc.fillColor('black').fontSize(8).text("WORK AREA", waX1, waLabelY, { width: waX2 - waX1, align: 'center', lineBreak: false });
 
-  // Downstream Taper (opposing transition)
-  doc.moveTo(zones.dnTransitionStart, roadCL + 3).lineTo(zones.dnTransitionEnd, roadY2).stroke();
-  for (let i = 0; i <= 5; i++) {
-    const cx = zones.dnTransitionStart + (i / 5) * (zones.dnTransitionEnd - zones.dnTransitionStart);
-    const cy = roadCL + 3 + (i / 5) * (roadY2 - roadCL - 3);
-    doc.circle(cx, cy, 2.5).fillAndStroke('orange', 'black');
-  }
-
-  // Flagger stations
-  drawFlaggerSymbol(doc, zones.transitionStart - 15, roadY2 + 15, 'FLAGGER');
-  // Opposing flagger at start of downstream taper (upstream from opposing traffic perspective)
-  drawFlaggerSymbol(doc, zones.dnBufferEnd + 15, roadY1 - 25, 'FLAGGER');
-
-  // END ROAD WORK sign (termination area)
+  // END ROAD WORK sign
   doc.lineWidth(0.5).strokeColor('black');
   doc.rect(zones.terminationEnd - 20, roadY2 + 10, 30, 20).stroke();
   doc.fontSize(4).fillColor('black').text('G20-2', zones.terminationEnd - 18, roadY2 + 13, { lineBreak: false });
   doc.text('END ROAD', zones.terminationEnd - 18, roadY2 + 19, { lineBreak: false });
   doc.text('WORK', zones.terminationEnd - 18, roadY2 + 25, { lineBreak: false });
+
+  // === SHARED: Signs, dimensions, notes ===
 
   // Primary approach signs
   const priSigns = ctx.blueprint.primary_approach;
@@ -503,65 +564,72 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
     }
   });
 
-  // Opposing approach signs — positioned above zone labels to avoid overlap
-  const oppSigns = ctx.blueprint.opposing_approach;
-  const oppCount = oppSigns.length;
-  const oppStep = oppCount > 1 ? (zones.oppWarningEnd - zones.oppWarningStart - 40) / (oppCount - 1) : 0;
-  oppSigns.forEach((sign, i) => {
-    const x = zones.oppWarningStart + 20 + i * oppStep;
-    drawSignDiamond(doc, x, roadY1 - 110, sign.sign_code, sign.label);
-    if (i < oppCount - 1) {
-      drawDimLine(doc, x, zones.oppWarningStart + 20 + (i + 1) * oppStep, roadY1 - 80, `${sign.distance_ft} FT`);
-    }
-  });
+  // Opposing/downstream signs
+  if (isTwoWayFlagger) {
+    // Two-way: opposing approach signs above the road
+    const oppSigns = ctx.blueprint.opposing_approach;
+    const oppCount = oppSigns.length;
+    const oppStep = oppCount > 1 ? (zones.oppWarningEnd - zones.oppWarningStart - 40) / (oppCount - 1) : 0;
+    oppSigns.forEach((sign, i) => {
+      const x = zones.oppWarningStart + 20 + i * oppStep;
+      drawSignDiamond(doc, x, roadY1 - 110, sign.sign_code, sign.label);
+      if (i < oppCount - 1) {
+        drawDimLine(doc, x, zones.oppWarningStart + 20 + (i + 1) * oppStep, roadY1 - 80, `${sign.distance_ft} FT`);
+      }
+    });
+  }
 
-  // Speed signs (W3-5 + R2-1) — placed at transition start
+  // Speed signs
   if (ctx.speedMph !== ctx.wzSpeedMph) {
     doc.lineWidth(0.5).strokeColor('black');
-    // W3-5 REDUCED SPEED AHEAD
     const rsX = zones.transitionStart - 50;
     doc.rect(rsX - 12, roadY2 + 60, 24, 24).stroke();
     doc.fontSize(3.5).fillColor('black');
     doc.text('W3-5', rsX - 10, roadY2 + 64, { lineBreak: false });
     doc.text('REDUCED', rsX - 10, roadY2 + 70, { lineBreak: false });
     doc.text('SPEED', rsX - 10, roadY2 + 75, { lineBreak: false });
-    // R2-1 Speed Limit sign
     const slX = zones.bufferStart;
     doc.rect(slX - 8, roadY2 + 60, 16, 24).stroke();
     doc.fontSize(3.5).text('R2-1', slX - 6, roadY2 + 64, { lineBreak: false });
     doc.fontSize(6).text(`${ctx.wzSpeedMph}`, slX - 6, roadY2 + 72, { lineBreak: false });
   }
 
-  // Dimension lines for taper, buffer, work area
-  const bufferFt = getBufferSpaceFt(ctx.speedMph);
+  // Dimension lines
   const dimY = roadY2 + 145;
-  drawDimLine(doc, zones.transitionStart, zones.transitionEnd, dimY, `TAPER: ${ctx.taperLengthFt} FT`);
+  const taperLabel = isTwoWayFlagger ? `FLAGGER TAPER: ${ctx.taperLengthFt} FT` : `MERGING TAPER: ${ctx.taperLengthFt} FT`;
+  drawDimLine(doc, zones.transitionStart, zones.transitionEnd, dimY, taperLabel);
   drawDimLine(doc, zones.bufferStart, zones.bufferEnd, dimY, `BUFFER: ${bufferFt} FT`);
   drawDimLine(doc, zones.activityStart, zones.activityEnd, dimY, 'WORK AREA');
-  drawDimLine(doc, zones.dnBufferStart, zones.dnBufferEnd, dimY, `BUFFER: ${bufferFt} FT`);
+  if (isTwoWayFlagger) {
+    drawDimLine(doc, zones.dnBufferStart, zones.dnBufferEnd, dimY, `BUFFER: ${bufferFt} FT`);
+  }
   drawDimLine(doc, zones.dnTransitionStart, zones.dnTransitionEnd, dimY, `DN TAPER: ${ctx.blueprint.downstream_taper.length_ft} FT`);
 
   // Direction arrows
   doc.fillColor('#444').fontSize(7);
-  doc.text("PRIMARY APPROACH >>>", 40, roadY2 + 145, { lineBreak: false });
-  doc.text("<<< OPPOSING APPROACH", 1040, roadY1 - 100, { lineBreak: false });
+  doc.text("PRIMARY APPROACH >>>", 40, dimY + 8, { lineBreak: false });
+  if (isTwoWayFlagger) {
+    doc.text("<<< OPPOSING APPROACH", 1040, roadY1 - 100, { lineBreak: false });
+  } else {
+    doc.text("TRAFFIC FLOW >>>", roadL + 5, roadY1 + 3, { lineBreak: false });
+  }
 
-  // Cross-streets within work zone
+  // Cross-streets
   if (ctx.crossStreets.length > 0) {
     doc.fillColor('black').fontSize(7);
-    doc.text(`INTERSECTIONS WITHIN WORK ZONE: ${ctx.crossStreets.map(c => c.name).join(', ')}`, 40, dimY + 15, { width: 1140, lineBreak: false });
-    doc.fontSize(6).text('See intersection detail sheets for cross-street signage requirements.', 40, dimY + 27, { lineBreak: false });
+    doc.text(`INTERSECTIONS WITHIN WORK ZONE: ${ctx.crossStreets.map(c => c.name).join(', ')}`, 40, dimY + 22, { width: 1140, lineBreak: false });
+    doc.fontSize(6).text('See intersection detail sheets for cross-street signage requirements.', 40, dimY + 34, { lineBreak: false });
   }
 
   // Notes box
-  doc.lineWidth(0.5).rect(40, 600, 350, 100).stroke();
+  doc.lineWidth(0.5).rect(40, 610, 400, 90).stroke();
   doc.fontSize(7).fillColor('black');
-  doc.font('Helvetica-Bold').text('NOTES:', 45, 605);
+  doc.font('Helvetica-Bold').text('NOTES:', 45, 615);
   doc.font('Helvetica').fontSize(6);
-  doc.text(`Speed: ${ctx.speedMph} MPH | WZ Speed: ${ctx.wzSpeedMph} MPH | Lane Width: ${ctx.laneWidthFt} ft`, 45, 618, { width: 340 });
-  doc.text(`Taper: ${ctx.taperLengthFt} ft (${ctx.blueprint.taper.device_type}) | DN Taper: ${ctx.blueprint.downstream_taper.length_ft} ft`, 45, 630, { width: 340 });
-  doc.text(`Route Distance: ${ctx.routeDistanceFt > 0 ? ctx.routeDistanceFt.toLocaleString() + ' ft' : 'N/A'}`, 45, 642, { width: 340 });
-  doc.text(`MUTCD 11th Ed. Spacing: A=${spacing.a}' B=${spacing.b}' C=${spacing.c}' (${spacing.classification}) | Buffer: ${getBufferSpaceFt(ctx.speedMph)}' (Table 6C-2)`, 45, 654, { width: 340 });
+  doc.text(`Speed: ${ctx.speedMph} MPH | WZ Speed: ${ctx.wzSpeedMph} MPH | Lanes: ${ctx.totalLanes || '2'} | Width: ${ctx.laneWidthFt} ft`, 45, 628, { width: 390 });
+  doc.text(`Taper: ${ctx.taperLengthFt} ft ${isTwoWayFlagger ? '(flagger)' : '(merging)'} | DN Taper: ${ctx.blueprint.downstream_taper.length_ft} ft | ${ctx.blueprint.taper.device_type}`, 45, 640, { width: 390 });
+  doc.text(`Route: ${ctx.routeDistanceFt > 0 ? ctx.routeDistanceFt.toLocaleString() + ' ft' : 'N/A'} | Spacing: A=${spacing.a}' B=${spacing.b}' C=${spacing.c}' | Buffer: ${bufferFt}' (6C-2)`, 45, 652, { width: 390 });
+  if (isMultiLaneClosure) doc.text('Arrow board (Type A) required at merging taper approach.', 45, 664, { width: 390 });
 
   drawTitleBlock(doc, sheetNum, totalSheets, ctx.operationType, ctx.roadName);
 }
