@@ -119,56 +119,132 @@ function extractRoadNumber(name: string): string {
 // PDF DRAWING HELPERS
 // ===================================================================
 function drawTitleBlock(doc: Doc, sheetNum: number, totalSheets: number, operationType: string, roadName: string) {
-  const y0 = 720;
-  doc.lineWidth(1).strokeColor('black');
-  doc.rect(20, y0, 1184, 60).stroke();
+  const y0 = 700;
+  doc.lineWidth(1.5).strokeColor('black');
 
-  doc.moveTo(200, y0).lineTo(200, y0 + 60).stroke();
-  doc.moveTo(350, y0).lineTo(350, y0 + 60).stroke();
-  doc.moveTo(600, y0).lineTo(600, y0 + 60).stroke();
-  doc.moveTo(800, y0).lineTo(800, y0 + 60).stroke();
-  doc.moveTo(1050, y0).lineTo(1050, y0 + 60).stroke();
+  // PE Stamp block (top row)
+  const peY = y0;
+  const peH = 30;
+  doc.lineWidth(1).rect(20, peY, 1184, peH).stroke();
+  // PE seal circle
+  doc.circle(50, peY + peH / 2, 12).stroke();
+  doc.fontSize(3.5).fillColor('black');
+  doc.text('PE', 45, peY + peH / 2 - 5, { lineBreak: false });
+  doc.text('SEAL', 43, peY + peH / 2 + 1, { lineBreak: false });
+  // Signature fields
+  doc.fontSize(7).fillColor('#666');
+  doc.text('LICENSED PROFESSIONAL ENGINEER:', 75, peY + 5, { lineBreak: false });
+  doc.moveTo(260, peY + 14).lineTo(430, peY + 14).stroke(); // signature line
+  doc.text('PE NO.:', 440, peY + 5, { lineBreak: false });
+  doc.moveTo(480, peY + 14).lineTo(560, peY + 14).stroke();
+  doc.text('DATE:', 570, peY + 5, { lineBreak: false });
+  doc.moveTo(600, peY + 14).lineTo(700, peY + 14).stroke();
+  doc.text('EXP:', 710, peY + 5, { lineBreak: false });
+  doc.moveTo(735, peY + 14).lineTo(810, peY + 14).stroke();
+  doc.fontSize(6).fillColor('#999');
+  doc.text('I hereby certify that this plan was prepared by me or under my direct supervision.', 75, peY + 18, { lineBreak: false });
 
-  doc.moveTo(200, y0 + 20).lineTo(350, y0 + 20).stroke();
-  doc.moveTo(200, y0 + 40).lineTo(350, y0 + 40).stroke();
-  doc.moveTo(1050, y0 + 20).lineTo(1204, y0 + 20).stroke();
-  doc.moveTo(1050, y0 + 40).lineTo(1204, y0 + 40).stroke();
+  // Main title block (bottom row)
+  const tbY = peY + peH;
+  const tbH = 50;
+  doc.lineWidth(1.5).rect(20, tbY, 1184, tbH).stroke();
 
-  doc.fontSize(8).fillColor('black');
-  doc.text("REVISIONS", 25, y0 + 5, { width: 170, align: 'center', lineBreak: false });
-  doc.text("DESIGNED", 205, y0 + 8, { width: 140, lineBreak: false });
-  doc.text("DETAILED", 205, y0 + 28, { width: 140, lineBreak: false });
-  doc.text("CHECKED", 205, y0 + 48, { width: 140, lineBreak: false });
+  // Vertical dividers
+  doc.lineWidth(1);
+  doc.moveTo(200, tbY).lineTo(200, tbY + tbH).stroke();
+  doc.moveTo(350, tbY).lineTo(350, tbY + tbH).stroke();
+  doc.moveTo(600, tbY).lineTo(600, tbY + tbH).stroke();
+  doc.moveTo(820, tbY).lineTo(820, tbY + tbH).stroke();
+  doc.moveTo(1050, tbY).lineTo(1050, tbY + tbH).stroke();
 
-  doc.fontSize(10).text("IDAHO TRANSPORTATION DEPARTMENT", 355, y0 + 12, { width: 240, align: 'center', lineBreak: false });
-  if (roadName) doc.fontSize(8).text(roadName.toUpperCase(), 355, y0 + 30, { width: 240, align: 'center', lineBreak: false });
+  // Row dividers
+  doc.moveTo(200, tbY + 17).lineTo(350, tbY + 17).stroke();
+  doc.moveTo(200, tbY + 34).lineTo(350, tbY + 34).stroke();
+  doc.moveTo(1050, tbY + 17).lineTo(1204, tbY + 17).stroke();
+  doc.moveTo(1050, tbY + 34).lineTo(1204, tbY + 34).stroke();
 
-  doc.fontSize(9).text("OPERATION", 605, y0 + 5, { width: 190, lineBreak: false });
-  doc.fontSize(10).text(operationType.toUpperCase(), 605, y0 + 22, { width: 190, align: 'center', lineBreak: false });
+  doc.fontSize(7).fillColor('black');
+  doc.text("REVISIONS", 25, tbY + 4, { width: 170, align: 'center', lineBreak: false });
+  doc.text("DESIGNED:", 205, tbY + 5, { width: 140, lineBreak: false });
+  doc.text("DETAILED:", 205, tbY + 22, { width: 140, lineBreak: false });
+  doc.text("CHECKED:", 205, tbY + 39, { width: 140, lineBreak: false });
 
-  doc.fontSize(9).text("TEMPORARY TRAFFIC CONTROL PLAN", 805, y0 + 5, { width: 240, align: 'center', lineBreak: false });
-  doc.fontSize(10).text("AI-GENERATED TCP", 805, y0 + 28, { width: 240, align: 'center', lineBreak: false });
+  doc.font('Helvetica-Bold').fontSize(9);
+  doc.text("IDAHO TRANSPORTATION DEPARTMENT", 355, tbY + 8, { width: 240, align: 'center', lineBreak: false });
+  doc.font('Helvetica').fontSize(7);
+  if (roadName) doc.text(roadName.toUpperCase(), 355, tbY + 22, { width: 240, align: 'center', lineBreak: false });
+  doc.fontSize(6).fillColor('#666').text('TEMPORARY TRAFFIC CONTROL', 355, tbY + 35, { width: 240, align: 'center', lineBreak: false });
 
-  doc.fontSize(10).text("ENGLISH", 1055, y0 + 5, { width: 140, lineBreak: false });
-  doc.fontSize(8).text("STATE OF IDAHO", 1055, y0 + 28, { width: 140, lineBreak: false });
-  doc.text(`SHEET ${sheetNum} OF ${totalSheets}`, 1055, y0 + 48, { width: 140, lineBreak: false });
+  doc.fillColor('black').fontSize(7);
+  doc.text("OPERATION:", 605, tbY + 4, { lineBreak: false });
+  doc.font('Helvetica-Bold').fontSize(9).text(operationType.toUpperCase(), 605, tbY + 18, { width: 210, align: 'center', lineBreak: false });
+  doc.font('Helvetica');
+
+  doc.fontSize(7).text("AI-GENERATED TCP", 825, tbY + 4, { width: 220, align: 'center', lineBreak: false });
+  doc.fontSize(8).text("PRELIMINARY", 825, tbY + 18, { width: 220, align: 'center', lineBreak: false });
+  doc.fontSize(6).fillColor('#cc0000').text("NOT FOR CONSTRUCTION", 825, tbY + 32, { width: 220, align: 'center', lineBreak: false });
+
+  doc.fillColor('black').fontSize(8);
+  doc.text("ENGLISH", 1055, tbY + 4, { width: 140, lineBreak: false });
+  doc.fontSize(7).text("STATE OF IDAHO", 1055, tbY + 22, { width: 140, lineBreak: false });
+  doc.font('Helvetica-Bold').text(`SHEET ${sheetNum} OF ${totalSheets}`, 1055, tbY + 39, { width: 140, lineBreak: false });
+  doc.font('Helvetica');
 }
 
 function drawDimLine(doc: Doc, x1: number, x2: number, y: number, text: string) {
+  const aw = 5, ah = 2.5; // arrowhead width and half-height
   doc.lineWidth(0.5).strokeColor('black');
-  doc.moveTo(x1, y).lineTo(x2, y).stroke();
-  doc.moveTo(x1, y - 4).lineTo(x1, y + 4).stroke();
-  doc.moveTo(x2, y - 4).lineTo(x2, y + 4).stroke();
+  // Main line (gap in center for text)
+  const tw = doc.fontSize(7).widthOfString(text);
+  const mid = x1 + (x2 - x1) / 2;
+  const gap = tw / 2 + 4;
+  doc.moveTo(x1, y).lineTo(mid - gap, y).stroke();
+  doc.moveTo(mid + gap, y).lineTo(x2, y).stroke();
+  // Left arrowhead (filled triangle pointing right)
+  doc.save();
+  doc.moveTo(x1, y).lineTo(x1 + aw, y - ah).lineTo(x1 + aw, y + ah).closePath().fill('black');
+  doc.restore();
+  // Right arrowhead (filled triangle pointing left)
+  doc.save();
+  doc.moveTo(x2, y).lineTo(x2 - aw, y - ah).lineTo(x2 - aw, y + ah).closePath().fill('black');
+  doc.restore();
+  // Extension lines
+  doc.moveTo(x1, y - 6).lineTo(x1, y + 6).stroke();
+  doc.moveTo(x2, y - 6).lineTo(x2, y + 6).stroke();
+  // Text centered in gap
   doc.fontSize(7).fillColor('black');
-  const tw = doc.widthOfString(text);
-  doc.text(text, x1 + (x2 - x1) / 2 - tw / 2, y - 9, { lineBreak: false });
+  doc.text(text, mid - tw / 2, y - 4, { lineBreak: false });
 }
 
 function drawSignDiamond(doc: Doc, x: number, y: number, code: string, label: string) {
-  doc.lineWidth(1).strokeColor('black');
-  doc.save().translate(x, y).rotate(45).rect(-12, -12, 24, 24).fillAndStroke('#ffffff', 'black').restore();
+  // Determine sign type by code prefix for correct color
+  const isRegulatory = /^R\d/.test(code);    // R2-1 speed limit etc → white rect
+  const isGuide = /^G\d/.test(code);          // G20-2 END ROAD WORK → green rect
+  const isWarning = !isRegulatory && !isGuide; // W20-x → orange diamond
+
+  doc.lineWidth(1.5).strokeColor('black');
+  if (isWarning) {
+    // Orange diamond (MUTCD warning sign)
+    doc.save().translate(x, y).rotate(45);
+    doc.rect(-12, -12, 24, 24).fillAndStroke('#FF8C00', 'black');
+    doc.restore();
+    // Black code text inside diamond
+    doc.fontSize(5).fillColor('black');
+    doc.text(code, x - 15, y - 4, { width: 30, align: 'center', lineBreak: false });
+  } else if (isGuide) {
+    // Green rectangle (MUTCD guide sign)
+    doc.rect(x - 14, y - 10, 28, 20).fillAndStroke('#006B3F', 'black');
+    doc.fontSize(4).fillColor('white');
+    doc.text(code, x - 12, y - 7, { width: 24, align: 'center', lineBreak: false });
+  } else {
+    // White rectangle with black border (regulatory sign)
+    doc.rect(x - 10, y - 12, 20, 24).fillAndStroke('#ffffff', 'black');
+    doc.fontSize(4.5).fillColor('black');
+    doc.text(code, x - 8, y - 8, { width: 16, align: 'center', lineBreak: false });
+  }
+  // Label below sign
   doc.fontSize(7).fillColor('black');
-  doc.text(`${code}`, x - 45, y + 22, { width: 90, align: 'center', lineBreak: false });
+  doc.text(code, x - 45, y + 22, { width: 90, align: 'center', lineBreak: false });
   doc.fontSize(6).text(label, x - 45, y + 32, { width: 90, align: 'center' });
 }
 
@@ -297,6 +373,16 @@ function drawFlaggerSymbol(doc: Doc, x: number, y: number, label: string) {
   doc.fillColor('black').fontSize(5).text(label, x - 20, y + 22, { width: 40, align: 'center', lineBreak: false });
 }
 
+function drawWatermark(doc: Doc) {
+  doc.save();
+  doc.fontSize(60).fillColor('#000000').opacity(0.06);
+  doc.translate(612, 396);
+  doc.rotate(-30);
+  doc.text('PRELIMINARY — NOT FOR CONSTRUCTION', -400, -20, { align: 'center', width: 800 });
+  doc.restore();
+  doc.opacity(1);
+}
+
 // ===================================================================
 // SHEET: COVER / GENERAL NOTES
 // ===================================================================
@@ -349,10 +435,10 @@ function drawCoverSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: Dr
     doc.text(`Sheet ${i + 1}: ${name}`, ix + 10, iy + 30 + i * 14, { lineBreak: false });
   });
 
-  // General Notes
+  // General Notes (left column)
   const ny = 360;
-  doc.lineWidth(1).rect(50, ny, 1124, 340).stroke();
-  doc.font('Helvetica-Bold').fontSize(10).text("GENERAL NOTES", 60, ny + 8, { underline: true });
+  doc.lineWidth(1).rect(50, ny, 780, 330).stroke();
+  doc.font('Helvetica-Bold').fontSize(10).fillColor('black').text("GENERAL NOTES", 60, ny + 8, { underline: true });
   doc.font('Helvetica').fontSize(7);
   const notes = [
     '1. All temporary traffic control shall conform to the MUTCD 11th Edition (Dec 2023) and Idaho Supplementary provisions.',
@@ -369,16 +455,97 @@ function drawCoverSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: Dr
     `12. Taper Length: ${ctx.taperLengthFt} ft (${ctx.blueprint.taper.device_type}). Downstream Taper: ${ctx.blueprint.downstream_taper.length_ft} ft.`,
     `13. Minimum longitudinal buffer space: ${getBufferSpaceFt(ctx.speedMph)} ft (per MUTCD 11th Ed. Table 6C-2 for ${ctx.speedMph} MPH).`,
     `14. SINGLE PHASE OPERATION. All work shall be completed within a single traffic control setup.`,
-    '',
-    'LEGEND: Diamond = Warning Sign | Circle with paddle = Flagger Station | Crosshatch = Work Area | Dashed line = Centerline',
   ];
   let noteY = ny + 28;
   for (const note of notes) {
-    doc.text(note, 60, noteY, { width: 1104 });
-    noteY += note.length > 100 ? 18 : 11;
-    if (noteY > ny + 330) break;
+    doc.text(note, 60, noteY, { width: 760 });
+    noteY += note.length > 90 ? 18 : 11;
+    if (noteY > ny + 320) break;
   }
 
+  // Symbology Legend (right column)
+  const lx = 850, ly = ny;
+  doc.lineWidth(1).rect(lx, ly, 324, 330).stroke();
+  doc.font('Helvetica-Bold').fontSize(10).fillColor('black').text("LEGEND", lx + 10, ly + 8, { underline: true });
+  doc.font('Helvetica');
+  let legendY = ly + 32;
+  const legendStep = 28;
+
+  // Warning sign (orange diamond)
+  doc.save().translate(lx + 22, legendY + 6).rotate(45);
+  doc.rect(-7, -7, 14, 14).fillAndStroke('#FF8C00', 'black');
+  doc.restore();
+  doc.fontSize(7).fillColor('black').text('WARNING SIGN (W-Series)', lx + 45, legendY + 2, { lineBreak: false });
+  doc.fontSize(5.5).fillColor('#666').text('Orange diamond — Advance warning', lx + 45, legendY + 12, { lineBreak: false });
+  legendY += legendStep;
+
+  // Regulatory sign (white rectangle)
+  doc.lineWidth(1).rect(lx + 15, legendY, 14, 16).fillAndStroke('#ffffff', 'black');
+  doc.fontSize(7).fillColor('black').text('REGULATORY SIGN (R-Series)', lx + 45, legendY + 2, { lineBreak: false });
+  doc.fontSize(5.5).fillColor('#666').text('White rectangle — Speed limit, etc.', lx + 45, legendY + 12, { lineBreak: false });
+  legendY += legendStep;
+
+  // Guide sign (green rectangle)
+  doc.rect(lx + 15, legendY, 14, 12).fillAndStroke('#006B3F', 'black');
+  doc.fontSize(7).fillColor('black').text('GUIDE SIGN (G-Series)', lx + 45, legendY + 2, { lineBreak: false });
+  doc.fontSize(5.5).fillColor('#666').text('Green rectangle — END ROAD WORK', lx + 45, legendY + 12, { lineBreak: false });
+  legendY += legendStep;
+
+  // Channelizing device (orange circle)
+  doc.circle(lx + 22, legendY + 6, 5).fillAndStroke('orange', 'black');
+  doc.fontSize(7).fillColor('black').text('CHANNELIZING DEVICE', lx + 45, legendY + 2, { lineBreak: false });
+  doc.fontSize(5.5).fillColor('#666').text('Cone (28") or Drum (42")', lx + 45, legendY + 12, { lineBreak: false });
+  legendY += legendStep;
+
+  // Flagger
+  doc.circle(lx + 22, legendY + 2, 4).fillAndStroke('#cc0000', 'black');
+  doc.moveTo(lx + 22, legendY + 6).lineTo(lx + 22, legendY + 14).stroke();
+  doc.moveTo(lx + 18, legendY + 9).lineTo(lx + 26, legendY + 9).stroke();
+  doc.fontSize(7).fillColor('black').text('FLAGGER STATION', lx + 45, legendY + 2, { lineBreak: false });
+  doc.fontSize(5.5).fillColor('#666').text('TCOC certified, Class 3 apparel', lx + 45, legendY + 12, { lineBreak: false });
+  legendY += legendStep;
+
+  // Work area (crosshatch)
+  doc.lineWidth(0.5).strokeColor('#cc0000');
+  doc.rect(lx + 14, legendY, 16, 12).stroke();
+  for (let hx = 0; hx < 16; hx += 5) {
+    doc.moveTo(lx + 14 + hx, legendY + 12).lineTo(lx + 14 + hx + 12, legendY).stroke();
+  }
+  doc.fontSize(7).fillColor('black').text('WORK AREA', lx + 45, legendY + 2, { lineBreak: false });
+  doc.fontSize(5.5).fillColor('#666').text('Crosshatched zone — No traffic', lx + 45, legendY + 12, { lineBreak: false });
+  legendY += legendStep;
+
+  // Arrow board
+  doc.lineWidth(1).strokeColor('black');
+  doc.rect(lx + 12, legendY + 1, 20, 10).fillAndStroke('#333', 'black');
+  doc.fontSize(4).fillColor('#FFAA00').text('>>>>', lx + 14, legendY + 3, { lineBreak: false });
+  doc.fontSize(7).fillColor('black').text('ARROW BOARD (Type A)', lx + 45, legendY + 2, { lineBreak: false });
+  doc.fontSize(5.5).fillColor('#666').text('Required for multi-lane closures', lx + 45, legendY + 12, { lineBreak: false });
+  legendY += legendStep;
+
+  // Dimension line
+  doc.lineWidth(0.5).strokeColor('black');
+  doc.moveTo(lx + 12, legendY + 6).lineTo(lx + 34, legendY + 6).stroke();
+  doc.save();
+  doc.moveTo(lx + 12, legendY + 6).lineTo(lx + 16, legendY + 4).lineTo(lx + 16, legendY + 8).closePath().fill('black');
+  doc.restore();
+  doc.save();
+  doc.moveTo(lx + 34, legendY + 6).lineTo(lx + 30, legendY + 4).lineTo(lx + 30, legendY + 8).closePath().fill('black');
+  doc.restore();
+  doc.fontSize(7).fillColor('black').text('DIMENSION LINE', lx + 45, legendY + 2, { lineBreak: false });
+  doc.fontSize(5.5).fillColor('#666').text('Distances in feet', lx + 45, legendY + 12, { lineBreak: false });
+  legendY += legendStep;
+
+  // Edge line / centerline
+  doc.lineWidth(2).strokeColor('black');
+  doc.moveTo(lx + 12, legendY + 4).lineTo(lx + 34, legendY + 4).stroke();
+  doc.lineWidth(1).dash(4, { space: 4 }).strokeColor('#CC9900');
+  doc.moveTo(lx + 12, legendY + 12).lineTo(lx + 34, legendY + 12).stroke();
+  doc.undash();
+  doc.fontSize(7).fillColor('black').text('EDGE LINE / CENTERLINE', lx + 45, legendY + 2, { lineBreak: false });
+  doc.fontSize(5.5).fillColor('#666').text('Solid = edge, Dashed = center', lx + 45, legendY + 12, { lineBreak: false });
+
+  drawWatermark(doc);
   drawTitleBlock(doc, sheetNum, totalSheets, ctx.operationType, ctx.roadName);
 }
 
@@ -551,12 +718,13 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
   doc.restore();
   doc.fillColor('black').fontSize(8).text("WORK AREA", waX1, waLabelY, { width: waX2 - waX1, align: 'center', lineBreak: false });
 
-  // END ROAD WORK sign
-  doc.lineWidth(0.5).strokeColor('black');
-  doc.rect(zones.terminationEnd - 20, roadY2 + 10, 30, 20).stroke();
-  doc.fontSize(4).fillColor('black').text('G20-2', zones.terminationEnd - 18, roadY2 + 13, { lineBreak: false });
+  // END ROAD WORK sign (green guide sign)
+  doc.lineWidth(1).strokeColor('black');
+  doc.rect(zones.terminationEnd - 20, roadY2 + 10, 30, 20).fillAndStroke('#006B3F', 'black');
+  doc.fontSize(4).fillColor('white').text('G20-2', zones.terminationEnd - 18, roadY2 + 13, { lineBreak: false });
   doc.text('END ROAD', zones.terminationEnd - 18, roadY2 + 19, { lineBreak: false });
   doc.text('WORK', zones.terminationEnd - 18, roadY2 + 25, { lineBreak: false });
+  doc.fillColor('black');
 
   // === SHARED: Signs, dimensions, notes ===
 
@@ -589,17 +757,24 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
 
   // Speed signs
   if (ctx.speedMph !== ctx.wzSpeedMph) {
-    doc.lineWidth(0.5).strokeColor('black');
+    doc.lineWidth(1).strokeColor('black');
+    // W3-5 REDUCED SPEED (orange diamond)
     const rsX = zones.transitionStart - 50;
-    doc.rect(rsX - 12, roadY2 + 60, 24, 24).stroke();
+    doc.save().translate(rsX, roadY2 + 72).rotate(45);
+    doc.rect(-10, -10, 20, 20).fillAndStroke('#FF8C00', 'black');
+    doc.restore();
     doc.fontSize(3.5).fillColor('black');
-    doc.text('W3-5', rsX - 10, roadY2 + 64, { lineBreak: false });
-    doc.text('REDUCED', rsX - 10, roadY2 + 70, { lineBreak: false });
-    doc.text('SPEED', rsX - 10, roadY2 + 75, { lineBreak: false });
+    doc.text('W3-5', rsX - 12, roadY2 + 64, { lineBreak: false });
+    doc.text('REDUCED', rsX - 12, roadY2 + 70, { lineBreak: false });
+    doc.text('SPEED', rsX - 12, roadY2 + 76, { lineBreak: false });
+    // R2-1 SPEED LIMIT (white regulatory rectangle)
     const slX = zones.bufferStart;
-    doc.rect(slX - 8, roadY2 + 60, 16, 24).stroke();
-    doc.fontSize(3.5).text('R2-1', slX - 6, roadY2 + 64, { lineBreak: false });
-    doc.fontSize(6).text(`${ctx.wzSpeedMph}`, slX - 6, roadY2 + 72, { lineBreak: false });
+    doc.rect(slX - 8, roadY2 + 60, 16, 24).fillAndStroke('#ffffff', 'black');
+    doc.fontSize(3.5).fillColor('black').text('R2-1', slX - 6, roadY2 + 62, { lineBreak: false });
+    doc.fontSize(3).text('SPEED', slX - 6, roadY2 + 68, { lineBreak: false });
+    doc.text('LIMIT', slX - 6, roadY2 + 72, { lineBreak: false });
+    doc.fontSize(7).font('Helvetica-Bold').text(`${ctx.wzSpeedMph}`, slX - 6, roadY2 + 76, { lineBreak: false });
+    doc.font('Helvetica');
   }
 
   // Dimension lines
@@ -639,6 +814,7 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
   doc.text(`Route: ${ctx.routeDistanceFt > 0 ? ctx.routeDistanceFt.toLocaleString() + ' ft' : 'N/A'} | Spacing: A=${spacing.a}' B=${spacing.b}' C=${spacing.c}' | Buffer: ${bufferFt}' (6C-2)`, 45, 652, { width: 390 });
   if (isMultiLaneClosure) doc.text('Arrow board (Type A) required at merging taper approach.', 45, 664, { width: 390 });
 
+  drawWatermark(doc);
   drawTitleBlock(doc, sheetNum, totalSheets, ctx.operationType, ctx.roadName);
 }
 
@@ -690,12 +866,72 @@ function drawSiteLayoutSheet(doc: Doc, sheetNum: number, totalSheets: number, ct
   doc.fillColor('#666').fontSize(6);
   doc.text("Route polyline and markers provided by Google Maps Platform. Verify on-site before construction.", imgX, imgY + imgH + 95, { width: imgW, align: 'center' });
 
+  // North Arrow (upper-left of map area)
+  const naX = imgX - 60, naY = imgY + 20;
+  doc.lineWidth(1.5).strokeColor('black');
+  // Arrow shaft
+  doc.moveTo(naX, naY + 40).lineTo(naX, naY).stroke();
+  // Arrowhead (filled triangle)
+  doc.save();
+  doc.moveTo(naX, naY).lineTo(naX - 6, naY + 12).lineTo(naX + 6, naY + 12).closePath().fill('black');
+  doc.restore();
+  // "N" label
+  doc.font('Helvetica-Bold').fontSize(12).fillColor('black');
+  doc.text('N', naX - 5, naY + 44, { lineBreak: false });
+  doc.font('Helvetica');
+
+  // Scale Bar (below map, left side)
+  if (ctx.routeDistanceFt > 0) {
+    const sbX = imgX - 80, sbY = imgY + imgH - 40;
+    // Calculate scale: imgW pixels represents routeDistanceFt
+    const ftPerPx = ctx.routeDistanceFt / imgW;
+    // Choose a round scale increment
+    const rawBarFt = ftPerPx * 100; // 100px bar
+    const scaleIncrements = [50, 100, 200, 500, 1000, 2000, 5000];
+    const barFt = scaleIncrements.find(s => s >= rawBarFt * 0.8) || rawBarFt;
+    const barPx = barFt / ftPerPx;
+
+    doc.lineWidth(1).strokeColor('black');
+    // Main bar
+    doc.moveTo(sbX, sbY).lineTo(sbX + barPx, sbY).stroke();
+    // End ticks
+    doc.moveTo(sbX, sbY - 5).lineTo(sbX, sbY + 5).stroke();
+    doc.moveTo(sbX + barPx, sbY - 5).lineTo(sbX + barPx, sbY + 5).stroke();
+    // Midpoint tick
+    doc.moveTo(sbX + barPx / 2, sbY - 3).lineTo(sbX + barPx / 2, sbY + 3).stroke();
+    // Labels
+    doc.fontSize(6).fillColor('black');
+    doc.text('0', sbX - 2, sbY + 7, { lineBreak: false });
+    doc.text(`${barFt} FT`, sbX + barPx - 10, sbY + 7, { lineBreak: false });
+    doc.fontSize(5).fillColor('#666');
+    doc.text(`SCALE: 1" ≈ ${Math.round(ftPerPx * 72)} FT`, sbX, sbY + 18, { lineBreak: false });
+  }
+
+  // Project info sidebar (left of map)
+  const siX = 30, siY = imgY;
+  doc.lineWidth(0.5).strokeColor('#999').rect(siX, siY, 260, 180).stroke();
+  doc.font('Helvetica-Bold').fontSize(8).fillColor('black');
+  doc.text('SITE INFORMATION', siX + 8, siY + 6);
+  doc.font('Helvetica').fontSize(6.5);
+  const siteInfo = [
+    `Road: ${ctx.roadName || 'Not identified'}`,
+    `TA: ${ctx.taCode} — ${ctx.taDescription}`,
+    `Speed: ${ctx.speedMph} MPH | WZ: ${ctx.wzSpeedMph} MPH`,
+    `Lanes: ${ctx.totalLanes || 'Unknown'}${ctx.isDivided ? ' (Divided)' : ''}${ctx.hasTWLTL ? ' (TWLTL)' : ''}`,
+    `Taper: ${ctx.taperLengthFt} ft | Buffer: ${getBufferSpaceFt(ctx.speedMph)} ft`,
+    `Devices: ${ctx.blueprint.taper.device_type}`,
+    `Route: ${ctx.routeDistanceFt > 0 ? ctx.routeDistanceFt.toLocaleString() + ' ft' : 'N/A'}`,
+    `Cross-Streets: ${ctx.crossStreets.length}`,
+    `Sign Size: ${getSignSize(ctx.speedMph, ctx.roadName)}`,
+  ];
+  siteInfo.forEach((line, i) => {
+    doc.text(line, siX + 8, siY + 22 + i * 12, { width: 244, lineBreak: false });
+  });
+
+  drawWatermark(doc);
   drawTitleBlock(doc, sheetNum, totalSheets, ctx.operationType, ctx.roadName);
 }
 
-// ===================================================================
-// SHEET: INTERSECTION DETAIL
-// ===================================================================
 // ===================================================================
 // SHEET: INTERSECTION DETAIL (ENGINEERING-GRADE GEOMETRY)
 // ===================================================================
@@ -893,6 +1129,7 @@ function drawIntersectionSheet(doc: Doc, sheetNum: number, totalSheets: number, 
     doc.fillColor('black');
   }
 
+  drawWatermark(doc);
   drawTitleBlock(doc, sheetNum, totalSheets, ctx.operationType, ctx.roadName);
 }
 
@@ -979,6 +1216,7 @@ function drawSignScheduleSheet(doc: Doc, sheetNum: number, totalSheets: number, 
   doc.text(`Upstream Taper: ${taperDevices} | Work Area Tangent (${tangentLen.toLocaleString()} ft): ${tangentDevices} | Downstream: ${dnDevices}`, tx, totalY + 48);
   doc.font('Helvetica-Bold').text(`TOTAL CHANNELIZING DEVICES: ${totalDevices} minimum`, tx, totalY + 62);
 
+  drawWatermark(doc);
   drawTitleBlock(doc, sheetNum, totalSheets, ctx.operationType, ctx.roadName);
 }
 

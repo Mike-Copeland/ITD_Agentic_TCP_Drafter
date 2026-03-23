@@ -106,7 +106,7 @@ const FUNC_CLASS_NAMES: Record<number, string> = {
 async function fetchITDContext(lat: number, lng: number) {
   // Wrap entire ITD fetch in a 15-second timeout
   const timeoutPromise = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error('ITD query timeout')), 15000)
+    setTimeout(() => reject(new Error('ITD query timeout')), 25000)
   );
 
   try { return await Promise.race([_fetchITDContextInner(lat, lng), timeoutPromise]); }
@@ -616,7 +616,7 @@ If no intersections are visible, output: []` },
         const geoAi = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
         const csNames = positionedCrossStreets.slice(0, 6).map(cs => cs.name).join(', ');
-        const geoTimeout = new Promise<any>((_, rej) => setTimeout(() => rej(new Error('Geo vision timeout')), 12000));
+        const geoTimeout = new Promise<any>((_, rej) => setTimeout(() => rej(new Error('Geo vision timeout')), 25000));
         const geoRes = await Promise.race([geoAi.models.generateContent({
           model: 'gemini-3-flash-preview',
           contents: {
