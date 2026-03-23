@@ -489,6 +489,9 @@ app.post('/api/site-context', async (req, res) => {
             const routeComp = result.address_components?.find((c: any) => c.types?.includes('route'));
             name = routeComp?.short_name || routeComp?.long_name || '';
           }
+          // Filter out garbage: navigation instructions, long strings, parenthetical text
+          if (name && name.length > 50) name = '';
+          if (name && /turn|pass by|onto|destination|continue|head /i.test(name)) name = '';
           if (name && !isMainRoad(name) && !detectedRoads.has(name)) {
             detectedRoads.add(name);
             crossStreets.push(name);
@@ -648,7 +651,7 @@ If no intersections are visible, output: []` },
       itdLaneWidth: itd.laneWidth || null,
       itdTotalLanes: itd.totalLanes || 0,
       itdTerrain: itd.terrain || '',
-      itdFuncClass: itd.funcClassName || '',
+      itdFuncClass: String(itd.funcClassCode || ''),
       itdCrashCount: itd.crashCount || 0,
       itdBridges: itd.bridgeDetails || [],
       itdContext: itd.contextString || '',
