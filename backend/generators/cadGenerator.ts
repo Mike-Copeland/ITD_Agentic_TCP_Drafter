@@ -22,6 +22,14 @@ export interface Blueprint {
 interface CrossStreet {
   name: string;
   position: number; // 0-1 fraction along route
+  geometry?: {
+    type: 'T-north' | 'T-south' | 'T-east' | 'T-west' | '4-way' | 'Y' | 'offset' | 'roundabout';
+    hasSignal: boolean;
+    hasStopSign: boolean;
+    turnLanes: boolean;
+    approachAngle: number; // degrees from perpendicular (0 = perfect cross, 45 = angled)
+    legs: number; // 3 for T, 4 for cross, etc.
+  };
 }
 
 type Doc = InstanceType<typeof PDFDocument>;
@@ -694,43 +702,120 @@ function drawIntersectionSheet(doc: Doc, sheetNum: number, totalSheets: number, 
   doc.fontSize(14).fillColor('black').text(`INTERSECTION DETAIL: ${cs.name.toUpperCase()}`, 0, 25, { align: 'center' });
   doc.fontSize(9).text(`${ctx.roadName || 'Main Road'} at ${cs.name} — Approximate Position: ${Math.round(cs.position * 100)}% along route`, 0, 45, { align: 'center' });
 
-  // Draw intersection diagram — lane-aware
-  const cx = 612, cy = 360;
-  const mainLen = 400, crossLen = 250;
+  // Draw intersection diagram — geometry-aware
+  const cx = 612, cy = 340;
+  const mainLen = 400, crossLen = 200;
+  const geo = cs.geometry || { type: '4-way' as const, hasSignal: false, hasStopSign: false, turnLanes: false, approachAngle: 0, legs: 4 };
 
   // Main road (horizontal) — uses multi-lane drawing
   const intRoad = drawRoadway(doc, cx - mainLen / 2, cx + mainLen / 2, cy, ctx);
   const roadHalfW = intRoad.totalPixelH / 2;
-
-  // Cross-street (vertical) — always drawn as 2-lane
   const csHalfW = 18;
+
+  // Geometry type label
+  const geoLabel = geo.type === '4-way' ? '4-WAY INTERSECTION' :
+    geo.type.startsWith('T-') ? `T-INTERSECTION (${geo.type.replace('T-', '').toUpperCase()})` :
+    geo.type === 'Y' ? 'Y-INTERSECTION' : geo.type === 'roundabout' ? 'ROUNDABOUT' : 'INTERSECTION';
+  doc.fontSize(8).fillColor('#666').text(geoLabel, 0, 60, { align: 'center' });
+
+  // Draw cross-street legs based on geometry type
   doc.lineWidth(2).strokeColor('black');
-  doc.moveTo(cx - csHalfW, cy - crossLen / 2).lineTo(cx - csHalfW, cy - roadHalfW).stroke();
-  doc.moveTo(cx + csHalfW, cy - crossLen / 2).lineTo(cx + csHalfW, cy - roadHalfW).stroke();
-  doc.moveTo(cx - csHalfW, cy + roadHalfW).lineTo(cx - csHalfW, cy + crossLen / 2).stroke();
-  doc.moveTo(cx + csHalfW, cy + roadHalfW).lineTo(cx + csHalfW, cy + crossLen / 2).stroke();
-  // Cross-street centerline
-  doc.lineWidth(0.5).dash(5, { space: 5 }).strokeColor('#666');
-  doc.moveTo(cx, cy - crossLen / 2).lineTo(cx, cy - roadHalfW - 2).stroke();
-  doc.moveTo(cx, cy + roadHalfW + 2).lineTo(cx, cy + crossLen / 2).stroke();
-  doc.undash();
+
+  const drawNorthLeg = () => {
+    doc.moveTo(cx - csHalfW, cy - roadHalfW).lineTo(cx - csHalfW, cy - crossLen).stroke();
+    doc.moveTo(cx + csHalfW, cy - roadHalfW).lineTo(cx + csHalfW, cy - crossLen).stroke();
+    doc.lineWidth(0.5).dash(5, { space: 5 }).strokeColor('#666');
+    doc.moveTo(cx, cy - roadHalfW - 2).lineTo(cx, cy - crossLen).stroke();
+    doc.undash();
+  };
+  const drawSouthLeg = () => {
+    doc.lineWidth(2).strokeColor('black');
+    doc.moveTo(cx - csHalfW, cy + roadHalfW).lineTo(cx - csHalfW, cy + crossLen).stroke();
+    doc.moveTo(cx + csHalfW, cy + roadHalfW).lineTo(cx + csHalfW, cy + crossLen).stroke();
+    doc.lineWidth(0.5).dash(5, { space: 5 }).strokeColor('#666');
+    doc.moveTo(cx, cy + roadHalfW + 2).lineTo(cx, cy + crossLen).stroke();
+    doc.undash();
+  };
+
+  // Draw legs based on intersection type
+  if (geo.type === 'T-north' || geo.type === '4-way' || geo.type === 'Y') drawNorthLeg();
+  if (geo.type === 'T-south' || geo.type === '4-way' || geo.type === 'Y') drawSouthLeg();
+  if (geo.type === 'T-east') {
+    doc.lineWidth(2).strokeColor('black');
+    doc.moveTo(cx + roadHalfW + 2, cy - csHalfW).lineTo(cx + crossLen, cy - csHalfW).stroke();
+    doc.moveTo(cx + roadHalfW + 2, cy + csHalfW).lineTo(cx + crossLen, cy + csHalfW).stroke();
+  }
+  if (geo.type === 'T-west') {
+    doc.lineWidth(2).strokeColor('black');
+    doc.moveTo(cx - roadHalfW - 2, cy - csHalfW).lineTo(cx - crossLen, cy - csHalfW).stroke();
+    doc.moveTo(cx - roadHalfW - 2, cy + csHalfW).lineTo(cx - crossLen, cy + csHalfW).stroke();
+  }
+  // Default: if no specific T type, draw both north and south
+  if (!geo.type.startsWith('T-') && geo.type !== '4-way' && geo.type !== 'Y') {
+    drawNorthLeg();
+    drawSouthLeg();
+  }
+
+  // Traffic control indicators
+  if (geo.hasSignal) {
+    // Draw traffic signal symbol
+    doc.lineWidth(1).strokeColor('black');
+    doc.rect(cx - 6, cy - roadHalfW - 25, 12, 22).fillAndStroke('#333', 'black');
+    doc.circle(cx, cy - roadHalfW - 20, 3).fillAndStroke('#ff0000', '#333');
+    doc.circle(cx, cy - roadHalfW - 13, 3).fillAndStroke('#ffcc00', '#333');
+    doc.circle(cx, cy - roadHalfW - 6, 3).fillAndStroke('#00cc00', '#333');
+    doc.fontSize(5).fillColor('#cc0000').text('SIGNAL', cx - 15, cy - roadHalfW - 38, { lineBreak: false });
+  }
+  if (geo.hasStopSign && !geo.hasSignal) {
+    // Stop sign on cross-street approaches
+    doc.lineWidth(1).strokeColor('#cc0000');
+    const stopY1 = cy - roadHalfW - 18;
+    doc.save().translate(cx, stopY1).rotate(22.5);
+    const r = 7;
+    doc.moveTo(r, 0);
+    for (let i = 1; i <= 8; i++) {
+      const angle = (i * Math.PI * 2) / 8 - Math.PI / 8;
+      doc.lineTo(r * Math.cos(angle), r * Math.sin(angle));
+    }
+    doc.fillAndStroke('#cc0000', '#660000');
+    doc.restore();
+    doc.fontSize(3).fillColor('white').text('STOP', cx - 5, stopY1 - 2, { lineBreak: false });
+  }
+
+  // Turn lane indicator
+  if (geo.turnLanes) {
+    doc.fontSize(5).fillColor('#0066cc');
+    doc.text('TURN LANE', cx + csHalfW + 5, cy - roadHalfW - 10, { lineBreak: false });
+    // Draw turn arrow
+    doc.lineWidth(0.5).strokeColor('#0066cc');
+    doc.moveTo(cx + csHalfW + 3, cy - 5).lineTo(cx + csHalfW + 3, cy - roadHalfW + 5).stroke();
+    doc.moveTo(cx + csHalfW + 3, cy - roadHalfW + 5).lineTo(cx + csHalfW, cy - roadHalfW + 10).stroke();
+    doc.moveTo(cx + csHalfW + 3, cy - roadHalfW + 5).lineTo(cx + csHalfW + 6, cy - roadHalfW + 10).stroke();
+  }
 
   // Labels
   doc.fontSize(10).fillColor('black');
   doc.text(ctx.roadName || 'MAIN ROAD', cx + mainLen / 2 + 10, cy - 5, { lineBreak: false });
-  doc.save();
-  doc.translate(cx - 5, cy - crossLen / 2 - 10);
-  doc.text(cs.name.toUpperCase(), 0, 0, { lineBreak: false });
-  doc.restore();
+  // Cross-street label at top
+  doc.fontSize(9);
+  if (geo.type === 'T-south' || geo.type === '4-way' || geo.type === 'Y' || !geo.type.startsWith('T-')) {
+    doc.text(cs.name.toUpperCase(), cx - 60, cy - crossLen - 15, { width: 120, align: 'center', lineBreak: false });
+  } else {
+    doc.text(cs.name.toUpperCase(), cx - 60, cy + crossLen + 5, { width: 120, align: 'center', lineBreak: false });
+  }
 
-  // Direction arrows on main road
+  // Direction arrows
   doc.fontSize(6).fillColor('#444');
   doc.text('>>> PRIMARY', cx - mainLen / 2, cy + roadHalfW + 8, { lineBreak: false });
   doc.text('OPPOSING <<<', cx + mainLen / 2 - 60, cy - roadHalfW - 14, { lineBreak: false });
 
-  // W20-1 signs on cross-street approaches
-  drawSignDiamond(doc, cx, cy - crossLen / 2 + 30, 'W20-1', 'ROAD WORK\nAHEAD');
-  drawSignDiamond(doc, cx, cy + crossLen / 2 - 30, 'W20-1', 'ROAD WORK\nAHEAD');
+  // W20-1 signs on cross-street approaches (only on legs that exist)
+  if (geo.type === '4-way' || geo.type === 'T-north' || geo.type === 'Y' || !geo.type.startsWith('T-')) {
+    drawSignDiamond(doc, cx, cy - crossLen + 25, 'W20-1', 'ROAD WORK\nAHEAD');
+  }
+  if (geo.type === '4-way' || geo.type === 'T-south' || geo.type === 'Y' || !geo.type.startsWith('T-')) {
+    drawSignDiamond(doc, cx, cy + crossLen - 25, 'W20-1', 'ROAD WORK\nAHEAD');
+  }
 
   // Determine intersection significance
   const isHwy = isHighway(cs.name);

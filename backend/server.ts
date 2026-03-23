@@ -607,6 +607,61 @@ If no intersections are visible, output: []` },
     console.log(`[site-context] Total cross-streets detected: ${crossStreets.length} — ${crossStreets.join(', ') || 'none'}`);
 
     // ------------------------------------------------------------------
+    // 4c. INTERSECTION GEOMETRY ANALYSIS — Vision-based
+    // Analyze each detected cross-street's geometry using the satellite image
+    // ------------------------------------------------------------------
+    if (staticMapB64 && positionedCrossStreets.length > 0 && process.env.GEMINI_API_KEY) {
+      try {
+        const { GoogleGenAI } = await import('@google/genai');
+        const geoAi = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+        const csNames = positionedCrossStreets.slice(0, 6).map(cs => cs.name).join(', ');
+        const geoTimeout = new Promise<any>((_, rej) => setTimeout(() => rej(new Error('Geo vision timeout')), 12000));
+        const geoRes = await Promise.race([geoAi.models.generateContent({
+          model: 'gemini-3-flash-preview',
+          contents: {
+            parts: [
+              { inlineData: { data: staticMapB64, mimeType: 'image/jpeg' } },
+              { text: `Analyze the intersections of these cross-streets with the main highlighted route: ${csNames}
+
+For each cross-street, determine:
+1. type: "T-north" (T from north only), "T-south", "T-east", "T-west", "4-way" (full cross), "Y" (angled), "offset" (staggered), "roundabout"
+2. hasSignal: true/false (traffic signal visible?)
+3. hasStopSign: true/false (stop sign visible on cross-street?)
+4. turnLanes: true/false (dedicated turn lanes visible?)
+5. legs: number of intersection legs (3 for T, 4 for cross)
+6. approachAngle: degrees from perpendicular (0=perfect cross, 30=angled)
+
+Output ONLY a JSON array matching the cross-street order: [{"name":"...","type":"...","hasSignal":false,"hasStopSign":true,"turnLanes":false,"legs":3,"approachAngle":0}]` },
+            ],
+          },
+        }), geoTimeout]);
+
+        const geoText = geoRes?.text || '[]';
+        const geoMatch = geoText.match(/\[[\s\S]*\]/);
+        if (geoMatch) {
+          const geoData = JSON.parse(geoMatch[0]) as any[];
+          for (let i = 0; i < Math.min(geoData.length, positionedCrossStreets.length); i++) {
+            const g = geoData[i];
+            if (g) {
+              (positionedCrossStreets[i] as any).geometry = {
+                type: g.type || '4-way',
+                hasSignal: !!g.hasSignal,
+                hasStopSign: !!g.hasStopSign,
+                turnLanes: !!g.turnLanes,
+                approachAngle: g.approachAngle || 0,
+                legs: g.legs || 4,
+              };
+            }
+          }
+          console.log(`[site-context] Intersection geometry: analyzed ${geoData.length} intersections`);
+        }
+      } catch (geoErr) {
+        console.warn('[site-context] Intersection geometry analysis failed:', geoErr);
+      }
+    }
+
+    // ------------------------------------------------------------------
     // 5. ITD AUTHORITATIVE DATA (Speed, AADT, Lanes, Terrain, Crashes, Bridges)
     // ------------------------------------------------------------------
     const itd = await fetchITDContext(startCoords.lat, startCoords.lng);
