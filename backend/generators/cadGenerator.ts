@@ -1073,12 +1073,53 @@ export async function generateCAD(
   let taperLengthFt: number;
   if (taCode === 'TA-10') {
     // MUTCD 6C.08: One-Lane Two-Way Traffic Taper = 50 ft min, 100 ft max
-    // Force clamp regardless of AI input — a 780 ft taper at a flagger is dangerous
     const aiTaper = blueprint.taper.length_ft || 100;
     taperLengthFt = Math.min(Math.max(aiTaper, 50), 100);
+  } else if (['TA-22', 'TA-23'].includes(taCode)) {
+    // Shoulder taper = 1/3 of merging taper
+    taperLengthFt = Math.round(calcTaperLength(laneWidthFt, speedMph) / 3);
   } else {
-    // Standard merging taper (L=WS or L=WS²/60) for non-flagger TAs
-    taperLengthFt = blueprint.taper.length_ft > 0 ? blueprint.taper.length_ft : calcTaperLength(laneWidthFt, speedMph);
+    // TA-30/31/33/35: Standard merging taper (L=WS or L=WS²/60)
+    // Always use formula — PE may have provided a flagger taper by mistake
+    taperLengthFt = calcTaperLength(laneWidthFt, speedMph);
+  }
+
+  // === SIGN CORRECTION based on TA selection ===
+  // PE Agent assumes TA-10 (flaggers) — override signs for multi-lane TAs
+  if (['TA-30', 'TA-31', 'TA-33', 'TA-35'].includes(taCode)) {
+    // Replace W20-7a FLAGGER AHEAD with W20-5 RIGHT LANE CLOSED AHEAD
+    // Replace W20-4 ONE LANE ROAD AHEAD with W20-5 RIGHT LANE CLOSED AHEAD (multi-lane)
+    for (const signs of [blueprint.primary_approach, blueprint.opposing_approach]) {
+      for (const sign of signs) {
+        if (sign.sign_code === 'W20-7a') {
+          sign.sign_code = 'W20-5';
+          sign.label = 'RIGHT LANE CLOSED AHEAD';
+        }
+        if (sign.sign_code === 'W20-4') {
+          sign.sign_code = 'W20-5';
+          sign.label = 'RIGHT LANE CLOSED AHEAD';
+        }
+      }
+    }
+    // For multi-lane, opposing approach gets same signs (same direction closure)
+    // but if TA-33/35 (divided), opposing traffic is unaffected — clear opposing signs
+    if (['TA-33', 'TA-35'].includes(taCode)) {
+      blueprint.opposing_approach = []; // Opposing traffic unaffected on divided highway
+    }
+  } else if (['TA-22', 'TA-23'].includes(taCode)) {
+    // Shoulder work: replace lane closure signs with shoulder work signs
+    for (const signs of [blueprint.primary_approach, blueprint.opposing_approach]) {
+      for (const sign of signs) {
+        if (sign.sign_code === 'W20-7a') {
+          sign.sign_code = 'W21-5b';
+          sign.label = 'SHOULDER WORK AHEAD';
+        }
+        if (sign.sign_code === 'W20-4') {
+          sign.sign_code = 'W21-5';
+          sign.label = 'SHOULDER CLOSED AHEAD';
+        }
+      }
+    }
   }
 
   if (routeDistanceFt === 0 && startCoords && endCoords) {
