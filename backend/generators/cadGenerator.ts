@@ -1937,8 +1937,8 @@ function drawGeometryPlanSheet(
   const midSta = (viewportStartSta + viewportEndSta) / 2;
   const midPt = alignment.getCoordinatesAtStation(midSta);
   const coverageFt = viewportEndSta - viewportStartSta;
-  // Zoom out 40% to capture the full area including cross-streets and signs
-  const scaleFtPerPt = coverageFt * 1.4 / (pageW * 0.85);
+  // Zoom out to ensure BOTH start and end pins are visible with margin for signs
+  const scaleFtPerPt = coverageFt * 1.6 / (pageW * 0.75);
 
   const rotation = -midPt.heading + 90;
   const rotRad = rotation * Math.PI / 180;
@@ -2234,6 +2234,20 @@ function drawGeometryPlanSheet(
       // ROUNDABOUT type label
       drawMaskedText('ROUNDABOUT', lx - 25, signGroupY + 17, 50, 3.5, '#666', false);
     }
+  }
+
+  // Start/End pin markers
+  if (ctx.startCoords) {
+    const sp = alignment.projectGps(ctx.startCoords);
+    const spg = toPage(sp.x, sp.y);
+    doc.circle(spg.px, spg.py, 5).fillAndStroke('#22c55e', '#166534');
+    drawMaskedText('START', spg.px - 15, spg.py - 15, 30, 4, '#166534', true);
+  }
+  if (ctx.endCoords) {
+    const ep = alignment.projectGps(ctx.endCoords);
+    const epg = toPage(ep.x, ep.y);
+    doc.circle(epg.px, epg.py, 5).fillAndStroke('#ef4444', '#991b1b');
+    drawMaskedText('END', epg.px - 12, epg.py - 15, 24, 4, '#991b1b', true);
   }
 
   // Scale bar
