@@ -327,33 +327,52 @@ class ProjectAlignmentFromUtm {
   }
 }
 
-// === SHEET LAYOUT ENGINE (Strip-Mapping) ===
+// === SHEET LAYOUT ENGINE (Grid Tiling) ===
 
 export interface Viewport {
   sheetNumber: number;
   startStation: number;
   endStation: number;
-  centerX: number; // UTM easting of viewport center
-  centerY: number; // UTM northing of viewport center
-  rotationDeg: number; // Average road bearing (for rotating sheet)
-  scaleFtPerInch: number; // e.g., 100 = 1"=100'
+  centerX: number;
+  centerY: number;
+  rotationDeg: number;
+  scaleFtPerInch: number;
+  // Grid tile info
+  isIndexSheet?: boolean;
+  tileMinX?: number;
+  tileMinY?: number;
+  tileMaxX?: number;
+  tileMaxY?: number;
 }
 
 /**
- * Generate strip-map viewports for a project alignment.
- * Slices the alignment into sequential sheets with overlap.
+ * Generate grid-tiled viewports for a project alignment.
+ * For short/straight routes: single sheet.
+ * For long/curvy routes: grid tiles + index sheet.
+ * Much fewer sheets than linear strip-mapping for winding roads.
  */
 export function generateViewports(
   alignment: ProjectAlignment,
-  maxCoverageFt = 1500,
-  overlapFt = 50,
-  targetScale = 100, // 1"=100'
+  tileSizeFt = 2000, // Each tile covers ~2000x2000 ft
 ): Viewport[] {
   const viewports: Viewport[] = [];
+  const pts = alignment.getUtmPoints();
   const totalLen = alignment.totalLengthFt;
 
-  if (totalLen <= maxCoverageFt) {
-    // Single sheet — no strip mapping needed
+  // Compute bounding box of the alignment
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (const p of pts) {
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y;
+    if (p.y > maxY) maxY = p.y;
+  }
+
+  const extentX = maxX - minX;
+  const extentY = maxY - minY;
+
+  // Short route or small extent: single sheet
+  if (totalLen <= 3000 && extentX < 3000 && extentY < 3000) {
     const midSta = totalLen / 2;
     const mid = alignment.getCoordinatesAtStation(midSta);
     viewports.push({
@@ -363,33 +382,85 @@ export function generateViewports(
       centerX: mid.x,
       centerY: mid.y,
       rotationDeg: mid.heading,
-      scaleFtPerInch: Math.max(targetScale, Math.ceil(totalLen / 14)), // Fit to 14" printable width
+      scaleFtPerInch: Math.max(50, Math.ceil(Math.max(extentX, extentY) * 1.6 / 14)),
     });
     return viewports;
   }
 
-  // Multi-sheet strip map
-  const stepFt = maxCoverageFt - overlapFt;
-  let sheetNum = 1;
+  // Grid tiling for long/curvy routes
+  // Add padding around bounding box
+  const pad = tileSizeFt * 0.2;
+  const gridMinX = minX - pad, gridMinY = minY - pad;
+  const gridMaxX = maxX + pad, gridMaxY = maxY + pad;
 
-  for (let startSta = 0; startSta < totalLen; startSta += stepFt) {
-    const endSta = Math.min(startSta + maxCoverageFt, totalLen);
-    const midSta = (startSta + endSta) / 2;
-    const mid = alignment.getCoordinatesAtStation(midSta);
+  const cols = Math.max(1, Math.ceil((gridMaxX - gridMinX) / tileSizeFt));
+  const rows = Math.max(1, Math.ceil((gridMaxY - gridMinY) / tileSizeFt));
 
-    viewports.push({
-      sheetNumber: sheetNum++,
-      startStation: startSta,
-      endStation: endSta,
-      centerX: mid.x,
-      centerY: mid.y,
-      rotationDeg: mid.heading,
-      scaleFtPerInch: targetScale,
-    });
+  // Adjust tile size to evenly divide the extent
+  const tileW = (gridMaxX - gridMinX) / cols;
+  const tileH = (gridMaxY - gridMinY) / rows;
 
-    if (endSta >= totalLen) break;
+  // Sheet 1: INDEX SHEET (full route overview with grid overlay)
+  viewports.push({
+    sheetNumber: 1,
+    startStation: 0,
+    endStation: totalLen,
+    centerX: (minX + maxX) / 2,
+    centerY: (minY + maxY) / 2,
+    rotationDeg: 0, // North-up for index
+    scaleFtPerInch: Math.ceil(Math.max(extentX, extentY) * 1.4 / 14),
+    isIndexSheet: true,
+    tileMinX: gridMinX,
+    tileMinY: gridMinY,
+    tileMaxX: gridMaxX,
+    tileMaxY: gridMaxY,
+  });
+
+  // Generate tiles — only include tiles that contain road points
+  let sheetNum = 2;
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const tMinX = gridMinX + col * tileW;
+      const tMaxX = tMinX + tileW;
+      const tMinY = gridMinY + row * tileH;
+      const tMaxY = tMinY + tileH;
+
+      // Check if any alignment points fall in this tile
+      const hasPoints = pts.some(p => p.x >= tMinX && p.x <= tMaxX && p.y >= tMinY && p.y <= tMaxY);
+      if (!hasPoints) continue;
+
+      // Find station range for points in this tile
+      let minSta = totalLen, maxSta = 0;
+      const stations = [0];
+      for (let i = 1; i < pts.length; i++) {
+        const dx = pts[i]!.x - pts[i - 1]!.x;
+        const dy = pts[i]!.y - pts[i - 1]!.y;
+        stations.push(stations[i - 1]! + Math.sqrt(dx * dx + dy * dy));
+      }
+      for (let i = 0; i < pts.length; i++) {
+        if (pts[i]!.x >= tMinX && pts[i]!.x <= tMaxX && pts[i]!.y >= tMinY && pts[i]!.y <= tMaxY) {
+          if (stations[i]! < minSta) minSta = stations[i]!;
+          if (stations[i]! > maxSta) maxSta = stations[i]!;
+        }
+      }
+
+      viewports.push({
+        sheetNumber: sheetNum++,
+        startStation: minSta,
+        endStation: maxSta,
+        centerX: (tMinX + tMaxX) / 2,
+        centerY: (tMinY + tMaxY) / 2,
+        rotationDeg: 0, // Grid tiles are always north-up
+        scaleFtPerInch: Math.ceil(Math.max(tileW, tileH) * 1.2 / 14),
+        tileMinX: tMinX,
+        tileMinY: tMinY,
+        tileMaxX: tMaxX,
+        tileMaxY: tMaxY,
+      });
+    }
   }
 
+  console.log(`[SheetLayout] ${extentX.toFixed(0)}x${extentY.toFixed(0)} ft extent → ${cols}x${rows} grid → ${viewports.length - 1} detail sheets + 1 index`);
   return viewports;
 }
 

@@ -1920,12 +1920,18 @@ function drawGeometryPlanSheet(
   viewportStartSta: number, viewportEndSta: number,
   basemapRoads: OsmRoadway[] = [],
   itdSegments: ItdRoadSegment[] = [],
+  isIndexSheet = false,
+  allViewports: import('../engineering/GeospatialEngine.js').Viewport[] = [],
 ) {
   doc.addPage({ size: 'tabloid', layout: 'landscape', margin: 0 });
 
-  const vpLabel = viewportTotal > 1 ? ` (${viewportIndex}/${viewportTotal})` : '';
+  const vpLabel = viewportTotal > 1 ? (isIndexSheet ? ' — INDEX' : ` — SHEET ${viewportIndex} OF ${viewportTotal}`) : '';
   doc.fontSize(12).fillColor('black').text(`GEOMETRY PLAN${vpLabel}`, 0, 20, { align: 'center' });
-  doc.fontSize(8).text(`${ctx.roadName || 'Project Road'} — STA ${ProjectAlignment.formatStation(viewportStartSta)} to STA ${ProjectAlignment.formatStation(viewportEndSta)}`, 0, 36, { align: 'center' });
+  if (isIndexSheet) {
+    doc.fontSize(8).text(`${ctx.roadName || 'Project Road'} — FULL PROJECT OVERVIEW — SEE DETAIL SHEETS FOR ENLARGED VIEWS`, 0, 36, { align: 'center' });
+  } else {
+    doc.fontSize(8).text(`${ctx.roadName || 'Project Road'} — STA ${ProjectAlignment.formatStation(viewportStartSta)} to STA ${ProjectAlignment.formatStation(viewportEndSta)}`, 0, 36, { align: 'center' });
+  }
 
   // Page drawing area
   const pageLeft = 60, pageRight = 1164, pageTop = 55, pageBot = 680;
@@ -2136,6 +2142,31 @@ function drawGeometryPlanSheet(
 
   // === END CLIPPING ===
   doc.restore();
+
+  // === INDEX SHEET: Draw numbered grid overlay ===
+  if (isIndexSheet && allViewports.length > 1) {
+    doc.lineWidth(0.8).strokeColor('#0066cc');
+    for (const vp of allViewports) {
+      if (vp.isIndexSheet || !vp.tileMinX) continue;
+      // Draw tile rectangle
+      const tlPg = toPage(vp.tileMinX, vp.tileMaxY!); // top-left
+      const brPg = toPage(vp.tileMaxX!, vp.tileMinY!); // bottom-right
+      const tw = brPg.px - tlPg.px;
+      const th = brPg.py - tlPg.py;
+      doc.rect(tlPg.px, tlPg.py, tw, th).stroke();
+      // Sheet number label in center of tile
+      const cx = tlPg.px + tw / 2;
+      const cy = tlPg.py + th / 2;
+      // White mask + sheet number
+      doc.rect(cx - 20, cy - 6, 40, 10).fill('white');
+      doc.font('Helvetica-Bold').fontSize(7).fillColor('#0066cc');
+      doc.text(`SHEET ${vp.sheetNumber}`, cx - 20, cy - 4, { width: 40, align: 'center', lineBreak: false });
+      doc.font('Helvetica');
+    }
+    // Legend
+    doc.fontSize(5).fillColor('#0066cc');
+    doc.text('GRID TILES — SEE NUMBERED SHEETS FOR DETAIL', pageLeft, pageBot - 5, { width: pageRight - pageLeft, align: 'center', lineBreak: false });
+  }
 
   // Station tick marks (Professional CAD — perpendicular to tangent, STATION_TICK style)
   doc.lineWidth(PLOT.STATION_TICK.lineWidth).strokeColor(PLOT.STATION_TICK.color);
@@ -3090,7 +3121,7 @@ export async function generateCAD(
             const viewports = generateViewports(alignment);
             for (let vi = 0; vi < viewports.length; vi++) {
               const vp = viewports[vi]!;
-              drawGeometryPlanSheet(doc, sheetNum++, totalSheets, ctx, alignment, vi + 1, viewports.length, vp.startStation, vp.endStation, geoBasemapRoads, itdRoadSegments);
+              drawGeometryPlanSheet(doc, sheetNum++, totalSheets, ctx, alignment, vi + 1, viewports.length, vp.startStation, vp.endStation, geoBasemapRoads, itdRoadSegments, vp.isIndexSheet || false, viewports);
             }
             console.log(`[cadGenerator] Geometry plan: ${viewports.length} sheet(s), ${gpsPoints.length}-point polyline (${Math.round(alignment.totalLengthFt)} ft, UTM Zone ${alignment.utmZoneNumber}N), ${itdRoadSegments.length} ITD + ${geoBasemapRoads.length} OSM roads`);
           }
