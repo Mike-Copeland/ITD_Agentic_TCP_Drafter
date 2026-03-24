@@ -1,0 +1,217 @@
+{
+  "gemini": {
+    "roundabout_detected": false,
+    "ta_appropriate": false,
+    "roundabout_specific_issues": [
+      {
+        "issue": "System modeled intersections as standard 4-way instead of a dog-bone/circular intersection.",
+        "severity": "CRITICAL",
+        "fix": "Implement circular intersection geometry detection and use roundabout-specific TAs (e.g., TA-53, TA-54)."
+      },
+      {
+        "issue": "Flagger positioning (TA-10) is invalid and highly dangerous for continuous circular flow and dog-bone bridge segments.",
+        "severity": "CRITICAL",
+        "fix": "Use roundabout-specific flagging (TA-53) or, preferably for long-term work, close the affected leg/quadrant with a detour."
+      },
+      {
+        "issue": "Bridge/Overpass not detected (ITD Data shows Bridges: 0), which is inherent to a dog-bone interchange.",
+        "severity": "MAJOR",
+        "fix": "Enhance GIS/structure detection to identify the bridge segment between the two teardrop roundabouts to prevent queuing on the structure."
+      },
+      {
+        "issue": "Truck off-tracking in the dog-bone is not accounted for in the 12 ft lane assumption.",
+        "severity": "MAJOR",
+        "fix": "Ensure lane widths and channelizing device placement in the circular roadway accommodate WB-67 or appropriate design vehicles."
+      }
+    ],
+    "missing_roundabout_signs": [
+      {
+        "code": "W2-6",
+        "label": "Roundabout Ahead",
+        "where": "Advance warning area on all approaches"
+      },
+      {
+        "code": "R6-4",
+        "label": "Yield",
+        "where": "Roundabout entry points"
+      },
+      {
+        "code": "R4-7",
+        "label": "Keep Right",
+        "where": "Splitter islands at all approaches"
+      },
+      {
+        "code": "W16-17P",
+        "label": "Roundabout Plaque",
+        "where": "Mounted below W20-1 signs on approaches"
+      }
+    ],
+    "code_recommendations": [
+      {
+        "description": "Add GIS tagging detection for circular intersections.",
+        "implementation": "Query OSM Overpass API for 'junction=roundabout' or 'highway=mini_roundabout' within the route bounding box. If true, trigger roundabout TA logic."
+      },
+      {
+        "description": "Implement Roundabout TA Selection Logic.",
+        "implementation": "If roundabout detected, override standard linear TAs (like TA-10) with TA-52, TA-53, or TA-54 based on lane count and project duration."
+      },
+      {
+        "description": "Dynamic Approach Generation for Intersections.",
+        "implementation": "Instead of hardcoding 4-way intersection templates, dynamically count intersecting legs from node data and generate advance warning arrays for each specific leg."
+      }
+    ],
+    "overall_assessment": "The current TCP is fundamentally flawed because the software failed to recognize the dog-bone roundabout geometry, defaulting to a standard two-lane flagging operation (TA-10) and standard 4-way intersections. Applying TA-10 to a dog-bone interchange will create severe safety hazards, as it does not account for circular traffic flow, multiple yield-controlled entry points, or truck off-tracking. The software must be updated to detect circular intersections via GIS metadata and apply appropriate MUTCD roundabout typologies.",
+    "peer_review": {
+      "critique": "The initial assessment correctly identifies the failure to detect the roundabout and the inappropriateness of TA-10. However, it assumes TA-53 (flagging in a roundabout) is the direct fix. For a long-term project (>3 days) at a high-crash (72 crashes) dog-bone interchange, flagging is highly discouraged due to driver confusion, continuous flow dynamics, and the short bridge segment connecting the teardrops. Furthermore, the system failed to detect the bridge entirely ('Bridges: 0').",
+      "corrections": "1. The recommended fix should prioritize partial/full detours or temporary traffic signals (adapted TA-12) over flagging (TA-53) for long-term dog-bone work. 2. The code recommendations must include a spatial check for bridge structures (e.g., intersecting a 'bridge=yes' or 'layer>0' tag in OSM) because queuing on the short dog-bone connector bridge can cause immediate gridlock of both roundabouts."
+    }
+  },
+  "opus": {
+    "roundabout_detected": false,
+    "ta_appropriate": false,
+    "roundabout_specific_issues": [
+      {
+        "issue": "System failed to detect dog-bone roundabout interchange geometry. All 6 intersections are treated as standard 4-way intersections with identical boilerplate detail sheets. A dog-bone interchange has two roundabouts connected by a bridge/overpass segment — none of this geometry is recognized.",
+        "severity": "CRITICAL",
+        "fix": "Implement intersection geometry classification using satellite imagery, GIS data (OpenStreetMap tags: junction=roundabout), and/or ITD intersection inventory. The system must distinguish between signalized, stop-controlled, roundabout, and interchange intersection types before generating detail sheets."
+      },
+      {
+        "issue": "TA-10 (Lane Closure on a Two-Lane Road Using Flaggers) is designed for linear two-lane road segments. It is not appropriate as the sole TA for work within or adjacent to a roundabout circulatory roadway. MUTCD 11th Edition provides TA-52 (Short-Term or Short-Duration Work in a Circular Intersection), TA-53 (Flagging Operation on a Single-Lane Circular Intersection), and TA-54 (Inside Lane Closure on a Multi-Lane Circular Intersection). None of these were selected or even referenced.",
+        "severity": "CRITICAL",
+        "fix": "When work occurs within or adjacent to a roundabout, the system must select from TA-52, TA-53, or TA-54 depending on the number of circulating lanes, work duration, and work location (approach leg vs. circulatory roadway vs. splitter island). TA-10 may still apply to approach legs outside the roundabout influence area, but the circulatory roadway requires roundabout-specific TAs."
+      },
+      {
+        "issue": "The plan treats the entire 1,309-ft corridor as a single linear work zone with one pair of flaggers. A dog-bone interchange with two roundabouts requires independent traffic control at each roundabout, with coordinated flagging between the two circular intersections and the connecting bridge segment. A single TA-10 setup cannot safely control traffic through two roundabouts.",
+        "severity": "CRITICAL",
+        "fix": "Decompose the work zone into segments: (1) approach legs to Roundabout 1, (2) Roundabout 1 circulatory roadway, (3) bridge/connecting segment between roundabouts, (4) Roundabout 2 circulatory roadway, (5) approach legs to Roundabout 2. Each segment requires its own TA selection and traffic control detail. Flaggers at each roundabout entry must coordinate so that only one direction of approach traffic is released at a time (per MUTCD TA-52 Note 3, which is a Standard)."
+      },
+      {
+        "issue": "No consideration of roundabout-specific signing. Permanent roundabout signs (W2-6 Roundabout Ahead, R6-4 Roundabout Directional arrows, R1-2 YIELD at entries) are not referenced. The plan does not address whether these permanent signs need to be covered, relocated, or supplemented during construction. MUTCD Section 6G.03 Standard requires that existing permanent regulatory devices be removed or covered and superseded by appropriate temporary regulatory signs when TTC zone requires different regulatory measures.",
+        "severity": "CRITICAL",
+        "fix": "Inventory all permanent roundabout signs. Determine which must be covered (e.g., YIELD signs at entries that are closed, ONE WAY signs on circulatory roadway segments that will carry two-way traffic). Add temporary regulatory and warning signs appropriate to the altered traffic pattern."
+      },
+      {
+        "issue": "Intersection detail sheets (Sheets 6-11) are all identical boilerplate showing a generic 4-way intersection with W20-1 signs on cross-street approaches. None reflect roundabout geometry, splitter islands, yield-controlled entries, or the unique sight distance requirements of circular intersections.",
+        "severity": "CRITICAL",
+        "fix": "Generate roundabout-specific intersection detail sheets showing: circulatory roadway, splitter islands, entry/exit geometry, channelization through the roundabout, flagger positions relative to the circulatory roadway, and temporary signing for altered traffic patterns. Reference MUTCD Figures 6P-52, 6P-53, and 6P-54 for layout guidance."
+      },
+      {
+        "issue": "The plan does not address truck accommodation through the roundabout work zone. MUTCD TA-52 Guidance Note 11 states: 'Since the geometrics of the circular intersection will be temporarily altered, consideration should be given to establishing a truck detour for the duration of the project.' MUTCD TA-53 Guidance Note 5 states accommodations for wider heavy commercial vehicles should be considered. With unknown truck percentage and a functional class 5 road, this is a significant gap.",
+        "severity": "MAJOR",
+        "fix": "Conduct swept-path analysis for WB-67 design vehicle through the altered roundabout geometry. If the work zone channelization cannot accommodate trucks, establish a signed truck detour route. Add truck detour signing to the plan."
+      },
+      {
+        "issue": "The bridge/overpass connecting the two roundabouts is not identified in the plan. The audit log shows 'Bridges: 0' which is incorrect for a dog-bone interchange. Bridge work zones have specific requirements including positive protection (MUTCD Section 6M.02 Support 03A: 'Work zones that provide workers no means of escape from motorized traffic such as tunnels or bridges').",
+        "severity": "CRITICAL",
+        "fix": "Identify the bridge structure connecting the two roundabouts. If work occurs on or adjacent to the bridge, temporary traffic barriers are required per MUTCD 6M.02. Update the bridge count in the data and add bridge-specific traffic control details."
+      },
+      {
+        "issue": "72 crashes at a roundabout interchange is extremely high. The plan notes 'HIGH CRASH LOCATION' and recommends PCMS, speed feedback signs, and law enforcement, but does not address roundabout-specific crash patterns (e.g., wrong-way entry, failure to yield, sideswipe in circulatory roadway). Work zone channelization that alters roundabout geometry can exacerbate these crash types.",
+        "severity": "MAJOR",
+        "fix": "Obtain crash type breakdown from ITD. If wrong-way crashes are prevalent, ensure temporary WRONG WAY and DO NOT ENTER signs are prominently placed. If failure-to-yield crashes dominate, consider temporary traffic signals or enhanced flagger operations at entries. Deploy PCMS on all approaches with roundabout-specific messaging (e.g., 'ROUNDABOUT WORK ZONE AHEAD / EXPECT DELAYS'). Consider law enforcement presence during peak hours given the crash history."
+      },
+      {
+        "issue": "The plan does not address pedestrian and bicycle circulation through the roundabout work zone. Roundabouts typically have separated pedestrian crossings at each leg with splitter island refuges. If these are disrupted, ADA-compliant alternate routes must be provided per MUTCD 6C.02 and 6C.03.",
+        "severity": "MAJOR",
+        "fix": "Identify all pedestrian crossings at both roundabouts. If any are disrupted, provide detectable pedestrian channelizing devices (per MUTCD Section 6K.02), temporary crosswalk markings, and SIDEWALK CLOSED / CROSS HERE signs per TA-29. Ensure splitter island pedestrian refuges remain accessible or provide alternate accessible routes."
+      },
+      {
+        "issue": "Channelizing device spacing and taper calculations assume linear geometry. Roundabout circulatory roadways are curved, requiring closer device spacing to maintain clear path delineation. MUTCD TA-53 Guidance Note 8 requires channelizing devices at maximum spacing of 1/2 S feet where S is speed in mph when conflicting pavement markings exist. MUTCD TA-54 Guidance Note 6 has the same requirement.",
+        "severity": "MAJOR",
+        "fix": "For circulatory roadway channelization, use maximum device spacing of 15 ft (1/2 × 30 mph) rather than the 60 ft tangent spacing used in the current plan. Recalculate device quantities accordingly. Use drums or vertical panels (not cones) for better visibility on curves."
+      },
+      {
+        "issue": "The plan specifies a single-phase operation (General Note 14). A dog-bone roundabout with two circular intersections and a bridge segment almost certainly requires multi-phase construction staging to maintain traffic flow. Single-phase closure of the entire corridor would require full detour routing.",
+        "severity": "MAJOR",
+        "fix": "Develop a phased construction staging plan. Typical phases for roundabout work include: Phase 1 — work on one half of circulatory roadway while maintaining one-lane circulation; Phase 2 — switch to other half. Each phase requires its own TCP sheet. If full closure is required, develop a comprehensive detour plan with signing on all alternate routes."
+      },
+      {
+        "issue": "MUTCD TA-52 Standard Note 5 requires: 'WRONG WAY signs shall be covered.' The plan does not address covering or removing permanent WRONG WAY signs that may become inapplicable when roundabout traffic patterns are altered during construction.",
+        "severity": "MAJOR",
+        "fix": "Inventory all WRONG WAY, DO NOT ENTER, ONE WAY, and directional arrow signs at both roundabouts. Determine which become inapplicable under each construction phase and specify covering/removal in the TCP."
+      }
+    ],
+    "missing_roundabout_signs": [
+      {
+        "code": "W2-6",
+        "label": "ROUNDABOUT AHEAD (Circular Intersection)",
+        "where": "Each approach leg to both roundabouts, in advance warning area. These are likely existing permanent signs — plan must address whether they remain, are supplemented, or are covered during construction."
+      },
+      {
+        "code": "R1-2",
+        "label": "YIELD",
+        "where": "Each roundabout entry point. Existing permanent signs — plan must address disposition during each construction phase. If entries are closed, YIELD signs must be covered per MUTCD 6G.03."
+      },
+      {
+        "code": "R6-4",
+        "label": "Roundabout Directional (3-pointed curved arrow)",
+        "where": "Splitter islands at each roundabout entry. Must be addressed in construction phasing — cover if entry is closed or traffic pattern is altered."
+      },
+      {
+        "code": "W12-1",
+        "label": "Double Arrow",
+        "where": "Within circulatory roadway at points where traffic is split around work zone per TA-53 Figure 6P-53."
+      },
+      {
+        "code": "R11-2",
+        "label": "ROAD CLOSED",
+        "where": "At any roundabout entry that is fully closed during a construction phase, mounted on Type 3 Barricade per TA-53."
+      },
+      {
+        "code": "W20-7",
+        "label": "FLAGGER (symbol)",
+        "where": "Each approach to each roundabout where flaggers are stationed, per TA-53. Current plan only places flagger signs on the mainline approaches, not on all roundabout legs."
+      },
+      {
+        "code": "W20-4",
+        "label": "ONE LANE ROAD AHEAD",
+        "where": "Each approach to each roundabout where circulatory roadway is reduced to one lane, per TA-53."
+      },
+      {
+        "code": "R5-1",
+        "label": "DO NOT ENTER",
+        "where": "Temporary placement at any roundabout entry that is closed to prevent wrong-way entry into the work zone from the circulatory roadway."
+      },
+      {
+        "code": "W13-1P",
+        "label": "Advisory Speed Plaque",
+        "where": "With curve warning signs on altered circulatory roadway alignment where channelization creates tighter radii than the original roundabout geometry."
+      }
+    ],
+    "code_recommendations": [
+      {
+        "description": "Intersection Geometry Classifier",
+        "implementation": "Add a classification module that queries OpenStreetMap Overpass API for junction=roundabout tags within the project buffer zone (500 ft of route). Cross-reference with satellite imagery analysis (circular road features) and ITD intersection inventory database. Output an enum: SIGNALIZED | STOP_CONTROLLED | YIELD_CONTROLLED | ROUNDABOUT_SINGLE_LANE | ROUNDABOUT_MULTI_LANE | INTERCHANGE_DOGBONE | INTERCHANGE_DIAMOND | INTERCHANGE_CLOVERLEAF | UNCONTROLLED. This classification drives all downstream TA selection and detail sheet generation."
+      },
+      {
+        "description": "Roundabout-Specific TA Selection Logic",
+        "implementation": "When intersection_type IN (ROUNDABOUT_SINGLE_LANE, ROUNDABOUT_MULTI_LANE, INTERCHANGE_DOGBONE): (1) If work_duration <= SHORT_TERM AND work_location == CIRCULATORY: select TA-52. (2) If work_duration IN (SHORT_TERM, INTERMEDIATE) AND intersection_type == ROUNDABOUT_SINGLE_LANE AND flaggers_required: select TA-53. (3) If intersection_type == ROUNDABOUT_MULTI_LANE AND lane_closure_type == INSIDE: select TA-54. (4) If work_duration == LONG_TERM: recommend full closure with detour (TA-8/TA-20) or phased construction with TA-53/TA-54 per phase. (5) For INTERCHANGE_DOGBONE: decompose into sub-segments and apply appropriate TA to each segment independently."
+      },
+      {
+        "description": "Roundabout Detail Sheet Generator",
+        "implementation": "Replace the generic 4-way intersection template with a roundabout-specific template when intersection_type is roundabout. The template should render: (a) circular geometry with correct number of legs and lanes, (b) splitter islands, (c) channelization through the circulatory roadway showing work zone and open travel path, (d) flagger positions at each entry (offset from circulatory roadway per MUTCD 6D.06), (e) sign placements on each approach leg, (f) pedestrian crossing locations with closure/detour status, (g) truck turning template overlay. Use parametric CAD generation with inputs: number_of_legs, number_of_circulatory_lanes, inscribed_circle_diameter, work_zone_quadrant(s)."
+      },
+      {
+        "description": "Dog-Bone Interchange Decomposition Engine",
+        "implementation": "When intersection_type == INTERCHANGE_DOGBONE: (1) Identify the two roundabout nodes and the connecting bridge segment from GIS data. (2) Decompose the project into sub-zones: approach_legs[], roundabout_1, bridge_segment, roundabout_2. (3) For each sub-zone, independently determine: applicable TA, sign requirements, channelization, flagger positions, barrier requirements. (4) Generate coordination notes between sub-zones (e.g., flagger communication requirements between roundabouts). (5) Flag bridge_segment for positive protection evaluation per MUTCD 6M.02. (6) Generate a phased construction staging plan with separate TCP sheets per phase."
+      },
+      {
+        "description": "Permanent Sign Inventory and Disposition Module",
+        "implementation": "For roundabout and interchange intersection types, generate a permanent sign inventory checklist. Query the sign database (or prompt the user) for all existing signs within the work zone. For each construction phase, determine sign disposition: KEEP (sign remains applicable), COVER (sign conflicts with temporary traffic pattern), RELOCATE (sign must be moved), SUPPLEMENT (additional temporary sign needed). Generate a sign disposition table on a dedicated plan sheet. This addresses MUTCD 6G.03 Standard: 'If a TTC zone requires regulatory measures different from those existing, the existing permanent regulatory devices shall be removed or covered and superseded by the appropriate temporary regulatory signs.'"
+      },
+      {
+        "description": "Multi-Phase Construction Staging Generator",
+        "implementation": "For complex intersections (roundabouts, interchanges), implement a phasing engine: (1) Accept user input for number of construction phases. (2) For each phase, define: work area polygon, open travel lanes, closed entries/exits, temporary traffic pattern. (3) Generate a separate TCP sheet set for each phase including: phase-specific TA layout, sign schedule, channelization plan, flagger positions, pavement marking plan (removals and temporary markings). (4) Generate a phase transition plan describing the sequence of device changes between phases. (5) Include a phase summary sheet showing all phases on one drawing for overview."
+      },
+      {
+        "description": "Swept-Path Analysis Integration",
+        "implementation": "For roundabout work zones, integrate a simplified swept-path check: (1) Define the altered travel path through the channelized roundabout. (2) Check minimum lane width against WB-67 (or applicable design vehicle) turning requirements at the reduced radius. (3) If the altered path cannot accommodate the design vehicle, flag the issue and recommend: wider channelization, truck detour, or periodic channelization adjustment (per MUTCD TA-53 Option Note 12: 'Periodic adjustments to the channelizing devices may be allowed in an active TTC zone to accommodate the turning movements of tractor trailer vehicles'). (4) Generate a truck accommodation note on the plan."
+      },
+      {
+        "description": "Bridge Detection and Positive Protection Logic",
+        "implementation": "Query ITD bridge inventory (NBI database) and OpenStreetMap for bridge/overpass features within the project buffer. When bridges are detected: (1) Update the bridge count in project data. (2) Flag for positive protection evaluation per MUTCD 6M.02. (3) If work occurs on the bridge deck, require temporary traffic barriers as a Standard (not just Guidance). (4) Add bridge-specific notes to the Special Considerations sheet. (5) For dog-bone interchanges, the connecting overpass is always a bridge — ensure this is detected even if the NBI record is missing."
+      }
+    ],
+    "overall_assessment": "This TCP is fundamentally inadequate for a dog-bone roundabout interchange. The system completely failed to detect the roundabout/interchange geometry and generated a plan appropriate for a simple two-lane rural road. Every intersection detail sheet is identical boilerplate for a 4-way intersection, none reflecting circular geometry. The selected TA (TA-10) is inappropriate for circulatory roadway work — MUTCD provides three roundabout-specific TAs (52, 53, 54) that were not considered. The bridge connecting the two roundabouts was not detected (Bridges: 0 is incorrect). The plan cannot be used for construction as-is and would likely result in unsafe conditions, MUTCD non-compliance, and potential liability exposure. A complete redesign is required with: (1) proper intersection geometry classification, (2) roundabout-specific TA selection (TA-52/53/54), (3) phased construction staging, (4) roundabout-specific detail sheets for both circular intersections, (5) bridge identification and positive protection, (6) permanent sign disposition plan, (7) truck accommodation analysis, (8) pedestrian/bicycle circulation plan through the roundabout work zone, and (9) enhanced safety measures commensurate with the 72-crash history. The software requires significant architectural additions to handle roundabout and interchange geometries — the eight code recommendations above represent the minimum viable feature set. Until these are implemented, roundabout and interchange projects should be flagged for manual PE design rather than automated generation."
+  }
+}
