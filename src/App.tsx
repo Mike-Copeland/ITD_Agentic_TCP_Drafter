@@ -12,7 +12,8 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
 
-  const [operationType, setOperationType] = useState('Single Lane Closure');
+  const [operationTypes, setOperationTypes] = useState<string[]>(['Single Lane Closure']);
+  const operationType = operationTypes[0] || 'Single Lane Closure'; // Primary for PE prompt
   const [duration, setDuration] = useState('Short-term (<= 3 days)');
   const [normalSpeed, setNormalSpeed] = useState(65);
   const [workZoneSpeed, setWorkZoneSpeed] = useState(55);
@@ -24,6 +25,7 @@ export default function App() {
   const [loadingState, setLoadingState] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
 
+  const [contextData, setContextData] = useState<any>(null);
   const [verifiedBlueprint, setVerifiedBlueprint] = useState<string | null>(null);
   const [eacrAudit, setEacrAudit] = useState<{attack: string, defense: string} | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
@@ -192,7 +194,9 @@ export default function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ startCoords, endCoords, normalSpeed })
       });
-      const contextData = contextRes.ok ? await contextRes.json() : null;
+      const ctxData = contextRes.ok ? await contextRes.json() : null;
+      setContextData(ctxData);
+      const contextData = ctxData;
 
       // Auto-populate from ITD authoritative data if available
       if (contextData?.itdSpeedLimit && contextData.itdSpeedLimit !== normalSpeed) {
@@ -366,6 +370,7 @@ export default function App() {
           workZoneSpeed,
           laneWidth,
           operationType,
+          operationTypes,
           duration,
           routeDistanceFt: contextData?.routeDistanceFt || 0,
           roadName: contextData?.roadName || '',
@@ -452,35 +457,53 @@ export default function App() {
             </h2>
 
             <div className="space-y-5">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-1.5">Operation Type</label>
-                  <select
-                    value={operationType}
-                    onChange={(e) => setOperationType(e.target.value)}
-                    className="w-full bg-zinc-950 border border-white/10 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                  >
-                    <option>Single Lane Closure</option>
-                    <option>Double Lane Closure</option>
-                    <option>Full Road Closure</option>
-                    <option>Shoulder Work</option>
-                    <option>Median Crossover</option>
-                    <option>Mobile Operations</option>
-                    <option>Intermittent Closure</option>
-                  </select>
+              <div>
+                <label className="block text-sm font-medium text-zinc-400 mb-2">Operation Phases (select all that apply)</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(() => {
+                    const lanes = contextData?.itdTotalLanes || 0;
+                    const fc = parseInt(contextData?.itdFuncClass || '99') || 99;
+                    const isDivided = fc <= 3 && lanes >= 4;
+                    const isFreeway = fc <= 2;
+                    const isMultiLane = lanes >= 4;
+                    const allOps = [
+                      { id: 'Single Lane Closure', label: 'Lane Closure', show: true },
+                      { id: 'Double Lane Closure', label: 'Double Lane Closure', show: isMultiLane || isFreeway },
+                      { id: 'Full Road Closure', label: 'Road Closure / Detour', show: true },
+                      { id: 'Shoulder Work', label: 'Shoulder Work', show: true },
+                      { id: 'Median Crossover', label: 'Median Crossover', show: isDivided || lanes >= 4 },
+                      { id: 'Mobile Operations', label: 'Mobile Operations', show: true },
+                      { id: 'Intermittent Closure', label: 'Intermittent / Short Duration', show: true },
+                    ];
+                    return allOps.filter(o => o.show || !contextData).map(op => (
+                      <label key={op.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer text-sm transition-colors ${operationTypes.includes(op.id) ? 'bg-emerald-900/40 border-emerald-500/50 text-emerald-300' : 'bg-zinc-950 border-white/10 text-zinc-400 hover:border-white/20'}`}>
+                        <input
+                          type="checkbox"
+                          checked={operationTypes.includes(op.id)}
+                          onChange={(e) => {
+                            if (e.target.checked) setOperationTypes(prev => [...prev, op.id]);
+                            else setOperationTypes(prev => prev.filter(t => t !== op.id));
+                          }}
+                          className="accent-emerald-500"
+                        />
+                        {op.label}
+                      </label>
+                    ));
+                  })()}
                 </div>
+                {operationTypes.length === 0 && <p className="text-xs text-amber-400 mt-1">Select at least one operation type</p>}
+              </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-1.5">Work Duration</label>
-                  <select
-                    value={duration}
-                    onChange={(e) => setDuration(e.target.value)}
-                    className="w-full bg-zinc-950 border border-white/10 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                  >
-                    <option>Short-term (&lt;= 3 days)</option>
-                    <option>Long-term (&gt; 3 days)</option>
-                  </select>
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-zinc-400 mb-1.5">Work Duration</label>
+                <select
+                  value={duration}
+                  onChange={(e) => setDuration(e.target.value)}
+                  className="w-full bg-zinc-950 border border-white/10 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+                >
+                  <option>Short-term (&lt;= 3 days)</option>
+                  <option>Long-term (&gt; 3 days)</option>
+                </select>
               </div>
 
               <div className="grid grid-cols-2 gap-4">

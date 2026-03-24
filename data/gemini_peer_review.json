@@ -1,0 +1,79 @@
+{
+  "overall_grade": "C",
+  "critical_issues": [
+    {
+      "issue": "The opposing approach on the TA-10 diagram (Sheet 2) is missing the required speed reduction signage (W3-5 'REDUCED SPEED 40 MPH AHEAD' and R2-1 'SPEED LIMIT 40'). Traffic from both directions must be given advance warning of and be subject to the same work zone speed limit.",
+      "mutcd_reference": "MUTCD Section 6C.01",
+      "fix": "Add the W3-5 and R2-1 signs to the opposing approach sign series on Sheet 2, consistent with the primary approach. The Sign Schedule on Sheet 17 correctly quantities these signs (2 each), but the controlling drawing is incorrect."
+    }
+  ],
+  "sign_spacing_ruling": {
+    "correct_classification": "Urban (High Speed)",
+    "reasoning": "The core discrepancy arises from the `mutcdPart6.ts` module's rigid classification logic. While the speed is 45 MPH, MUTCD Table 6B-1's 'Road Type' is not solely defined by speed and functional class but by the surrounding environment. US-95 through Payette, as shown on the site-specific layout (Sheet 8), is a principal arterial in a developed area with numerous intersections, businesses, and access points. This context aligns with the MUTCD's description of an 'Urban' environment. Therefore, the PE Agent's use of 'Urban (High Speed)' spacing is the more appropriate engineering judgment. The compliance check failure is a false negative resulting from flawed logic in the reference code, which incorrectly defaults this scenario to 'Rural'.",
+    "correct_A_B_C": {
+      "A": 350,
+      "B": 350,
+      "C": 350
+    }
+  },
+  "sign_quality_issues": [
+    {
+      "sign_code": "N/A - Drawing Convention",
+      "issue": "On Sheet 2 (TA-10), the dimension lines for the advance warning signs are misleading. For example, the line labeled '700 FT' is drawn between the first and second signs, but this distance is actually 350 ft (1050 ft - 700 ft). The labels represent distance from the taper, but the lines represent distance between signs.",
+      "mutcd_figure": "MUTCD Figure 6H-10 (TA-10)",
+      "fix": "Redraw the dimension lines to accurately reflect the distance between consecutive signs (e.g., a line labeled '350 FT' between the W20-1 and W20-4 signs) or use a continuous dimension line with a common datum at the start of the taper."
+    }
+  ],
+  "drawing_quality": [
+    {
+      "sheet": "All",
+      "issue": "The large, central 'PRELIMINARY' and 'NOT FOR CONSTRUCTION' watermarks obscure key details of the diagrams, hindering a clear review. While appropriate for draft status, their placement is intrusive.",
+      "fix": "Relocate watermarks to a less obstructive location, such as a corner or border, or reduce their opacity for future revisions."
+    },
+    {
+      "sheet": "2",
+      "issue": "There is a direct contradiction between the signs shown on the opposing approach in the drawing (missing speed reduction) and the quantities specified in the Sign Schedule on Sheet 17 (which correctly accounts for them). The drawing, as the primary instruction, must be correct.",
+      "fix": "Correct the drawing on Sheet 2 to match the quantities on Sheet 17, as noted in the 'critical_issues' section."
+    }
+  ],
+  "missing_elements": [
+    {
+      "element": "Enhanced Measures for High Crash Location",
+      "mutcd_section": "MUTCD Section 6A.01 (Fundamental Principles)",
+      "importance": "critical",
+      "details": "Sheet 15 correctly identifies the project limits as a 'HIGH CRASH LOCATION' with 55 crashes and recommends 'Enhanced traffic control measures'. The provided plan is a standard TA-10 application with no enhancements. This is a major liability and oversight. The plan must specify what these enhanced measures are, such as portable changeable message signs (PCMS) with advance warning, speed feedback signs, increased law enforcement presence, or temporary lighting."
+    },
+    {
+      "element": "Long Work Zone Repeater Signs",
+      "mutcd_section": "MUTCD Section 6C.04",
+      "importance": "major",
+      "details": "General Note 15 and a note on Sheet 2 correctly identify the need for W20-1 'ROAD WORK AHEAD' repeater signs for work zones longer than 1 mile. This project is 1.1 miles long. However, these repeater signs are not included in the Sign Schedule & Quantities on Sheet 17. The plan must include at least one set of repeater signs within the work area."
+    },
+    {
+      "element": "Bridge Work Zone Device Detail",
+      "mutcd_section": "N/A (Good Practice)",
+      "importance": "minor",
+      "details": "Sheet 15 notes a bridge within the project limits and explicitly prohibits placing devices on the deck without approval. The plan should include a note identifying the approximate location of the bridge and provide guidance on how to transition channelizing devices across it (e.g., ending before, restarting after, or using low-profile devices if approved)."
+    }
+  ],
+  "code_fixes": [
+    {
+      "file": "mutcdPart6.ts",
+      "function": "classifyRoad",
+      "issue": "The function's logic is overly simplistic and produces false negatives. It incorrectly classifies any road with FC <= 4 and Speed >= 45 MPH as 'Rural', ignoring the critical context of development density.",
+      "fix_description": "Refactor the function to incorporate a parameter for 'area type' (urban/suburban/rural) provided by the PE Agent or derived from GIS data. This would allow for a more accurate classification, preventing cases like this from being flagged as non-compliant."
+    },
+    {
+      "file": "mutcdPart6.ts",
+      "function": "getRequiredSigns",
+      "issue": "The function for TA-10 does not account for conditionally required signs, specifically the W3-5 'REDUCED SPEED... AHEAD' sign when a speed reduction is implemented. This leads to the sign being omitted from the opposing approach sign series.",
+      "fix_description": "Modify the function to accept a `wzSpeed` parameter. If `wzSpeed` is less than `postedSpeed`, the function should conditionally add the W3-5 sign to the required sign list for both primary and opposing approaches."
+    }
+  ],
+  "positive_observations": [
+    "The AI correctly identified the need for a flagger-controlled lane closure (TA-10) over a yield-controlled setup (TA-11) based on the high AADT, which is sound engineering judgment.",
+    "The system's ability to self-correct initial errors noted in the audit log (e.g., adjusting taper length to 100 ft for flagger control, adding the W3-5 sign) is a strong feature.",
+    "The plan set is well-structured and comprehensive, including a cover sheet, general notes, site-specific map, TA diagram, and dedicated sheets for each of the six intersecting streets.",
+    "The queue and traffic data analysis on Sheet 15 is valuable for operational planning and justifies the recommended work windows."
+  ]
+}

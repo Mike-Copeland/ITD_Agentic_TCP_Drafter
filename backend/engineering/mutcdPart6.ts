@@ -24,21 +24,28 @@ const SIGN_SPACING: Record<RoadClass, SignSpacing> = {
 
 /**
  * Determine road classification for sign spacing.
- * Uses functional class code, terrain, and speed to classify.
+ * MUTCD Table 6B-1 "Road Type" is based on environment (urban/rural), not just FC.
+ * Uses FC, terrain, speed, and area indicators (AADT, cross-street density) to classify.
  */
-export function classifyRoad(speedMph: number, funcClassCode: number, terrain?: string): RoadClass {
-  // FC 1-2 = Interstate/Freeway
+export function classifyRoad(speedMph: number, funcClassCode: number, terrain?: string, aadt = 0, crossStreetCount = 0): RoadClass {
+  // FC 1-2 = Interstate/Freeway — always expressway spacing
   if (funcClassCode <= 2 || speedMph >= 65) return 'expressway';
-  // FC 3-4 = Arterials; rolling/mountainous terrain = rural
+
+  // Determine if the environment is urban or rural.
+  // Urban indicators: high AADT, many cross-streets, lower speed, higher FC codes
+  // Rural indicators: low AADT, few cross-streets, mountainous/rolling terrain
+  const isUrbanContext = aadt >= 3000 || crossStreetCount >= 4 || funcClassCode >= 5;
   const isRuralTerrain = terrain && /mountainous|rolling/i.test(terrain);
-  if (isRuralTerrain || (funcClassCode <= 4 && speedMph >= 45)) return 'rural';
-  // Speed-based urban split: MUTCD says "determined by highway agency", we use 30 mph
-  if (speedMph > 30) return 'urban_high';
+  const isRural = !isUrbanContext && (isRuralTerrain || (aadt > 0 && aadt < 1500));
+
+  if (isRural) return speedMph >= 45 ? 'rural' : 'urban_low'; // Low-speed rural uses urban_low per MUTCD
+  // Urban: split by speed
+  if (speedMph > 40) return 'urban_high';
   return 'urban_low';
 }
 
-export function getSignSpacing(speedMph: number, funcClassCode: number, terrain?: string, gradePercent = 0): SignSpacing {
-  const base = SIGN_SPACING[classifyRoad(speedMph, funcClassCode, terrain)];
+export function getSignSpacing(speedMph: number, funcClassCode: number, terrain?: string, gradePercent = 0, aadt = 0, crossStreetCount = 0): SignSpacing {
+  const base = SIGN_SPACING[classifyRoad(speedMph, funcClassCode, terrain, aadt, crossStreetCount)];
   // MUTCD guidance: increase spacing on steep downgrades (>3%) to account for truck braking
   if (gradePercent > 5) {
     const mult = 1.5;

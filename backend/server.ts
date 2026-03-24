@@ -856,7 +856,9 @@ app.post('/api/rag', async (req, res) => {
 // ---------------------------------------------------------------------------
 app.post('/api/generate-plan', async (req, res) => {
   try {
-    const { blueprint, startCoords, endCoords, staticMapBase64, normalSpeed, workZoneSpeed, laneWidth, operationType, duration, routeDistanceFt: rawRouteDist, roadName: rawRoadName, positionedCrossStreets: rawCrossStreets, itdTerrain: rawTerrain, itdFuncClass: rawFuncClass, itdTotalLanes: rawTotalLanes, itdAADT: rawAADT, itdTruckPct: rawTruckPct, itdCrashCount: rawCrashCount, itdBridges: rawBridges, maxGradePercent: rawGrade } = req.body;
+    const { blueprint, startCoords, endCoords, staticMapBase64, normalSpeed, workZoneSpeed, laneWidth, operationType, operationTypes: rawOpTypes, duration, routeDistanceFt: rawRouteDist, roadName: rawRoadName, positionedCrossStreets: rawCrossStreets, itdTerrain: rawTerrain, itdFuncClass: rawFuncClass, itdTotalLanes: rawTotalLanes, itdAADT: rawAADT, itdTruckPct: rawTruckPct, itdCrashCount: rawCrashCount, itdBridges: rawBridges, maxGradePercent: rawGrade } = req.body;
+    // Support multi-phase: operationTypes[] or fallback to single operationType
+    const operationTypes: string[] = Array.isArray(rawOpTypes) && rawOpTypes.length > 0 ? rawOpTypes : [operationType || 'Single Lane Closure'];
     const speedMph: number = normalSpeed || 65;
     const wzSpeedMph: number = workZoneSpeed || 55;
     const laneWidthFt: number = laneWidth || 12;
@@ -910,6 +912,7 @@ app.post('/api/generate-plan', async (req, res) => {
       rawBridges || [],
       duration || 'Short-term (<= 3 days)',
       parseFloat(rawGrade) || 0,
+      operationTypes,
     );
 
     // Verify the generated files

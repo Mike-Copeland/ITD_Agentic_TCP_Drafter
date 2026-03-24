@@ -83,9 +83,9 @@ function haversineDistanceFt(a: { lat: number; lng: number }, b: { lat: number; 
 }
 
 // Delegates to MUTCD module — single source of truth
-function getABCSpacing(speedMph: number, terrain?: string, funcClass?: string, gradePercent = 0): { a: number; b: number; c: number; classification: string } {
+function getABCSpacing(speedMph: number, terrain?: string, funcClass?: string, gradePercent = 0, aadt = 0, crossStreetCount = 0): { a: number; b: number; c: number; classification: string } {
   const fcCode = funcClass ? parseInt(funcClass) || 99 : 99;
-  return MUTCD.getSignSpacing(speedMph, fcCode, terrain, gradePercent);
+  return MUTCD.getSignSpacing(speedMph, fcCode, terrain, gradePercent, aadt, crossStreetCount);
 }
 
 // Delegates to MUTCD module — single source of truth
@@ -221,35 +221,42 @@ function drawDimLine(doc: Doc, x1: number, x2: number, y: number, text: string) 
 }
 
 function drawSignDiamond(doc: Doc, x: number, y: number, code: string, label: string) {
-  // Determine sign type by code prefix for correct color
-  const isRegulatory = /^R\d/.test(code);    // R2-1 speed limit etc → white rect
-  const isGuide = /^G\d/.test(code);          // G20-2 END ROAD WORK → green rect
-  const isWarning = !isRegulatory && !isGuide; // W20-x → orange diamond
+  const isRegulatory = /^R\d/.test(code);
+  const isGuide = /^G\d/.test(code);
+  const isWarning = !isRegulatory && !isGuide;
 
   doc.lineWidth(1.5).strokeColor('black');
   if (isWarning) {
-    // Orange diamond (MUTCD warning sign)
+    // MUTCD warning sign: orange diamond, black border, black legend text
+    const sz = 16;
     doc.save().translate(x, y).rotate(45);
-    doc.rect(-12, -12, 24, 24).fillAndStroke('#FF8C00', 'black');
+    doc.rect(-sz, -sz, sz * 2, sz * 2).fillAndStroke('#FF8C00', 'black');
+    doc.rect(-sz + 2, -sz + 2, (sz - 2) * 2, (sz - 2) * 2).stroke(); // inner border per MUTCD
     doc.restore();
-    // Black code text inside diamond
-    doc.fontSize(5).fillColor('black');
-    doc.text(code, x - 15, y - 4, { width: 30, align: 'center', lineBreak: false });
-  } else if (isGuide) {
-    // Green rectangle (MUTCD guide sign)
-    doc.rect(x - 14, y - 10, 28, 20).fillAndStroke('#006B3F', 'black');
-    doc.fontSize(4).fillColor('white');
-    doc.text(code, x - 12, y - 7, { width: 24, align: 'center', lineBreak: false });
-  } else {
-    // White rectangle with black border (regulatory sign)
-    doc.rect(x - 10, y - 12, 20, 24).fillAndStroke('#ffffff', 'black');
+    // Sign legend text ON the sign face (multi-line, centered)
+    const lines = label.split(/\n| (?=[A-Z])/);
     doc.fontSize(4.5).fillColor('black');
-    doc.text(code, x - 8, y - 8, { width: 16, align: 'center', lineBreak: false });
+    const startY = y - (lines.length * 5) / 2;
+    lines.forEach((line, i) => {
+      doc.text(line, x - 14, startY + i * 5, { width: 28, align: 'center', lineBreak: false });
+    });
+  } else if (isGuide) {
+    // MUTCD guide sign: green rectangle, white legend, white border
+    doc.rect(x - 18, y - 12, 36, 24).fillAndStroke('#006B3F', 'black');
+    doc.lineWidth(0.5).strokeColor('white');
+    doc.rect(x - 16, y - 10, 32, 20).stroke(); // inner white border
+    doc.fontSize(4.5).fillColor('white');
+    doc.text(label.replace(/\n/g, ' '), x - 15, y - 5, { width: 30, align: 'center' });
+  } else {
+    // MUTCD regulatory sign: white rectangle, black border, black legend
+    doc.rect(x - 12, y - 14, 24, 28).fillAndStroke('#ffffff', 'black');
+    doc.fontSize(4.5).fillColor('black');
+    doc.text(label.replace(/\n/g, ' '), x - 10, y - 8, { width: 20, align: 'center' });
   }
-  // Label below sign
-  doc.fontSize(7).fillColor('black');
+  // Code and label below sign
+  doc.fontSize(6.5).fillColor('black');
   doc.text(code, x - 45, y + 22, { width: 90, align: 'center', lineBreak: false });
-  doc.fontSize(6).text(label, x - 45, y + 32, { width: 90, align: 'center' });
+  doc.fontSize(5.5).text(label.replace(/\n/g, ' '), x - 50, y + 31, { width: 100, align: 'center' });
 }
 
 // ===================================================================
@@ -377,12 +384,63 @@ function drawFlaggerSymbol(doc: Doc, x: number, y: number, label: string) {
   doc.fillColor('black').fontSize(5).text(label, x - 20, y + 22, { width: 40, align: 'center', lineBreak: false });
 }
 
+/** Draw a 28" traffic cone (triangle with stripes) */
+function drawCone(doc: Doc, x: number, y: number, size = 5) {
+  doc.save();
+  // Cone body (triangle)
+  doc.moveTo(x, y - size).lineTo(x - size * 0.6, y + size * 0.4).lineTo(x + size * 0.6, y + size * 0.4).closePath();
+  doc.fillAndStroke('#FF6600', 'black');
+  // Reflective stripe
+  doc.lineWidth(0.8).strokeColor('white');
+  doc.moveTo(x - size * 0.35, y).lineTo(x + size * 0.35, y).stroke();
+  doc.restore();
+}
+
+/** Draw a 42" drum (rectangle with diagonal stripes) */
+function drawDrum(doc: Doc, x: number, y: number, size = 5) {
+  doc.save();
+  const w = size * 0.8, h = size * 1.2;
+  doc.rect(x - w, y - h, w * 2, h * 2).fillAndStroke('#FF6600', 'black');
+  // Reflective stripes (diagonal)
+  doc.lineWidth(0.8).strokeColor('white');
+  doc.moveTo(x - w, y - h * 0.3).lineTo(x + w, y + h * 0.3).stroke();
+  doc.moveTo(x - w, y + h * 0.3).lineTo(x + w, y - h * 0.3).stroke();
+  doc.restore();
+}
+
+/** Draw a Type III barricade — used in road closure schematics */
+function drawBarricade(doc: Doc, x: number, y: number, size = 6) {
+  doc.save();
+  const w = size * 1.5, h = size;
+  // Three horizontal rails with diagonal stripes
+  for (let i = 0; i < 3; i++) {
+    const ry = y - h + i * (h * 0.8);
+    doc.rect(x - w, ry, w * 2, h * 0.5).fillAndStroke('#FF6600', 'black');
+    doc.lineWidth(0.5).strokeColor('white');
+    doc.moveTo(x - w + i * 3, ry).lineTo(x - w + i * 3 + h * 0.5, ry + h * 0.5).stroke();
+  }
+  // Legs
+  doc.lineWidth(1).strokeColor('black');
+  doc.moveTo(x - w * 0.7, y + h * 0.5).lineTo(x - w * 0.7, y + h * 1.2).stroke();
+  doc.moveTo(x + w * 0.7, y + h * 0.5).lineTo(x + w * 0.7, y + h * 1.2).stroke();
+  doc.restore();
+}
+
+/** Draw channelizing device based on work duration */
+function drawDevice(doc: Doc, x: number, y: number, duration: string, size = 4) {
+  if (/long/i.test(duration)) {
+    drawDrum(doc, x, y, size);
+  } else {
+    drawCone(doc, x, y, size);
+  }
+}
+
 function drawWatermark(doc: Doc) {
   doc.save();
-  doc.fontSize(60).fillColor('#000000').opacity(0.06);
+  doc.fontSize(48).fillColor('#000000').opacity(0.035);
   doc.translate(612, 396);
   doc.rotate(-30);
-  doc.text('PRELIMINARY — NOT FOR CONSTRUCTION', -400, -20, { align: 'center', width: 800 });
+  doc.text('PRELIMINARY — NOT FOR CONSTRUCTION', -380, -15, { align: 'center', width: 760 });
   doc.restore();
   doc.opacity(1);
 }
@@ -432,7 +490,10 @@ function drawCoverSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: Dr
   doc.font('Helvetica').fontSize(8);
   const sheetNames = [
     'Cover Sheet & General Notes',
-    `Typical Application (${ctx.taCode})`,
+    ...ctx.operationTypes.map((op: string) => {
+      const ta = MUTCD.selectTA(op, ctx.totalLanes, parseInt(ctx.funcClass) || 99, ctx.isDivided, ctx.aadt);
+      return `${ta.code}: ${op}`;
+    }),
     'Site-Specific Work Zone Layout',
     ...ctx.crossStreets.map(cs => `Intersection Detail: ${cs.name}`),
     'Traffic Data & Queue Analysis',
@@ -468,6 +529,9 @@ function drawCoverSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: Dr
     ] : []),
     ...(ctx.routeDistanceFt > 5280 ? [
       `${/mountainous|rolling/i.test(ctx.terrain) ? '16' : '15'}. LONG WORK ZONE (${(ctx.routeDistanceFt / 5280).toFixed(1)} mi): Consider intermediate W20-1 "ROAD WORK AHEAD" repeater signs at 1-mile intervals within the activity area per MUTCD 6C.04 guidance.`,
+    ] : []),
+    ...(ctx.crashCount >= 10 ? [
+      `${ctx.routeDistanceFt > 5280 ? '17' : /mountainous|rolling/i.test(ctx.terrain) ? '16' : '15'}. HIGH CRASH LOCATION (${ctx.crashCount} crashes): ENHANCED MEASURES REQUIRED — Deploy portable changeable message signs (PCMS), speed feedback signs, and/or law enforcement presence. Document enhanced measures in field TCP log.`,
     ] : []),
   ];
   let noteY = ny + 28;
@@ -505,10 +569,11 @@ function drawCoverSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: Dr
   doc.fontSize(5.5).fillColor('#666').text('Green rectangle — END ROAD WORK', lx + 45, legendY + 12, { lineBreak: false });
   legendY += legendStep;
 
-  // Channelizing device (orange circle)
-  doc.circle(lx + 22, legendY + 6, 5).fillAndStroke('orange', 'black');
+  // Channelizing devices (cone + drum)
+  drawCone(doc, lx + 18, legendY + 6, 5);
+  drawDrum(doc, lx + 30, legendY + 6, 4);
   doc.fontSize(7).fillColor('black').text('CHANNELIZING DEVICE', lx + 45, legendY + 2, { lineBreak: false });
-  doc.fontSize(5.5).fillColor('#666').text('Cone (28") or Drum (42")', lx + 45, legendY + 12, { lineBreak: false });
+  doc.fontSize(5.5).fillColor('#666').text('Cone (28") short-term | Drum (42") long-term', lx + 45, legendY + 12, { lineBreak: false });
   legendY += legendStep;
 
   // Flagger
@@ -654,7 +719,7 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
     for (let i = 0; i <= 8; i++) {
       const cx = zones.transitionStart + (i / 8) * (zones.transitionEnd - zones.transitionStart);
       const cy = roadY2 - (i / 8) * (roadY2 - roadCL - 3);
-      doc.circle(cx, cy, 2.5).fillAndStroke('orange', 'black');
+      drawDevice(doc, cx, cy, ctx.duration, 3);
     }
     // Work area fills opposing lane
     drawCrosshatch(doc, zones.activityStart, roadCL + 3, zones.activityEnd, roadY2 - 3);
@@ -663,7 +728,7 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
     for (let i = 0; i <= 5; i++) {
       const cx = zones.dnTransitionStart + (i / 5) * (zones.dnTransitionEnd - zones.dnTransitionStart);
       const cy = roadCL + 3 + (i / 5) * (roadY2 - roadCL - 3);
-      doc.circle(cx, cy, 2.5).fillAndStroke('orange', 'black');
+      drawDevice(doc, cx, cy, ctx.duration, 3);
     }
     // Flaggers at both ends
     drawFlaggerSymbol(doc, zones.transitionStart - 15, roadY2 + 15, 'FLAGGER');
@@ -679,7 +744,7 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
     for (let i = 0; i <= 10; i++) {
       const cx = zones.transitionStart + (i / 10) * (zones.transitionEnd - zones.transitionStart);
       const cy = closedLaneBot - (i / 10) * (closedLaneBot - closedLaneTop);
-      doc.circle(cx, cy, 2.5).fillAndStroke('orange', 'black');
+      drawDevice(doc, cx, cy, ctx.duration, 3);
     }
     // Work area in closed lane
     drawCrosshatch(doc, zones.activityStart, closedLaneTop, zones.activityEnd, closedLaneBot - 3);
@@ -687,7 +752,7 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
     doc.lineWidth(0.5).strokeColor('black');
     const tangentSpacing = Math.max(40, ctx.speedMph * 2);
     for (let x = zones.activityStart; x <= zones.activityEnd; x += tangentSpacing) {
-      doc.circle(x, closedLaneTop, 2).fillAndStroke('orange', 'black');
+      drawDevice(doc, x, closedLaneTop, ctx.duration, 2.5);
     }
     // Downstream taper (shorter, shifts back to right)
     doc.lineWidth(1);
@@ -695,7 +760,7 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
     for (let i = 0; i <= 5; i++) {
       const cx = zones.dnTransitionStart + (i / 5) * (zones.dnTransitionEnd - zones.dnTransitionStart);
       const cy = closedLaneTop + (i / 5) * (closedLaneBot - closedLaneTop);
-      doc.circle(cx, cy, 2.5).fillAndStroke('orange', 'black');
+      drawDevice(doc, cx, cy, ctx.duration, 3);
     }
     // Arrow board (Type A for multi-lane)
     const abX = zones.transitionStart - 30;
@@ -722,7 +787,7 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
     for (let i = 0; i <= 4; i++) {
       const cx = zones.transitionStart + (i / 4) * (zones.transitionEnd - zones.transitionStart);
       const cy = shoulderBot - (i / 4) * (shoulderBot - shoulderTop);
-      doc.circle(cx, cy, 2).fillAndStroke('orange', 'black');
+      drawDevice(doc, cx, cy, ctx.duration, 2.5);
     }
   } else if (isMedianCrossover) {
     // TA-18: Median crossover — traffic diverted through median to opposing lanes
@@ -750,13 +815,13 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
       const frac = i / 8;
       const cx = zones.transitionStart + frac * (zones.transitionEnd - zones.transitionStart);
       const cy = roadY2 - frac * (roadY2 - oppLaneTop - 5);
-      doc.circle(cx, cy, 2.5).fillAndStroke('orange', 'black');
+      drawDevice(doc, cx, cy, ctx.duration, 3);
     }
     for (let i = 0; i <= 6; i++) {
       const frac = i / 6;
       const cx = zones.dnTransitionStart + frac * (zones.dnTransitionEnd - zones.dnTransitionStart);
       const cy = oppLaneTop + 5 + frac * (roadY2 - oppLaneTop - 5);
-      doc.circle(cx, cy, 2.5).fillAndStroke('orange', 'black');
+      drawDevice(doc, cx, cy, ctx.duration, 3);
     }
     // Median barrier/delineation label
     doc.fontSize(5).fillColor('#666').text('MEDIAN', zones.activityStart + 5, medianY - 3, { lineBreak: false });
@@ -809,12 +874,9 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
     doc.fontSize(4).fillColor('black').text('M4-9', barX + 12, roadY2 + 13, { lineBreak: false });
     doc.text('DETOUR', barX + 12, roadY2 + 19, { lineBreak: false });
     doc.text('→', barX + 30, roadY2 + 17, { lineBreak: false });
-    // Barricade symbols (Type 3)
-    doc.lineWidth(1).strokeColor('#FF8C00');
-    for (let bx = barX - 5; bx <= barX + 5; bx += 5) {
-      doc.moveTo(bx, roadY1 - 3).lineTo(bx + 8, roadY1 + 3).stroke();
-      doc.moveTo(bx, roadY2 + 3).lineTo(bx + 8, roadY2 - 3).stroke();
-    }
+    // Type III barricades at closure point
+    drawBarricade(doc, barX - 5, roadY1 - 5, 5);
+    drawBarricade(doc, barX + 5, roadY1 - 5, 5);
     doc.fontSize(5).fillColor('#cc0000').text('ROAD CLOSED', zones.activityStart + 20, roadCL - 5, { lineBreak: false });
   } else if (isDoubleLane) {
     // TA-37: Double lane closure — two staggered merging tapers
@@ -834,13 +896,13 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
       const frac = i / 6;
       const cx1 = zones.transitionStart + frac * (zones.transitionEnd - zones.transitionStart) * 0.6;
       const cy1 = closedLaneBot - frac * (closedLaneBot - midLane);
-      doc.circle(cx1, cy1, 2.5).fillAndStroke('orange', 'black');
+      drawDevice(doc, cx1, cy1, ctx.duration, 3);
     }
     for (let i = 0; i <= 6; i++) {
       const frac = i / 6;
       const cx2 = zones.transitionStart + stagger + frac * (zones.transitionEnd - zones.transitionStart - stagger);
       const cy2 = midLane - frac * (midLane - closedLaneTop);
-      doc.circle(cx2, cy2, 2.5).fillAndStroke('orange', 'black');
+      drawDevice(doc, cx2, cy2, ctx.duration, 3);
     }
     // Two arrow boards
     doc.rect(zones.transitionStart - 20, closedLaneBot - 18, 16, 8).fillAndStroke('#333', 'black');
@@ -881,7 +943,9 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
     const x = zones.priWarningStart + 20 + i * priStep;
     drawSignDiamond(doc, x, roadY2 + 70, sign.sign_code, sign.label);
     if (i < priCount - 1) {
-      drawDimLine(doc, x, zones.priWarningStart + 20 + (i + 1) * priStep, roadY2 + 52, `${sign.distance_ft} FT`);
+      // Show inter-sign distance (distance between consecutive signs), not cumulative
+      const interDist = sign.distance_ft - priSigns[i + 1]!.distance_ft;
+      drawDimLine(doc, x, zones.priWarningStart + 20 + (i + 1) * priStep, roadY2 + 52, `${Math.abs(interDist)} FT`);
     }
   });
 
@@ -895,7 +959,8 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
       const x = zones.oppWarningStart + 20 + i * oppStep;
       drawSignDiamond(doc, x, roadY1 - 110, sign.sign_code, sign.label);
       if (i < oppCount - 1) {
-        drawDimLine(doc, x, zones.oppWarningStart + 20 + (i + 1) * oppStep, roadY1 - 80, `${sign.distance_ft} FT`);
+        const interDist = sign.distance_ft - oppSigns[i + 1]!.distance_ft;
+        drawDimLine(doc, x, zones.oppWarningStart + 20 + (i + 1) * oppStep, roadY1 - 80, `${Math.abs(interDist)} FT`);
       }
     });
   }
@@ -966,6 +1031,11 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
   if (ctx.routeDistanceFt > 5280) {
     doc.fillColor('#CC6600');
     doc.text(`LONG ZONE: ${(ctx.routeDistanceFt / 5280).toFixed(1)} mi — Place W20-1 repeaters at 1-mi intervals within activity area.`, 45, 688, { width: 390 });
+    doc.fillColor('black');
+  }
+  if (ctx.bridges && ctx.bridges.length > 0) {
+    doc.fillColor('#cc0000').fontSize(5);
+    doc.text(`BRIDGE(S): ${ctx.bridges.length} structure(s) within limits. NO DEVICES ON BRIDGE DECK WITHOUT ENGINEER APPROVAL.`, 460, 688, { width: 390 });
     doc.fillColor('black');
   }
 
@@ -1598,6 +1668,11 @@ function drawSignScheduleSheet(doc: Doc, sheetNum: number, totalSheets: number, 
   }
   // END ROAD WORK
   signList.push({ code: 'G20-2', description: 'END ROAD WORK', size: '36" x 18"', qty: 2, location: 'Both approaches, termination area' });
+  // Long work zone repeater signs (>1 mile)
+  if (ctx.routeDistanceFt > 5280) {
+    const repeaterCount = Math.floor(ctx.routeDistanceFt / 5280); // One set per mile
+    signList.push({ code: 'W20-1', description: 'ROAD WORK AHEAD (Repeater)', size: getSignSize(ctx.speedMph, ctx.roadName), qty: repeaterCount * 2, location: `Within activity area, at 1-mile intervals (${repeaterCount} sets × 2 per set)` });
+  }
   // Cross-street W20-1 signs — size matches mainline speed requirements
   const csSignSize = getSignSize(ctx.speedMph, ctx.roadName);
   const isDw = (n: string) => /chevron|gas|station|access|driveway|parking|lot/i.test(n) && !/state\s*park|national|public/i.test(n);
@@ -1689,6 +1764,7 @@ interface DrawContext {
   crashCount: number;
   bridges: any[];
   duration: string;
+  operationTypes: string[];
 }
 
 // ===================================================================
@@ -2017,6 +2093,7 @@ export async function generateCAD(
   bridges: any[] = [],
   duration = 'Short-term (<= 3 days)',
   maxGradePercent = 0,
+  operationTypes: string[] = [],
 ): Promise<GenerationResult> {
   // === BLUEPRINT VALIDATION — ensure all required fields exist ===
   if (!blueprint.primary_approach || !Array.isArray(blueprint.primary_approach)) blueprint.primary_approach = [];
@@ -2075,43 +2152,81 @@ export async function generateCAD(
   // Use MUTCD module as the source of truth for sign codes.
   // PE Agent provides distances; we enforce correct sign codes per TA.
   const requiredSigns = MUTCD.getRequiredSigns(taCode);
-  const spacing = MUTCD.getSignSpacing(speedMph, fcCode, terrain, maxGradePercent);
+  const spacing = MUTCD.getSignSpacing(speedMph, fcCode, terrain, maxGradePercent, aadt, crossStreets?.length || 0);
 
-  // Build authoritative primary sign sequence using MUTCD-required codes + PE distances
+  // Build authoritative primary sign sequence using MUTCD-required codes.
+  // Use PE distances if they meet MUTCD minimums, otherwise recalculate from Table 6B-1.
   const peDistances = blueprint.primary_approach.map(s => s.distance_ft).sort((a, b) => b - a);
-  // Ensure we have enough distances — fill with MUTCD spacing if PE provided fewer
-  while (peDistances.length < requiredSigns.primary.length) {
-    const lastDist = peDistances.length > 0 ? peDistances[peDistances.length - 1]! : spacing.a;
-    peDistances.push(Math.max(lastDist - spacing.b, 100));
+  const numRequired = requiredSigns.primary.length;
+
+  // Level 1: Check if first sign distance meets A minimum
+  const peFirstDist = peDistances[0] || 0;
+  let useAuthoritative = peFirstDist < spacing.a * 0.9;
+
+  // Level 2: Even if first sign passes, check inter-sign B/C spacing
+  if (!useAuthoritative && peDistances.length >= 2) {
+    for (let i = 0; i < peDistances.length - 1; i++) {
+      const interSpace = peDistances[i]! - peDistances[i + 1]!;
+      const reqSpace = i === 0 ? spacing.b : spacing.c;
+      if (interSpace < reqSpace * 0.85) { useAuthoritative = true; break; }
+    }
   }
+
+  // Build authoritative distances: first sign at A+(n-1)*B, then decrement by B
+  const authDistances: number[] = [];
+  for (let i = 0; i < numRequired; i++) {
+    if (i === 0) authDistances.push(spacing.a + (numRequired - 1) * spacing.b);
+    else authDistances.push(authDistances[i - 1]! - spacing.b);
+  }
+
+  const finalDistances = useAuthoritative ? authDistances : peDistances;
+
+  // Ensure we have enough distances
+  while (finalDistances.length < numRequired) {
+    const lastDist = finalDistances.length > 0 ? finalDistances[finalDistances.length - 1]! : spacing.a;
+    finalDistances.push(Math.max(lastDist - spacing.b, spacing.a));
+  }
+
+  if (useAuthoritative) {
+    corrections.push({ field: 'Sign Distances', peValue: peDistances.map(d => d + ' ft').join(', '), correctedValue: finalDistances.map(d => d + ' ft').join(', '), reason: `PE distances violated Table 6B-1 ${spacing.classification} minimums (A=${spacing.a}, B=${spacing.b}, C=${spacing.c})` });
+  }
+
   blueprint.primary_approach = requiredSigns.primary.map((req, i) => ({
     sign_code: req.code,
-    distance_ft: peDistances[i] || spacing.a - i * spacing.b,
+    distance_ft: finalDistances[i] || spacing.a,
     label: req.label,
   }));
 
-  // Add W3-5 REDUCED SPEED when WZ speed differs
-  // Place AFTER last warning sign (closest to taper) with proper B spacing
+  // Add W3-5 REDUCED SPEED when WZ speed differs — BOTH approaches per MUTCD 6C.01
   if (speedMph !== wzSpeedMph) {
-    const sortedDists = blueprint.primary_approach.map(s => s.distance_ft).sort((a, b) => a - b);
-    const closestSign = sortedDists[0] ?? spacing.a;
-    // W3-5 goes closer to the taper than the closest warning sign, maintaining B spacing
-    const w35dist = Math.max(closestSign - spacing.b, 50);
-    blueprint.primary_approach.push(
-      { sign_code: 'W3-5', distance_ft: w35dist, label: `REDUCED SPEED ${wzSpeedMph} MPH AHEAD` },
-    );
+    const addW35 = (signs: Sign[]) => {
+      const sortedDists = signs.map(s => s.distance_ft).sort((a, b) => a - b);
+      const closestSign = sortedDists[0] ?? spacing.a;
+      const w35dist = Math.max(closestSign - spacing.b, 50);
+      signs.push({ sign_code: 'W3-5', distance_ft: w35dist, label: `REDUCED SPEED ${wzSpeedMph} MPH AHEAD` });
+    };
+    addW35(blueprint.primary_approach);
+    if (blueprint.opposing_approach.length > 0) addW35(blueprint.opposing_approach);
   }
 
-  // Build authoritative opposing sign sequence
+  // Build authoritative opposing sign sequence (same spacing enforcement)
   if (requiredSigns.opposing.length > 0) {
-    const oppDistances = blueprint.opposing_approach.map(s => s.distance_ft).sort((a, b) => b - a);
-    while (oppDistances.length < requiredSigns.opposing.length) {
-      const lastDist = oppDistances.length > 0 ? oppDistances[oppDistances.length - 1]! : spacing.a;
-      oppDistances.push(Math.max(lastDist - spacing.b, 100));
+    const oppPeDistances = blueprint.opposing_approach.map(s => s.distance_ft).sort((a, b) => b - a);
+    const oppFirstDist = oppPeDistances[0] || 0;
+    const useOppAuth = oppFirstDist < spacing.a * 0.9;
+    const oppAuthDistances: number[] = [];
+    for (let i = 0; i < requiredSigns.opposing.length; i++) {
+      if (i === 0) oppAuthDistances.push(spacing.a + (requiredSigns.opposing.length - 1) * spacing.b);
+      else oppAuthDistances.push(oppAuthDistances[i - 1]! - spacing.b);
+    }
+    const oppFinalDistances = useOppAuth ? oppAuthDistances : oppPeDistances;
+    while (oppFinalDistances.length < requiredSigns.opposing.length) {
+      const lastDist = oppFinalDistances.length > 0 ? oppFinalDistances[oppFinalDistances.length - 1]! : spacing.a;
+      oppFinalDistances.push(Math.max(lastDist - spacing.b, spacing.a));
     }
     blueprint.opposing_approach = requiredSigns.opposing.map((req, i) => ({
       sign_code: req.code,
-      distance_ft: oppDistances[i] || spacing.a - i * spacing.b,
+      distance_ft: oppFinalDistances[i] || spacing.a,
       label: req.label,
     }));
   } else {
@@ -2153,7 +2268,8 @@ export async function generateCAD(
     return true;
   }).slice(0, 6);
 
-  const totalSheets = 3 + filteredCrossStreets.length + 3; // +3 = queue analysis, special considerations, sign schedule
+  const phaseCount = operationTypes.length > 0 ? operationTypes.length : 1;
+  const totalSheets = 2 + phaseCount + filteredCrossStreets.length + 3; // cover + phases + site + intersections + queue + special + signs
 
   const ctx: DrawContext = {
     blueprint, staticMapBase64, startCoords, endCoords,
@@ -2162,6 +2278,7 @@ export async function generateCAD(
     terrain, funcClass, mainRoadNumber: mainRoadNum, taCode, taDescription,
     totalLanes, hasTWLTL, isDivided, isMultiLane,
     aadt, truckPct, crashCount, bridges, duration,
+    operationTypes: operationTypes.length > 0 ? operationTypes : [operationType],
   };
 
   return new Promise((resolve, reject) => {
@@ -2176,7 +2293,7 @@ export async function generateCAD(
 
           // === MUTCD COMPLIANCE CHECKS (via authoritative reference module) ===
           const fcCode = funcClass ? parseInt(funcClass) || 99 : 99;
-          const roadClass = MUTCD.classifyRoad(speedMph, fcCode, terrain);
+          const roadClass = MUTCD.classifyRoad(speedMph, fcCode, terrain, aadt, filteredCrossStreets.length);
           const bufferFt = MUTCD.getBufferSpace(speedMph);
           const workDuration = MUTCD.parseDuration(duration);
 
@@ -2220,8 +2337,20 @@ export async function generateCAD(
       // Sheet 1: Cover Sheet & General Notes
       drawCoverSheet(doc, sheetNum++, totalSheets, ctx);
 
-      // Sheet 2: Typical Application (TA-10)
-      drawTASheet(doc, sheetNum++, totalSheets, ctx);
+      // Sheet 2+: Typical Application(s) — one per operation phase
+      const phases = operationTypes.length > 0 ? operationTypes : [operationType];
+      for (const phaseOp of phases) {
+        const phaseTA = MUTCD.selectTA(phaseOp, totalLanes, fcCode, isDivided, aadt);
+        const phaseTaper = MUTCD.getTaperLength(phaseTA.code, laneWidthFt, speedMph);
+        const phaseCtx: DrawContext = {
+          ...ctx,
+          operationType: phaseOp,
+          taCode: phaseTA.code,
+          taDescription: phaseTA.title,
+          taperLengthFt: phaseTaper,
+        };
+        drawTASheet(doc, sheetNum++, totalSheets, phaseCtx);
+      }
 
       // Sheet 3: Site-Specific Layout (Satellite Overlay)
       drawSiteLayoutSheet(doc, sheetNum++, totalSheets, ctx);
