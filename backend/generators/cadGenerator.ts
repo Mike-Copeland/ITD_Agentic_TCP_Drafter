@@ -103,10 +103,10 @@ function getDeviceSpacing(speedMph: number, taCode = 'TA-10'): { taperSpacingFt:
 }
 
 // Delegates to MUTCD module with ITD override — single source of truth
-function getSignSize(speedMph: number, roadName: string): string {
-  // Need roadClass but we don't have funcClass here — use speed-based fallback
-  const roadClass: MUTCD.RoadClass = speedMph >= 65 ? 'expressway' : speedMph > 30 ? 'urban_high' : 'urban_low';
-  return MUTCD.getITDSignSize(speedMph, roadName, roadClass).label;
+// Uses MUTCD Table 6H-1 categories: Conventional Road / Freeway or Expressway / Minimum
+function getSignSize(speedMph: number, roadName: string, funcClassCode = 99, aadt = 0): string {
+  const roadClass: MUTCD.RoadClass = funcClassCode <= 2 ? 'expressway' : speedMph >= 65 ? 'rural' : 'urban_high';
+  return MUTCD.getITDSignSize(speedMph, roadName, roadClass, funcClassCode, aadt).label;
 }
 
 // Determine if a cross-street is a state/US highway (needs enhanced treatment)

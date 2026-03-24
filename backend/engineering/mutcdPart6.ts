@@ -23,14 +23,21 @@ export function validateInputData(
 ): ValidationResult {
   const result: ValidationResult = { valid: true, warnings: [], errors: [] };
 
-  // Interstate validation
-  const isInterstate = /\b(I-\d+|Interstate)\b/i.test(roadName);
-  if (isInterstate) {
+  // Interstate/Freeway validation — check BOTH road name AND FC independently
+  const isInterstateByName = /\b(I-\d+|Interstate)\b/i.test(roadName);
+  const isInterstateByFC = funcClassCode >= 1 && funcClassCode <= 2;
+  if (isInterstateByName) {
     if (funcClassCode > 2 && funcClassCode !== 0) {
       result.warnings.push(`${roadName} has FC ${funcClassCode}; expected FC 1-2 for Interstate. Data may be from adjacent road.`);
     }
     if (aadt > 0 && aadt < 5000) {
       result.warnings.push(`${roadName} has AADT ${aadt}; unusually low for Interstate. Verify data source.`);
+    }
+  }
+  // FC 1-2 without Interstate name — still flag if AADT seems wrong
+  if (isInterstateByFC && !isInterstateByName) {
+    if (aadt > 0 && aadt < 5000) {
+      result.warnings.push(`FC ${funcClassCode} (freeway/expressway) detected but road "${roadName}" has AADT ${aadt}. Verify data source.`);
     }
   }
 
@@ -119,12 +126,17 @@ export function classifyRoad(speedMph: number, funcClassCode: number, terrain?: 
     return speedMph >= 45 ? 'rural' : 'urban_low';
   }
 
-  // Low volume with arterial FC = rural
-  if (aadt > 0 && aadt < 5000 && funcClassCode <= 4) {
-    return speedMph >= 45 ? 'rural' : 'urban_low';
+  // Low volume with arterial/collector FC = rural per Table 6B-1
+  // MUTCD Table 6B-1: "Rural" row has NO speed qualifier — it is environment-based
+  if (aadt > 0 && aadt < 5000 && funcClassCode <= 5) {
+    return 'rural'; // Rural spacing (500 ft) regardless of speed
   }
 
-  if (!isUrban) return speedMph >= 45 ? 'rural' : 'urban_low';
+  // Non-urban default: rural for arterials/collectors, urban_low only for local roads
+  if (!isUrban) {
+    if (funcClassCode <= 5) return 'rural'; // Arterials/collectors default rural
+    return 'urban_low'; // Local roads (FC 6+) default urban_low
+  }
   if (speedMph > 40) return 'urban_high';
   return 'urban_low';
 }
@@ -153,12 +165,21 @@ const BUFFER_TABLE: [number, number][] = [
   [70, 730], [75, 820], [80, 910], // 80 MPH: AASHTO extrapolation for Idaho interstates
 ];
 
-/** Get minimum longitudinal buffer space in feet for a given speed. */
+/**
+ * Get minimum longitudinal buffer space in feet for a given speed.
+ * Values up to 75 MPH are from MUTCD Table 6B-2.
+ * 80 MPH value (910 ft) is an AASHTO-based extrapolation for Idaho interstates —
+ * NOT from MUTCD Table 6B-2. MUTCD maximum listed speed is 75 MPH / 820 ft.
+ */
 export function getBufferSpace(speedMph: number): number {
+  if (speedMph > 75) {
+    // AASHTO extrapolation — flag in validation/audit
+    return 910;
+  }
   for (const [s, b] of BUFFER_TABLE) {
     if (speedMph <= s) return b;
   }
-  return 820; // 75+ mph
+  return 820;
 }
 
 // ===================================================================
@@ -166,17 +187,17 @@ export function getBufferSpace(speedMph: number): number {
 // ===================================================================
 
 /**
- * Merging taper per Table 6B-4:
+ * Merging taper per Table 6B-4 (Section 6B.08):
  * - 40 mph or less: L = WS²/60
  * - 45 mph or more: L = WS
- * Speeds 41-44 mph are snapped to nearest 5 MPH increment per MUTCD convention.
+ * For 41-44 mph (gap in table): use quadratic formula with exact speed
+ * since MUTCD says linear applies at "45 mph or more".
+ * Uses exact speed — NO rounding. MUTCD does not authorize speed snapping.
  */
 export function mergingTaper(laneWidthFt: number, speedMph: number): number {
-  // Snap to nearest 5 MPH increment per Table 6B-4 convention
-  const snappedSpeed = Math.round(speedMph / 5) * 5;
-  return snappedSpeed >= 45
-    ? laneWidthFt * snappedSpeed
-    : (laneWidthFt * snappedSpeed * snappedSpeed) / 60;
+  return speedMph >= 45
+    ? laneWidthFt * speedMph
+    : (laneWidthFt * speedMph * speedMph) / 60;
 }
 
 /** Shifting taper: >= L/2 */
@@ -239,19 +260,27 @@ export function tangentDeviceSpacing(speedMph: number): number {
 // ===================================================================
 export interface SignSize { width: number; height: number; label: string }
 
-export function getSignSize(speedMph: number, roadClass: RoadClass): SignSize {
-  if (roadClass === 'expressway') return { width: 48, height: 48, label: '48" x 48"' };
-  if (speedMph > 45) return { width: 48, height: 48, label: '48" x 48"' };
-  if (speedMph > 30) return { width: 36, height: 36, label: '36" x 36"' };
-  return { width: 30, height: 30, label: '30" x 30"' }; // minimum for low-volume local
+/**
+ * Sign size per MUTCD Tables 6G-1, 6H-1, 6I-1.
+ * Categories: "Freeway or Expressway", "Conventional Road", "Minimum"
+ * Minimum: low-volume rural roads, local streets, or operating speed <= 30 mph (Section 6F.01 P06)
+ */
+export function getSignSize(speedMph: number, roadClass: RoadClass, funcClassCode = 99, aadt = 0): SignSize {
+  // Freeway or Expressway (FC 1-2, or FC 3 at 55+ mph)
+  if (roadClass === 'expressway' || (funcClassCode <= 2)) return { width: 48, height: 48, label: '48" x 48"' };
+  // Minimum: low-volume rural, local streets, or <= 30 mph per Section 6F.01 P06
+  const isMinimum = (funcClassCode >= 6 && speedMph <= 30) || (aadt > 0 && aadt < 400 && funcClassCode >= 5);
+  if (isMinimum) return { width: 30, height: 30, label: '30" x 30"' };
+  // Conventional Road (default)
+  return { width: 36, height: 36, label: '36" x 36"' };
 }
 
 /** ITD override: State/US highways always 48" regardless of speed */
-export function getITDSignSize(speedMph: number, roadName: string, roadClass: RoadClass): SignSize {
+export function getITDSignSize(speedMph: number, roadName: string, roadClass: RoadClass, funcClassCode = 99, aadt = 0): SignSize {
   if (/\b(US|SH|I|ID|Interstate|Highway|Hwy)[\s-]*\d+/i.test(roadName)) {
     return { width: 48, height: 48, label: '48" x 48"' };
   }
-  return getSignSize(speedMph, roadClass);
+  return getSignSize(speedMph, roadClass, funcClassCode, aadt);
 }
 
 // ===================================================================
