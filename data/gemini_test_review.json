@@ -1,0 +1,256 @@
+{
+  "road_name_mismatches": [
+    {
+      "test_id": 1,
+      "expected": "I-84",
+      "got": "N Main St",
+      "coords_need_fix": true
+    },
+    {
+      "test_id": 2,
+      "expected": "I-86",
+      "got": "Fish Hatchery Rd",
+      "coords_need_fix": true
+    },
+    {
+      "test_id": 3,
+      "expected": "I-90",
+      "got": "Hubbard Ave",
+      "coords_need_fix": true
+    },
+    {
+      "test_id": 5,
+      "expected": "US-93 (Blue Lakes)",
+      "got": "Pierce St",
+      "coords_need_fix": true
+    },
+    {
+      "test_id": 6,
+      "expected": "US-20 (Broadway)",
+      "got": "Hickory Cir",
+      "coords_need_fix": true
+    },
+    {
+      "test_id": 8,
+      "expected": "US-30 (5th Ave)",
+      "got": "S 7th Ave",
+      "coords_need_fix": true
+    },
+    {
+      "test_id": 10,
+      "expected": "US-95",
+      "got": "Big Sky Ln",
+      "coords_need_fix": true
+    },
+    {
+      "test_id": 13,
+      "expected": "SH-55",
+      "got": "Charters Mountain Rnch Rd",
+      "coords_need_fix": true
+    },
+    {
+      "test_id": 15,
+      "expected": "SH-21 (Main St)",
+      "got": "Commercial St",
+      "coords_need_fix": true
+    }
+  ],
+  "classification_analysis": [
+    {
+      "test_id": 1,
+      "expected_class": "expressway",
+      "actual_class_would_be": "urban_high",
+      "correct": false
+    },
+    {
+      "test_id": 2,
+      "expected_class": "expressway",
+      "actual_class_would_be": "expressway",
+      "correct": true
+    },
+    {
+      "test_id": 3,
+      "expected_class": "expressway",
+      "actual_class_would_be": "expressway",
+      "correct": true
+    },
+    {
+      "test_id": 4,
+      "expected_class": "urban_high",
+      "actual_class_would_be": "urban_high",
+      "correct": true
+    },
+    {
+      "test_id": 5,
+      "expected_class": "urban_high",
+      "actual_class_would_be": "urban_high",
+      "correct": true
+    },
+    {
+      "test_id": 6,
+      "expected_class": "urban_high",
+      "actual_class_would_be": "urban_high",
+      "correct": true
+    },
+    {
+      "test_id": 7,
+      "expected_class": "urban_low",
+      "actual_class_would_be": "urban_low",
+      "correct": true
+    },
+    {
+      "test_id": 8,
+      "expected_class": "urban_high",
+      "actual_class_would_be": "urban_high",
+      "correct": true
+    },
+    {
+      "test_id": 9,
+      "expected_class": "urban_low",
+      "actual_class_would_be": "urban_low",
+      "correct": true
+    },
+    {
+      "test_id": 10,
+      "expected_class": "rural",
+      "actual_class_would_be": "urban_high",
+      "correct": false
+    },
+    {
+      "test_id": 11,
+      "expected_class": "urban_low",
+      "actual_class_would_be": "urban_low",
+      "correct": true
+    },
+    {
+      "test_id": 12,
+      "expected_class": "urban_low",
+      "actual_class_would_be": "urban_low",
+      "correct": true
+    },
+    {
+      "test_id": 13,
+      "expected_class": "rural",
+      "actual_class_would_be": "urban_high",
+      "correct": false
+    },
+    {
+      "test_id": 14,
+      "expected_class": "urban_low",
+      "actual_class_would_be": "urban_low",
+      "correct": true
+    },
+    {
+      "test_id": 15,
+      "expected_class": "rural",
+      "actual_class_would_be": "urban_high",
+      "correct": false
+    }
+  ],
+  "ta_selection_issues": [
+    {
+      "test_id": "all",
+      "expected_ta": "Varies (e.g., TA-10, TA-33)",
+      "reason": "CRITICAL: The system failed to log the selected 'taCode' and 'taDescription' for every test case. It is impossible to verify if the correct Typical Application was chosen. Expected TAs based on operation and road type are: TA-33 (Tests 1, 2), TA-35 (Test 3), TA-11/12 (Tests 4, 5, 7), TA-13 (Test 6), TA-20 (Test 8), TA-1/2 (Tests 9, 12), TA-10 (Tests 10, 13, 14), TA-45 (Tests 11, 15)."
+    }
+  ],
+  "missing_data_tests": [
+    {
+      "test_id": 1,
+      "missing": ["lanes", "terrain"]
+    },
+    {
+      "test_id": 2,
+      "missing": ["aadt", "funcClass", "lanes", "terrain"]
+    },
+    {
+      "test_id": 3,
+      "missing": ["funcClass", "lanes", "terrain"]
+    },
+    {
+      "test_id": 5,
+      "missing": ["lanes", "terrain"]
+    },
+    {
+      "test_id": 6,
+      "missing": ["lanes", "terrain"]
+    },
+    {
+      "test_id": 8,
+      "missing": ["lanes", "terrain"]
+    },
+    {
+      "test_id": 10,
+      "missing": ["aadt", "funcClass", "lanes", "terrain"]
+    },
+    {
+      "test_id": 13,
+      "missing": ["aadt", "funcClass", "lanes", "terrain"]
+    },
+    {
+      "test_id": 15,
+      "missing": ["lanes", "terrain"]
+    }
+  ],
+  "coordinate_fixes": [
+    {
+      "test_id": 1,
+      "reason": "Coordinates resolved to 'N Main St' instead of I-84."
+    },
+    {
+      "test_id": 2,
+      "reason": "Coordinates resolved to 'Fish Hatchery Rd' instead of I-86."
+    },
+    {
+      "test_id": 3,
+      "reason": "Coordinates resolved to 'Hubbard Ave' instead of I-90."
+    },
+    {
+      "test_id": 5,
+      "reason": "Coordinates resolved to 'Pierce St' instead of US-93."
+    },
+    {
+      "test_id": 6,
+      "reason": "Coordinates resolved to 'Hickory Cir' instead of US-20."
+    },
+    {
+      "test_id": 8,
+      "reason": "Coordinates resolved to 'S 7th Ave' instead of US-30."
+    },
+    {
+      "test_id": 10,
+      "reason": "Coordinates resolved to 'Big Sky Ln' instead of US-95."
+    },
+    {
+      "test_id": 13,
+      "reason": "Coordinates resolved to 'Charters Mountain Rnch Rd' instead of SH-55."
+    },
+    {
+      "test_id": 15,
+      "reason": "Coordinates resolved to 'Commercial St' instead of SH-21."
+    }
+  ],
+  "systemic_issues": [
+    {
+      "issue": "Flawed Road Identification (Geocoding)",
+      "affected_tests": [1, 2, 3, 5, 6, 8, 10, 13, 15],
+      "fix": "The algorithm that snaps GPS coordinates to the nearest road segment is failing, especially for major highways where it may be incorrectly selecting adjacent frontage or local roads. This 'reverse geocoding' logic needs to be refined to prioritize higher functional class roads or the road segment closest to the coordinate point that matches the expected highway name."
+    },
+    {
+      "issue": "Incorrect Road Classification Logic",
+      "affected_tests": [1, 10, 13, 15],
+      "fix": "The 'classifyRoad' function has several logic flaws. 1) It fails to classify Interstates (FC 1-2) as 'expressway' if the speed is below 65 mph. The check should be stronger. 2) The 'isUrbanContext' determination is overly sensitive to 'crossStreetCount', incorrectly classifying rural roads as urban (Tests 10, 13). 3) The logic allows a very low AADT road (Test 15) to be classified as 'urban_high', indicating AADT should be a more heavily weighted factor."
+    },
+    {
+      "issue": "Incomplete GIS Data Coverage",
+      "affected_tests": [1, 2, 3, 5, 6, 8, 10, 13, 15],
+      "fix": "There are significant gaps in the underlying ArcGIS data layers, particularly for lane counts, terrain, and AADT in rural and mountainous regions. This leads to poor classification and potentially non-compliant plans. The system must have a fallback strategy for missing data (e.g., using conservative defaults, flagging for manual review) and a long-term initiative to improve ITD's GIS data completeness is required."
+    },
+    {
+      "issue": "Failure to Log Plan Selection",
+      "affected_tests": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+      "fix": "The test logging mechanism is critically flawed as it does not record the primary output of the system: the selected Typical Application (TA) code and description. This must be fixed to enable any future verification of the system's core function."
+    }
+  ],
+  "overall_assessment": "The automated TCP generation system is not yet reliable for production use. While it performs adequately on roads with complete data in urban settings, it suffers from three critical, systemic failures. First, its ability to correctly identify the target road from coordinates is poor (60% failure rate in this sample), leading to plans for the wrong location. Second, the road classification logic is flawed, failing to correctly categorize interstates and rural highways. Third, the system is brittle and does not gracefully handle the significant gaps in the underlying GIS data, particularly in rural areas. The failure to log the selected TA in test results is a fundamental oversight that prevents full validation. Immediate engineering effort should be focused on improving the road identification algorithm and refining the classification logic before further testing."
+}
