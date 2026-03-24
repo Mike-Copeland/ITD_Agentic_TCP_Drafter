@@ -2160,71 +2160,79 @@ function drawGeometryPlanSheet(
     }
   }
 
-  // === ROAD LABELS + INTERSECTION SIGN PLACEMENT ===
+  // === ROAD LABELS + INTERSECTION SIGNS (CAD-standard collision avoidance) ===
 
-  // Main road label (along the primary alignment)
-  const mainLabelSta = (viewportStartSta + viewportEndSta) / 2;
+  // Helper: draw text with white bounding box mask behind it
+  const drawMaskedText = (text: string, x: number, y: number, w: number, fontSize: number, color: string, bold = false) => {
+    const h = fontSize + 2;
+    doc.rect(x, y - 1, w, h).fill('white');
+    if (bold) doc.font('Helvetica-Bold');
+    doc.fontSize(fontSize).fillColor(color);
+    doc.text(text, x, y, { width: w, align: 'center', lineBreak: false });
+    if (bold) doc.font('Helvetica');
+  };
+
+  // Main road label — offset to bottom-left quarter of alignment (away from intersections)
+  const mainLabelSta = viewportStartSta + (viewportEndSta - viewportStartSta) * 0.15;
   const mainLabelPt = alignment.getCoordinatesAtStation(mainLabelSta);
-  const mainLabelPg = toPage(mainLabelPt.x, mainLabelPt.y);
-  doc.save();
-  doc.translate(mainLabelPg.px, mainLabelPg.py);
-  doc.rotate(-(mainLabelPt.heading - 90));
-  doc.font('Helvetica-Bold').fontSize(7).fillColor('#333');
-  doc.text((ctx.roadName || 'MAIN ROAD').toUpperCase(), -60, halfW / scaleFtPerPt + 8, { width: 120, align: 'center', lineBreak: false });
-  doc.restore();
-  doc.font('Helvetica');
+  const mainPerpRad = (mainLabelPt.heading + 90) * Math.PI / 180;
+  const mainLx = toPage(mainLabelPt.x, mainLabelPt.y).px + Math.sin(mainPerpRad) / scaleFtPerPt * (halfW + 80);
+  const mainLy = toPage(mainLabelPt.x, mainLabelPt.y).py - Math.cos(mainPerpRad) / scaleFtPerPt * (halfW + 80);
+  const mainRoadText = (ctx.roadName || 'MAIN ROAD').toUpperCase();
+  drawMaskedText(mainRoadText, mainLx - 50, mainLy - 4, 100, 7, '#333', true);
+  // Leader from road edge to label
+  const mainEdgePg = toPage(mainLabelPt.x, mainLabelPt.y);
+  doc.lineWidth(0.4).strokeColor('#999');
+  doc.moveTo(mainEdgePg.px + Math.sin(mainPerpRad) / scaleFtPerPt * halfW,
+             mainEdgePg.py - Math.cos(mainPerpRad) / scaleFtPerPt * halfW)
+     .lineTo(mainLx, mainLy).stroke();
 
-  // Cross-street labels with leader lines + intersection signs
+  // Cross-street labels with leader lines + signs (pushed into white space)
+  const leaderOffset = 80; // Pixels perpendicular from road center to label
   for (let csIdx = 0; csIdx < ctx.crossStreets.length; csIdx++) {
     const cs = ctx.crossStreets[csIdx]!;
     const sta = cs.position * alignment.totalLengthFt;
-    if (sta < viewportStartSta - 100 || sta > viewportEndSta + 100) continue;
+    if (sta < viewportStartSta - 50 || sta > viewportEndSta + 50) continue;
     const pt = alignment.getCoordinatesAtStation(sta);
     const pg = toPage(pt.x, pt.y);
-    if (pg.px < pageLeft - 20 || pg.px > pageRight + 20) continue;
+    if (pg.px < pageLeft - 10 || pg.px > pageRight + 10) continue;
 
-    // Perpendicular direction for label offset
-    const perpRad = (pt.heading + 90) * Math.PI / 180;
-    const side = csIdx % 2 === 0 ? 1 : -1; // Alternate sides to avoid overlap
-    const lx = pg.px + side * Math.sin(perpRad) / scaleFtPerPt * (halfW + 50);
-    const ly = pg.py - side * Math.cos(perpRad) / scaleFtPerPt * (halfW + 50);
+    const side = csIdx % 2 === 0 ? 1 : -1;
 
-    // Leader line from road edge to label
-    doc.lineWidth(0.3).strokeColor('#0066cc');
-    doc.moveTo(pg.px + side * Math.sin(perpRad) / scaleFtPerPt * halfW,
-               pg.py - side * Math.cos(perpRad) / scaleFtPerPt * halfW)
-       .lineTo(lx, ly).stroke();
+    // Label endpoint (far into white space)
+    const lx = pg.px + side * leaderOffset;
+    const ly = pg.py - side * 20 - csIdx * 3; // Stagger vertically to reduce overlap
 
-    // Road name label
-    doc.font('Helvetica-Bold').fontSize(5.5).fillColor('#0066cc');
-    doc.text(cs.name.toUpperCase(), lx - 35, ly - 4, { width: 70, align: 'center', lineBreak: false });
-    doc.font('Helvetica');
+    // Thin gray leader line from intersection point to label
+    doc.lineWidth(0.4).strokeColor('#999');
+    doc.moveTo(pg.px, pg.py).lineTo(lx, ly).stroke();
+    // Small dot at intersection point
+    doc.circle(pg.px, pg.py, 1.5).fillAndStroke('#0066cc', '#0066cc');
 
-    // Intersection W20-1 sign on cross-street approach (both sides if applicable)
+    // Cross-street name (white mask + bold blue text)
+    const nameText = cs.name.length > 18 ? cs.name.substring(0, 16).toUpperCase() + '...' : cs.name.toUpperCase();
+    drawMaskedText(nameText, lx - 40, ly - 5, 80, 5, '#0066cc', true);
+
+    // Sign group — neatly below the label text, not on the road
     const isRoundabout = cs.geometry?.type === 'roundabout';
+    const signGroupY = ly + 8;
+
+    // W20-1 or W2-6 sign diamond
     const signCode = isRoundabout ? 'W2-6' : 'W20-1';
-    const signLx = lx + side * 15;
-    const signLy = ly + 10;
-    // Small sign diamond
-    doc.save().translate(signLx, signLy).rotate(45);
-    doc.rect(-4, -4, 8, 8).fillAndStroke('#FF8C00', 'black');
+    doc.save().translate(lx - 10, signGroupY + 4).rotate(45);
+    doc.rect(-3.5, -3.5, 7, 7).fillAndStroke('#FF8C00', 'black');
     doc.restore();
-    doc.fontSize(3.5).fillColor('black');
-    doc.text(signCode, signLx - 10, signLy + 7, { width: 20, align: 'center', lineBreak: false });
+    drawMaskedText(signCode, lx - 22, signGroupY + 10, 24, 3.5, '#333', false);
 
-    // Roundabout-specific: add R1-2 YIELD sign
     if (isRoundabout) {
-      doc.save().translate(signLx + side * 15, signLy);
-      doc.moveTo(0, -5).lineTo(5, 4).lineTo(-5, 4).closePath().fillAndStroke('#ffffff', '#cc0000');
+      // R1-2 YIELD triangle (next to sign diamond)
+      doc.save().translate(lx + 10, signGroupY + 4);
+      doc.moveTo(0, -4).lineTo(4, 3).lineTo(-4, 3).closePath().fillAndStroke('#ffffff', '#cc0000');
       doc.restore();
-      doc.fontSize(3).fillColor('#cc0000');
-      doc.text('R1-2', signLx + side * 15 - 7, signLy + 6, { width: 14, align: 'center', lineBreak: false });
-    }
+      drawMaskedText('R1-2', lx + 2, signGroupY + 10, 16, 3, '#cc0000', false);
 
-    // Intersection type label
-    if (isRoundabout) {
-      doc.fontSize(3.5).fillColor('#666');
-      doc.text('ROUNDABOUT', lx - 20, ly + 15, { width: 40, align: 'center', lineBreak: false });
+      // ROUNDABOUT type label
+      drawMaskedText('ROUNDABOUT', lx - 25, signGroupY + 17, 50, 3.5, '#666', false);
     }
   }
 
