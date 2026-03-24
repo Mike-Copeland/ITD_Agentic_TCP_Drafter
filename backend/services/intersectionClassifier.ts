@@ -132,62 +132,98 @@ async function queryOverpassInterchanges(
 }
 
 /**
- * Classify a specific intersection point based on nearby OSM features.
+ * Cluster OSM roundabout way segments into distinct roundabout locations.
+ * OSM stores roundabouts as multiple way segments — 9 ways could be 1 roundabout.
+ * Cluster by proximity: segments within ~200ft of each other = same roundabout.
  */
-function classifyPoint(
-  lat: number, lng: number,
-  roundabouts: any[], interchangeFeatures: any[],
-  proximityFt = 300
-): IntersectionClassification {
-  const proximityDeg = proximityFt / 364000; // rough ft to degrees
+interface RoundaboutCluster {
+  lat: number;
+  lng: number;
+  segmentCount: number;
+  maxLanes: number;
+  hasBridge: boolean;
+}
 
-  // Check for nearby roundabouts
-  const nearbyRoundabouts = roundabouts.filter(r => {
-    const rLat = r.center?.lat || r.lat || 0;
-    const rLng = r.center?.lon || r.lon || 0;
-    return Math.abs(rLat - lat) < proximityDeg && Math.abs(rLng - lng) < proximityDeg;
-  });
+function clusterRoundabouts(roundaboutWays: any[], interchangeFeatures: any[]): RoundaboutCluster[] {
+  const clusterRadiusDeg = 0.002; // ~700ft — enough to cluster all segments of one roundabout
+  const clusters: RoundaboutCluster[] = [];
 
-  // Check for nearby interchange features (ramps, bridges)
-  const nearbyRamps = interchangeFeatures.filter(f => {
-    const fLat = f.center?.lat || f.lat || 0;
-    const fLng = f.center?.lon || f.lon || 0;
-    return Math.abs(fLat - lat) < proximityDeg && Math.abs(fLng - lng) < proximityDeg;
-  });
+  for (const way of roundaboutWays) {
+    const lat = way.center?.lat || way.lat || 0;
+    const lng = way.center?.lon || way.lon || 0;
+    if (!lat || !lng) continue;
 
-  if (nearbyRoundabouts.length > 0) {
-    // Determine if multi-lane roundabout by checking lanes tag
-    const lanes = nearbyRoundabouts[0]?.tags?.lanes;
-    const laneCount = lanes ? parseInt(lanes) : 1;
-    const isMulti = laneCount >= 2;
+    // Find existing cluster this segment belongs to
+    const existing = clusters.find(c =>
+      Math.abs(c.lat - lat) < clusterRadiusDeg && Math.abs(c.lng - lng) < clusterRadiusDeg
+    );
 
-    return {
-      type: isMulti ? 'roundabout_multi' : 'roundabout_single',
-      legs: 4, // Default, could be refined
-      circulatoryLanes: laneCount,
-      hasSignal: false,
-      hasSplitterIslands: true,
-      nearbyRoundaboutCount: nearbyRoundabouts.length,
-      osmData: nearbyRoundabouts[0]?.tags,
-    };
+    if (existing) {
+      existing.segmentCount++;
+      const lanes = way.tags?.lanes ? parseInt(way.tags.lanes) : 1;
+      if (lanes > existing.maxLanes) existing.maxLanes = lanes;
+      // Update center to average
+      existing.lat = (existing.lat * (existing.segmentCount - 1) + lat) / existing.segmentCount;
+      existing.lng = (existing.lng * (existing.segmentCount - 1) + lng) / existing.segmentCount;
+    } else {
+      clusters.push({
+        lat, lng,
+        segmentCount: 1,
+        maxLanes: way.tags?.lanes ? parseInt(way.tags.lanes) : 1,
+        hasBridge: false,
+      });
+    }
   }
 
-  if (nearbyRamps.length >= 2) {
-    const hasBridge = nearbyRamps.some((f: any) => f.tags?.bridge === 'yes');
-    return {
-      type: hasBridge ? 'interchange_diamond' : 'interchange_other',
-      legs: 4,
-      hasSignal: false,
-      nearbyRoundaboutCount: 0,
-    };
+  // Check if any cluster has a bridge nearby (dog-bone indicator)
+  for (const cluster of clusters) {
+    cluster.hasBridge = interchangeFeatures.some(f => {
+      const fLat = f.center?.lat || f.lat || 0;
+      const fLng = f.center?.lon || f.lon || 0;
+      return Math.abs(fLat - cluster.lat) < clusterRadiusDeg * 2 &&
+             Math.abs(fLng - cluster.lng) < clusterRadiusDeg * 2 &&
+             f.tags?.bridge === 'yes';
+    });
   }
 
-  return {
-    type: 'unknown',
-    legs: 4,
-    hasSignal: false,
-    nearbyRoundaboutCount: 0,
-  };
+  // Detect dog-bone: 2 roundabout clusters close together with a bridge between
+  if (clusters.length >= 2) {
+    for (let i = 0; i < clusters.length; i++) {
+      for (let j = i + 1; j < clusters.length; j++) {
+        const dist = Math.sqrt(
+          Math.pow(clusters[i]!.lat - clusters[j]!.lat, 2) +
+          Math.pow(clusters[i]!.lng - clusters[j]!.lng, 2)
+        );
+        if (dist < 0.005) { // ~1500ft — close enough to be a dog-bone pair
+          clusters[i]!.hasBridge = true;
+          clusters[j]!.hasBridge = true;
+        }
+      }
+    }
+  }
+
+  console.log(`[intersectionClassifier] Clustered ${roundaboutWays.length} OSM ways into ${clusters.length} distinct roundabout(s)`);
+  return clusters;
+}
+
+/**
+ * Check if a point is near any roundabout cluster.
+ */
+function findNearestRoundabout(
+  lat: number, lng: number, clusters: RoundaboutCluster[], proximityFt = 600
+): RoundaboutCluster | null {
+  const proximityDeg = proximityFt / 364000;
+  let nearest: RoundaboutCluster | null = null;
+  let nearestDist = Infinity;
+
+  for (const c of clusters) {
+    const dist = Math.sqrt(Math.pow(c.lat - lat, 2) + Math.pow(c.lng - lng, 2));
+    if (dist < proximityDeg && dist < nearestDist) {
+      nearest = c;
+      nearestDist = dist;
+    }
+  }
+  return nearest;
 }
 
 /**
@@ -217,54 +253,82 @@ export async function classifyRouteIntersections(
     osmCache.set(cacheKey, { roundabouts, interchanges: interchangeFeatures, timestamp: Date.now() });
   }
 
-  console.log(`[intersectionClassifier] Found ${roundabouts.length} roundabouts, ${interchangeFeatures.length} interchange features`);
+  console.log(`[intersectionClassifier] Found ${roundabouts.length} roundabout ways, ${interchangeFeatures.length} interchange features`);
 
-  // Check if any roundabouts are near the route (not just in the bounding box)
-  const routeHasRoundabouts = roundabouts.length > 0;
-  const roundaboutCount = roundabouts.length;
+  // Cluster OSM way segments into distinct roundabout locations
+  const clusters = clusterRoundabouts(roundabouts, interchangeFeatures);
+  const routeHasRoundabouts = clusters.length > 0;
+  const roundaboutCount = clusters.length;
 
-  // Detect dog-bone: 2+ roundabouts with a bridge between them
-  let hasDogbone = false;
-  if (roundaboutCount >= 2) {
-    const hasBridge = interchangeFeatures.some((f: any) => f.tags?.bridge === 'yes');
-    if (hasBridge) hasDogbone = true;
-  }
+  // Detect dog-bone: 2+ clusters close together, or single cluster with bridge
+  const hasDogbone = clusters.length >= 2 && clusters.some(c => c.hasBridge);
+  const hasPeanut = clusters.length === 1 && clusters[0]!.segmentCount >= 4; // Many segments = elongated/peanut shape
 
-  // Classify each cross-street intersection
+  // Classify each cross-street — check if it's near a roundabout cluster
   const intersections = crossStreets.map(cs => {
-    // Interpolate lat/lng from position along route
     const lat = cs.lat || startCoords.lat + (endCoords.lat - startCoords.lat) * cs.position;
     const lng = cs.lng || startCoords.lng + (endCoords.lng - startCoords.lng) * cs.position;
 
-    const classification = classifyPoint(lat, lng, roundabouts, interchangeFeatures);
+    const nearestRB = findNearestRoundabout(lat, lng, clusters, 800); // 800ft proximity for cross-streets
 
-    // Override for dog-bone detection
-    if (hasDogbone && classification.nearbyRoundaboutCount > 0) {
-      classification.type = 'interchange_dogbone';
+    if (nearestRB) {
+      const isDogbone = hasDogbone || nearestRB.hasBridge;
+      const isPeanut = hasPeanut;
+      const type: IntersectionType = isDogbone ? 'interchange_dogbone' :
+        isPeanut ? 'roundabout_multi' : // Peanut roundabouts are typically multi-lane
+        nearestRB.maxLanes >= 2 ? 'roundabout_multi' : 'roundabout_single';
+
+      return {
+        name: cs.name, position: cs.position, lat, lng,
+        classification: {
+          type,
+          legs: 4,
+          circulatoryLanes: nearestRB.maxLanes,
+          hasSignal: false,
+          hasSplitterIslands: true,
+          nearbyRoundaboutCount: 1,
+        } as IntersectionClassification,
+      };
     }
 
-    return { name: cs.name, position: cs.position, classification, lat, lng };
+    return {
+      name: cs.name, position: cs.position, lat, lng,
+      classification: { type: 'unknown' as IntersectionType, legs: 4, hasSignal: false, nearbyRoundaboutCount: 0 },
+    };
   });
 
-  // Also check the route itself for roundabouts (not just at cross-streets)
-  // Sample 10 points along the route
-  for (let i = 0; i <= 10; i++) {
-    const frac = i / 10;
-    const lat = startCoords.lat + (endCoords.lat - startCoords.lat) * frac;
-    const lng = startCoords.lng + (endCoords.lng - startCoords.lng) * frac;
-    const cls = classifyPoint(lat, lng, roundabouts, interchangeFeatures);
-    if (cls.type.includes('roundabout') || cls.type.includes('interchange')) {
-      // Check if we already have this intersection
-      const exists = intersections.some(i => Math.abs(i.lat - lat) < 0.001 && Math.abs(i.lng - lng) < 0.001);
-      if (!exists) {
-        const type = hasDogbone ? 'interchange_dogbone' : cls.type;
-        intersections.push({
-          name: `Roundabout (OSM detected)`,
-          position: frac,
-          classification: { ...cls, type: type as IntersectionType },
-          lat, lng,
-        });
-      }
+  // For each roundabout cluster, ensure at least one intersection entry exists
+  for (const cluster of clusters) {
+    const alreadyMapped = intersections.some(i =>
+      i.classification.type.includes('roundabout') || i.classification.type.includes('interchange')
+    );
+    if (!alreadyMapped) {
+      // No cross-street matched this roundabout — add it as a standalone entry
+      const routeFrac = (() => {
+        const dLat = endCoords.lat - startCoords.lat;
+        const dLng = endCoords.lng - startCoords.lng;
+        if (Math.abs(dLat) > Math.abs(dLng)) return (cluster.lat - startCoords.lat) / dLat;
+        return (cluster.lng - startCoords.lng) / dLng;
+      })();
+      const pos = Math.max(0, Math.min(1, routeFrac));
+      const isDogbone = hasDogbone || cluster.hasBridge;
+      const isPeanut = hasPeanut;
+
+      intersections.push({
+        name: isDogbone ? 'Dog-Bone Roundabout Interchange' : isPeanut ? 'Peanut Roundabout' : 'Roundabout',
+        position: pos,
+        lat: cluster.lat,
+        lng: cluster.lng,
+        classification: {
+          type: isDogbone ? 'interchange_dogbone' : isPeanut ? 'roundabout_multi' : cluster.maxLanes >= 2 ? 'roundabout_multi' : 'roundabout_single',
+          legs: 4,
+          circulatoryLanes: cluster.maxLanes,
+          hasSignal: false,
+          hasSplitterIslands: true,
+          nearbyRoundaboutCount: 1,
+        },
+      });
+      console.log(`[intersectionClassifier] Added standalone roundabout entry at ${cluster.lat.toFixed(5)}, ${cluster.lng.toFixed(5)} (${cluster.segmentCount} OSM segments, ${cluster.maxLanes} lanes)`);
     }
   }
 

@@ -750,18 +750,35 @@ Output ONLY a JSON array matching the cross-street order: [{"name":"...","type":
         // Update cross-street geometry with roundabout classification
         for (const intx of intersectionData.intersections) {
           if (intx.classification.type.includes('roundabout') || intx.classification.type.includes('interchange')) {
-            const match = positionedCrossStreets.find((cs: any) => cs.name === intx.name);
+            // Try exact name match first
+            let match = positionedCrossStreets.find((cs: any) => cs.name === intx.name);
+            // If no match, find nearest cross-street by position
+            if (!match) {
+              match = positionedCrossStreets.find((cs: any) =>
+                Math.abs(cs.position - intx.position) < 0.15
+              );
+            }
+            const rbGeometry = {
+              type: 'roundabout' as const,
+              hasSignal: intx.classification.hasSignal,
+              hasStopSign: false,
+              turnLanes: false,
+              approachAngle: 0,
+              legs: intx.classification.legs,
+              intersectionType: intx.classification.type,
+              circulatoryLanes: intx.classification.circulatoryLanes || 1,
+            };
             if (match) {
-              (match as any).geometry = {
-                type: 'roundabout',
-                hasSignal: intx.classification.hasSignal,
-                hasStopSign: false,
-                turnLanes: false,
-                approachAngle: 0,
-                legs: intx.classification.legs,
-                intersectionType: intx.classification.type,
-                circulatoryLanes: intx.classification.circulatoryLanes || 1,
-              };
+              (match as any).geometry = rbGeometry;
+              console.log(`[site-context] Tagged "${(match as any).name}" as ${intx.classification.type}`);
+            } else {
+              // Add as new cross-street entry
+              positionedCrossStreets.push({
+                name: intx.name,
+                position: intx.position,
+                geometry: rbGeometry,
+              } as any);
+              console.log(`[site-context] Added roundabout cross-street: "${intx.name}" at position ${intx.position.toFixed(2)}`);
             }
           }
         }
