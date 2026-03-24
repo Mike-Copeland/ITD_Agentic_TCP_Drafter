@@ -40,6 +40,10 @@ export interface RouteIntersectionResult {
 
 const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
 
+// Simple cache to avoid Overpass rate limiting between site-context calls
+const osmCache = new Map<string, { roundabouts: any[]; interchanges: any[]; timestamp: number }>();
+const CACHE_TTL_MS = 120000; // 2 minutes
+
 /**
  * Query OpenStreetMap for roundabouts near a route segment.
  * Uses Overpass API to find junction=roundabout ways within buffer.
@@ -196,10 +200,22 @@ export async function classifyRouteIntersections(
 ): Promise<RouteIntersectionResult> {
   console.log('[intersectionClassifier] Querying OSM for roundabouts and interchanges...');
 
-  const [roundabouts, interchangeFeatures] = await Promise.all([
-    queryOverpassRoundabouts(startCoords.lat, startCoords.lng, endCoords.lat, endCoords.lng),
-    queryOverpassInterchanges(startCoords.lat, startCoords.lng, endCoords.lat, endCoords.lng),
-  ]);
+  // Check cache first (Overpass API can be inconsistent between rapid calls)
+  const cacheKey = `${startCoords.lat.toFixed(4)},${startCoords.lng.toFixed(4)}_${endCoords.lat.toFixed(4)},${endCoords.lng.toFixed(4)}`;
+  const cached = osmCache.get(cacheKey);
+  let roundabouts: any[], interchangeFeatures: any[];
+
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    roundabouts = cached.roundabouts;
+    interchangeFeatures = cached.interchanges;
+    console.log(`[intersectionClassifier] Using cached OSM data (${roundabouts.length} roundabouts)`);
+  } else {
+    [roundabouts, interchangeFeatures] = await Promise.all([
+      queryOverpassRoundabouts(startCoords.lat, startCoords.lng, endCoords.lat, endCoords.lng),
+      queryOverpassInterchanges(startCoords.lat, startCoords.lng, endCoords.lat, endCoords.lng),
+    ]);
+    osmCache.set(cacheKey, { roundabouts, interchanges: interchangeFeatures, timestamp: Date.now() });
+  }
 
   console.log(`[intersectionClassifier] Found ${roundabouts.length} roundabouts, ${interchangeFeatures.length} interchange features`);
 
