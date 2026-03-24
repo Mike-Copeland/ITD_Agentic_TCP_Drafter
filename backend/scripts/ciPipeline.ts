@@ -98,7 +98,6 @@ async function callClaudeOpus(systemPrompt: string, userMessage: string): Promis
     system: systemPrompt,
     messages: [
       { role: 'user', content: userContent },
-      { role: 'assistant', content: '{' }, // Force JSON start
     ],
   };
 

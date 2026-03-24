@@ -131,7 +131,8 @@ export function classifyRoad(speedMph: number, funcClassCode: number, terrain?: 
 
 export function getSignSpacing(speedMph: number, funcClassCode: number, terrain?: string, gradePercent = 0, aadt = 0, crossStreetCount = 0): SignSpacing {
   const base = SIGN_SPACING[classifyRoad(speedMph, funcClassCode, terrain, aadt, crossStreetCount)];
-  // MUTCD guidance: increase spacing on steep downgrades (>3%) to account for truck braking
+  // ITD-SPECIFIC POLICY: Grade-based spacing multipliers per Section 6B.04 Paragraph 07
+  // engineering judgment. These are agency heuristics, not MUTCD-prescribed values.
   if (gradePercent > 5) {
     const mult = 1.5;
     return { a: Math.round(base.a * mult), b: Math.round(base.b * mult), c: Math.round(base.c * mult), classification: `${base.classification} (1.5× grade adj for ${gradePercent}% grade)` };
@@ -149,7 +150,7 @@ export function getSignSpacing(speedMph: number, funcClassCode: number, terrain?
 const BUFFER_TABLE: [number, number][] = [
   [20, 115], [25, 155], [30, 200], [35, 250], [40, 305],
   [45, 360], [50, 425], [55, 495], [60, 570], [65, 645],
-  [70, 730], [75, 820],
+  [70, 730], [75, 820], [80, 910], // 80 MPH: AASHTO extrapolation for Idaho interstates
 ];
 
 /** Get minimum longitudinal buffer space in feet for a given speed. */
@@ -161,14 +162,21 @@ export function getBufferSpace(speedMph: number): number {
 }
 
 // ===================================================================
-// TAPER LENGTH FORMULAS (Section 6C.08)
+// TAPER LENGTH FORMULAS (Section 6B.08, 11th Edition)
 // ===================================================================
 
-/** Merging taper: L = W*S (>=45 mph) or L = W*S²/60 (<45 mph) */
+/**
+ * Merging taper per Table 6B-4:
+ * - 40 mph or less: L = WS²/60
+ * - 45 mph or more: L = WS
+ * Speeds 41-44 mph are snapped to nearest 5 MPH increment per MUTCD convention.
+ */
 export function mergingTaper(laneWidthFt: number, speedMph: number): number {
-  return speedMph >= 45
-    ? laneWidthFt * speedMph
-    : (laneWidthFt * speedMph * speedMph) / 60;
+  // Snap to nearest 5 MPH increment per Table 6B-4 convention
+  const snappedSpeed = Math.round(speedMph / 5) * 5;
+  return snappedSpeed >= 45
+    ? laneWidthFt * snappedSpeed
+    : (laneWidthFt * snappedSpeed * snappedSpeed) / 60;
 }
 
 /** Shifting taper: >= L/2 */
