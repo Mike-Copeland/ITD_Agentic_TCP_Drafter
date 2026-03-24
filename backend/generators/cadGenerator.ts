@@ -1937,7 +1937,8 @@ function drawGeometryPlanSheet(
   const midSta = (viewportStartSta + viewportEndSta) / 2;
   const midPt = alignment.getCoordinatesAtStation(midSta);
   const coverageFt = viewportEndSta - viewportStartSta;
-  const scaleFtPerPt = coverageFt / (pageW * 0.85);
+  // Zoom out 40% to capture the full area including cross-streets and signs
+  const scaleFtPerPt = coverageFt * 1.4 / (pageW * 0.85);
 
   const rotation = -midPt.heading + 90;
   const rotRad = rotation * Math.PI / 180;
@@ -2159,15 +2160,72 @@ function drawGeometryPlanSheet(
     }
   }
 
-  // Cross-street labels
-  doc.fontSize(5).fillColor('#0066cc');
-  for (const cs of ctx.crossStreets) {
+  // === ROAD LABELS + INTERSECTION SIGN PLACEMENT ===
+
+  // Main road label (along the primary alignment)
+  const mainLabelSta = (viewportStartSta + viewportEndSta) / 2;
+  const mainLabelPt = alignment.getCoordinatesAtStation(mainLabelSta);
+  const mainLabelPg = toPage(mainLabelPt.x, mainLabelPt.y);
+  doc.save();
+  doc.translate(mainLabelPg.px, mainLabelPg.py);
+  doc.rotate(-(mainLabelPt.heading - 90));
+  doc.font('Helvetica-Bold').fontSize(7).fillColor('#333');
+  doc.text((ctx.roadName || 'MAIN ROAD').toUpperCase(), -60, halfW / scaleFtPerPt + 8, { width: 120, align: 'center', lineBreak: false });
+  doc.restore();
+  doc.font('Helvetica');
+
+  // Cross-street labels with leader lines + intersection signs
+  for (let csIdx = 0; csIdx < ctx.crossStreets.length; csIdx++) {
+    const cs = ctx.crossStreets[csIdx]!;
     const sta = cs.position * alignment.totalLengthFt;
-    if (sta < viewportStartSta || sta > viewportEndSta) continue;
+    if (sta < viewportStartSta - 100 || sta > viewportEndSta + 100) continue;
     const pt = alignment.getCoordinatesAtStation(sta);
     const pg = toPage(pt.x, pt.y);
-    if (pg.px < pageLeft || pg.px > pageRight) continue;
-    doc.text(cs.name.toUpperCase(), pg.px - 30, pg.py - halfW / scaleFtPerPt - 12, { width: 60, align: 'center', lineBreak: false });
+    if (pg.px < pageLeft - 20 || pg.px > pageRight + 20) continue;
+
+    // Perpendicular direction for label offset
+    const perpRad = (pt.heading + 90) * Math.PI / 180;
+    const side = csIdx % 2 === 0 ? 1 : -1; // Alternate sides to avoid overlap
+    const lx = pg.px + side * Math.sin(perpRad) / scaleFtPerPt * (halfW + 50);
+    const ly = pg.py - side * Math.cos(perpRad) / scaleFtPerPt * (halfW + 50);
+
+    // Leader line from road edge to label
+    doc.lineWidth(0.3).strokeColor('#0066cc');
+    doc.moveTo(pg.px + side * Math.sin(perpRad) / scaleFtPerPt * halfW,
+               pg.py - side * Math.cos(perpRad) / scaleFtPerPt * halfW)
+       .lineTo(lx, ly).stroke();
+
+    // Road name label
+    doc.font('Helvetica-Bold').fontSize(5.5).fillColor('#0066cc');
+    doc.text(cs.name.toUpperCase(), lx - 35, ly - 4, { width: 70, align: 'center', lineBreak: false });
+    doc.font('Helvetica');
+
+    // Intersection W20-1 sign on cross-street approach (both sides if applicable)
+    const isRoundabout = cs.geometry?.type === 'roundabout';
+    const signCode = isRoundabout ? 'W2-6' : 'W20-1';
+    const signLx = lx + side * 15;
+    const signLy = ly + 10;
+    // Small sign diamond
+    doc.save().translate(signLx, signLy).rotate(45);
+    doc.rect(-4, -4, 8, 8).fillAndStroke('#FF8C00', 'black');
+    doc.restore();
+    doc.fontSize(3.5).fillColor('black');
+    doc.text(signCode, signLx - 10, signLy + 7, { width: 20, align: 'center', lineBreak: false });
+
+    // Roundabout-specific: add R1-2 YIELD sign
+    if (isRoundabout) {
+      doc.save().translate(signLx + side * 15, signLy);
+      doc.moveTo(0, -5).lineTo(5, 4).lineTo(-5, 4).closePath().fillAndStroke('#ffffff', '#cc0000');
+      doc.restore();
+      doc.fontSize(3).fillColor('#cc0000');
+      doc.text('R1-2', signLx + side * 15 - 7, signLy + 6, { width: 14, align: 'center', lineBreak: false });
+    }
+
+    // Intersection type label
+    if (isRoundabout) {
+      doc.fontSize(3.5).fillColor('#666');
+      doc.text('ROUNDABOUT', lx - 20, ly + 15, { width: 40, align: 'center', lineBreak: false });
+    }
   }
 
   // Scale bar

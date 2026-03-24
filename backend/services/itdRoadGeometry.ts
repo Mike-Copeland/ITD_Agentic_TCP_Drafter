@@ -73,7 +73,7 @@ export async function fetchItdRoadGeometry(
       .flatMap((f: any) =>
         f.geometry.paths.map((path: number[][]) => ({
           segCode: f.attributes?.SegCode || '',
-          routeName: '',
+          routeName: '', // Layer 13 doesn't have names — supplemented by cross-street data
           beginMilepost: f.attributes?.BMP || 0,
           endMilepost: f.attributes?.EMP || 0,
           nodes: path.map((pt: number[]) => ({ lat: pt[1]!, lng: pt[0]! })),
