@@ -3125,8 +3125,8 @@ export async function generateCAD(
 
             for (let vi = 0; vi < viewports.length; vi++) {
               const vp = viewports[vi]!;
-              // Skip degenerate viewports with no coverage
-              if (!vp.isIndexSheet && vp.startStation === vp.endStation) continue;
+              // Skip degenerate viewports with minimal coverage (< 100ft of road)
+              if (!vp.isIndexSheet && (vp.endStation - vp.startStation) < 100) continue;
               drawGeometryPlanSheet(doc, sheetNum++, totalSheets, ctx, alignment, vi + 1, viewports.length, vp.startStation, vp.endStation, geoBasemapRoads, itdRoadSegments, vp.isIndexSheet || false, viewports);
             }
             console.log(`[cadGenerator] Geometry plan: ${viewports.length} sheet(s), ${gpsPoints.length}-point polyline (${Math.round(alignment.totalLengthFt)} ft, UTM Zone ${alignment.utmZoneNumber}N), ${itdRoadSegments.length} ITD + ${geoBasemapRoads.length} OSM roads`);

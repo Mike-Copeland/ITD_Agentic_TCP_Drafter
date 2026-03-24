@@ -390,7 +390,8 @@ export function generateViewports(
   // Dynamic tile size: target ~4-8 total detail sheets max
   // Scale tile size so the larger extent dimension fits in 2-3 tiles
   const maxExtent = Math.max(extentX, extentY);
-  const effectiveTileSize = tileSizeFt || Math.max(2000, Math.ceil(maxExtent / 3 / 500) * 500);
+  // Target 2-3 tiles per axis, minimum 3000ft per tile
+  const effectiveTileSize = tileSizeFt || Math.max(3000, Math.ceil(maxExtent / 2.5 / 1000) * 1000);
 
   // Grid tiling for long/curvy routes
   const pad = effectiveTileSize * 0.2;
