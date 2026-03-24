@@ -37,8 +37,18 @@ export function classifyRoad(speedMph: number, funcClassCode: number, terrain?: 
   return 'urban_low';
 }
 
-export function getSignSpacing(speedMph: number, funcClassCode: number, terrain?: string): SignSpacing {
-  return SIGN_SPACING[classifyRoad(speedMph, funcClassCode, terrain)];
+export function getSignSpacing(speedMph: number, funcClassCode: number, terrain?: string, gradePercent = 0): SignSpacing {
+  const base = SIGN_SPACING[classifyRoad(speedMph, funcClassCode, terrain)];
+  // MUTCD guidance: increase spacing on steep downgrades (>3%) to account for truck braking
+  if (gradePercent > 5) {
+    const mult = 1.5;
+    return { a: Math.round(base.a * mult), b: Math.round(base.b * mult), c: Math.round(base.c * mult), classification: `${base.classification} (1.5× grade adj for ${gradePercent}% grade)` };
+  }
+  if (gradePercent > 3) {
+    const mult = 1.25;
+    return { a: Math.round(base.a * mult), b: Math.round(base.b * mult), c: Math.round(base.c * mult), classification: `${base.classification} (1.25× grade adj for ${gradePercent}% grade)` };
+  }
+  return base;
 }
 
 // ===================================================================
@@ -525,6 +535,32 @@ export function runComplianceChecks(params: {
     checks.push({
       rule: 'MUTCD 6E.01', requirement: 'Certified flaggers required for this TA',
       actual: `${p.taCode} requires flaggers`, pass: true, severity: 'info',
+    });
+  }
+
+  // 15. Sign-to-sign spacing (B and C distances)
+  const sortedPri = [...p.primarySigns].sort((a, b) => b.distance_ft - a.distance_ft);
+  if (sortedPri.length >= 2) {
+    const bActual = sortedPri[0]!.distance_ft - sortedPri[1]!.distance_ft;
+    checks.push({
+      rule: 'MUTCD Table 6B-1 (B)', requirement: `Sign spacing B >= ${spacing.b} ft between 1st and 2nd signs`,
+      actual: `${bActual} ft`, pass: bActual >= spacing.b * 0.85, severity: bActual >= spacing.b * 0.85 ? 'info' : 'warning',
+    });
+  }
+  if (sortedPri.length >= 3) {
+    const cActual = sortedPri[1]!.distance_ft - sortedPri[2]!.distance_ft;
+    checks.push({
+      rule: 'MUTCD Table 6B-1 (C)', requirement: `Sign spacing C >= ${spacing.c} ft between 2nd and 3rd signs`,
+      actual: `${cActual} ft`, pass: cActual >= spacing.c * 0.85, severity: cActual >= spacing.c * 0.85 ? 'info' : 'warning',
+    });
+  }
+
+  // 16. Speed reduction sign present when WZ speed differs
+  if (p.speedMph !== p.wzSpeedMph) {
+    const hasSpeedSign = p.primarySigns.some(s => s.sign_code === 'W3-5' || s.sign_code === 'R2-1');
+    checks.push({
+      rule: 'MUTCD 6C.01', requirement: `Speed reduction signs required (${p.speedMph}→${p.wzSpeedMph} MPH)`,
+      actual: hasSpeedSign ? 'W3-5 present' : 'MISSING', pass: hasSpeedSign, severity: 'warning',
     });
   }
 

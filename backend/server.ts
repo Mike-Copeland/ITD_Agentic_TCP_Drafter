@@ -846,7 +846,7 @@ app.post('/api/rag', async (req, res) => {
 // ---------------------------------------------------------------------------
 app.post('/api/generate-plan', async (req, res) => {
   try {
-    const { blueprint, startCoords, endCoords, staticMapBase64, normalSpeed, workZoneSpeed, laneWidth, operationType, duration, routeDistanceFt: rawRouteDist, roadName: rawRoadName, positionedCrossStreets: rawCrossStreets, itdTerrain: rawTerrain, itdFuncClass: rawFuncClass, itdTotalLanes: rawTotalLanes, itdAADT: rawAADT, itdTruckPct: rawTruckPct, itdCrashCount: rawCrashCount, itdBridges: rawBridges } = req.body;
+    const { blueprint, startCoords, endCoords, staticMapBase64, normalSpeed, workZoneSpeed, laneWidth, operationType, duration, routeDistanceFt: rawRouteDist, roadName: rawRoadName, positionedCrossStreets: rawCrossStreets, itdTerrain: rawTerrain, itdFuncClass: rawFuncClass, itdTotalLanes: rawTotalLanes, itdAADT: rawAADT, itdTruckPct: rawTruckPct, itdCrashCount: rawCrashCount, itdBridges: rawBridges, maxGradePercent: rawGrade } = req.body;
     const speedMph: number = normalSpeed || 65;
     const wzSpeedMph: number = workZoneSpeed || 55;
     const laneWidthFt: number = laneWidth || 12;
@@ -899,6 +899,7 @@ app.post('/api/generate-plan', async (req, res) => {
       parseInt(rawCrashCount) || 0,
       rawBridges || [],
       duration || 'Short-term (<= 3 days)',
+      parseFloat(rawGrade) || 0,
     );
 
     // Verify the generated files

@@ -57,10 +57,6 @@ export interface GenerationResult {
 // ===================================================================
 // MATH UTILITIES
 // ===================================================================
-function calcTaperLength(laneWidthFt: number, speedMph: number): number {
-  return speedMph >= 45 ? laneWidthFt * speedMph : (laneWidthFt * speedMph * speedMph) / 60;
-}
-
 function gpsToWebMercatorFt(lat: number, lng: number): { x: number; y: number } {
   const xMeters = (lng * 20037508.34) / 180;
   const latRad = (lat * Math.PI) / 180;
@@ -78,50 +74,30 @@ function haversineDistanceFt(a: { lat: number; lng: number }, b: { lat: number; 
   return R * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
 
-// MUTCD Table 6H-2: Advance Warning Sign Spacing
-// Uses both speed AND terrain/functional class to determine classification
-function getABCSpacing(speedMph: number, terrain?: string, funcClass?: string): { a: number; b: number; c: number; classification: string } {
-  // Expressway/Freeway (Interstates, divided highways with FC 1-2)
+// Delegates to MUTCD module — single source of truth
+function getABCSpacing(speedMph: number, terrain?: string, funcClass?: string, gradePercent = 0): { a: number; b: number; c: number; classification: string } {
   const fcCode = funcClass ? parseInt(funcClass) || 99 : 99;
-  if (fcCode <= 2 || speedMph >= 65) return { a: 1000, b: 1500, c: 2640, classification: 'Expressway/Freeway' };
-  // Rural: terrain is mountainous/rolling OR functional class is arterial (3-4) outside urban areas
-  const isRural = terrain && /mountainous|rolling/i.test(terrain);
-  if (isRural || (fcCode <= 4 && speedMph >= 45)) return { a: 500, b: 500, c: 500, classification: 'Rural' };
-  // Urban High Speed
-  if (speedMph > 40) return { a: 350, b: 350, c: 350, classification: 'Urban (High Speed)' };
-  // Urban Low Speed
-  return { a: 100, b: 100, c: 100, classification: 'Urban (Low Speed)' };
+  return MUTCD.getSignSpacing(speedMph, fcCode, terrain, gradePercent);
 }
 
-// MUTCD 11th Edition Table 6C-2: Longitudinal Buffer Space
-// Based on stopping sight distance, NOT advance warning spacing
+// Delegates to MUTCD module — single source of truth
 function getBufferSpaceFt(speedMph: number): number {
-  if (speedMph <= 20) return 115;
-  if (speedMph <= 25) return 155;
-  if (speedMph <= 30) return 200;
-  if (speedMph <= 35) return 250;
-  if (speedMph <= 40) return 305;
-  if (speedMph <= 45) return 360;
-  if (speedMph <= 50) return 425;
-  if (speedMph <= 55) return 495;
-  if (speedMph <= 60) return 570;
-  if (speedMph <= 65) return 645;
-  return 730; // 70+ mph
+  return MUTCD.getBufferSpace(speedMph);
 }
 
-// MUTCD channelizing device spacing
-// Standard: 1V taper, 2V tangent. Flagger tapers: 20 ft max (tight visual block per Fig 6H-10)
+// Delegates to MUTCD module — single source of truth
 function getDeviceSpacing(speedMph: number, taCode = 'TA-10'): { taperSpacingFt: number; tangentSpacingFt: number } {
-  if (taCode === 'TA-10') return { taperSpacingFt: 20, tangentSpacingFt: speedMph * 2 };
-  return { taperSpacingFt: speedMph, tangentSpacingFt: speedMph * 2 };
+  return {
+    taperSpacingFt: MUTCD.taperDeviceSpacing(speedMph, taCode),
+    tangentSpacingFt: MUTCD.tangentDeviceSpacing(speedMph),
+  };
 }
 
-// Sign size determination: ITD requires 48" on State/US highways regardless of speed
+// Delegates to MUTCD module with ITD override — single source of truth
 function getSignSize(speedMph: number, roadName: string): string {
-  // Route-hierarchy override: State/US highways always get 48" per ITD practice
-  if (/\b(US|SH|I|ID|Interstate|Highway|Hwy)[\s-]*\d+/i.test(roadName)) return '48" x 48"';
-  // Speed-based fallback per MUTCD
-  return speedMph > 45 ? '48" x 48"' : '36" x 36"';
+  // Need roadClass but we don't have funcClass here — use speed-based fallback
+  const roadClass: MUTCD.RoadClass = speedMph >= 65 ? 'expressway' : speedMph > 30 ? 'urban_high' : 'urban_low';
+  return MUTCD.getITDSignSize(speedMph, roadName, roadClass).label;
 }
 
 // Determine if a cross-street is a state/US highway (needs enhanced treatment)
@@ -1922,6 +1898,7 @@ export async function generateCAD(
   crashCount = 0,
   bridges: any[] = [],
   duration = 'Short-term (<= 3 days)',
+  maxGradePercent = 0,
 ): Promise<GenerationResult> {
   // === BLUEPRINT VALIDATION — ensure all required fields exist ===
   if (!blueprint.primary_approach || !Array.isArray(blueprint.primary_approach)) blueprint.primary_approach = [];
@@ -1983,66 +1960,57 @@ export async function generateCAD(
   }
   console.log(`[cadGenerator] TA Selection: ${taCode} (${taDescription}) | Lanes: ${totalLanes} | FC: ${fcCode} | Op: ${operationType}`);
 
-  // Taper length determination
-  let taperLengthFt: number;
-  if (taCode === 'TA-10') {
-    // MUTCD 6C.08: One-Lane Two-Way Traffic Taper = 50 ft min, 100 ft max
-    const aiTaper = blueprint.taper.length_ft || 100;
-    taperLengthFt = Math.min(Math.max(aiTaper, 50), 100);
-  } else if (['TA-22', 'TA-23'].includes(taCode)) {
-    // Shoulder taper = 1/3 of merging taper
-    taperLengthFt = Math.round(calcTaperLength(laneWidthFt, speedMph) / 3);
+  // Taper length determination (via MUTCD module)
+  const taperLengthFt = MUTCD.getTaperLength(taCode, laneWidthFt, speedMph);
+
+  // === MUTCD-AUTHORITATIVE SIGN ENFORCEMENT ===
+  // Use MUTCD module as the source of truth for sign codes.
+  // PE Agent provides distances; we enforce correct sign codes per TA.
+  const requiredSigns = MUTCD.getRequiredSigns(taCode);
+  const spacing = MUTCD.getSignSpacing(speedMph, fcCode, terrain, maxGradePercent);
+
+  // Build authoritative primary sign sequence using MUTCD-required codes + PE distances
+  const peDistances = blueprint.primary_approach.map(s => s.distance_ft).sort((a, b) => b - a);
+  // Ensure we have enough distances — fill with MUTCD spacing if PE provided fewer
+  while (peDistances.length < requiredSigns.primary.length) {
+    const lastDist = peDistances.length > 0 ? peDistances[peDistances.length - 1]! : spacing.a;
+    peDistances.push(Math.max(lastDist - spacing.b, 100));
+  }
+  blueprint.primary_approach = requiredSigns.primary.map((req, i) => ({
+    sign_code: req.code,
+    distance_ft: peDistances[i] || spacing.a - i * spacing.b,
+    label: req.label,
+  }));
+
+  // Add W3-5 REDUCED SPEED + R2-1 SPEED LIMIT when WZ speed differs
+  if (speedMph !== wzSpeedMph) {
+    const lastPriDist = peDistances[peDistances.length - 1] ?? spacing.a;
+    blueprint.primary_approach.push(
+      { sign_code: 'W3-5', distance_ft: Math.max(lastPriDist - spacing.b, 150), label: `REDUCED SPEED ${wzSpeedMph} MPH AHEAD` },
+    );
+  }
+
+  // Build authoritative opposing sign sequence
+  if (requiredSigns.opposing.length > 0) {
+    const oppDistances = blueprint.opposing_approach.map(s => s.distance_ft).sort((a, b) => b - a);
+    while (oppDistances.length < requiredSigns.opposing.length) {
+      const lastDist = oppDistances.length > 0 ? oppDistances[oppDistances.length - 1]! : spacing.a;
+      oppDistances.push(Math.max(lastDist - spacing.b, 100));
+    }
+    blueprint.opposing_approach = requiredSigns.opposing.map((req, i) => ({
+      sign_code: req.code,
+      distance_ft: oppDistances[i] || spacing.a - i * spacing.b,
+      label: req.label,
+    }));
   } else {
-    // TA-30/31/33/35: Standard merging taper (L=WS or L=WS²/60)
-    // Always use formula — PE may have provided a flagger taper by mistake
-    taperLengthFt = calcTaperLength(laneWidthFt, speedMph);
+    // TA-33/35 (divided) — opposing traffic unaffected
+    blueprint.opposing_approach = [];
   }
 
-  // === SIGN CORRECTION based on TA selection ===
-  // PE Agent assumes TA-10 (flaggers) — override signs for multi-lane TAs
-  if (['TA-30', 'TA-31', 'TA-33', 'TA-35'].includes(taCode)) {
-    // Replace W20-7a FLAGGER AHEAD with W20-5 RIGHT LANE CLOSED AHEAD
-    // Replace W20-4 ONE LANE ROAD AHEAD with W20-5 RIGHT LANE CLOSED AHEAD (multi-lane)
-    for (const signs of [blueprint.primary_approach, blueprint.opposing_approach]) {
-      for (const sign of signs) {
-        if (sign.sign_code === 'W20-7a') {
-          sign.sign_code = 'W20-5';
-          sign.label = 'RIGHT LANE CLOSED AHEAD';
-        }
-        if (sign.sign_code === 'W20-4') {
-          sign.sign_code = 'W20-5';
-          sign.label = 'RIGHT LANE CLOSED AHEAD';
-        }
-      }
-    }
-    // For multi-lane, opposing approach gets same signs (same direction closure)
-    // but if TA-33/35 (divided), opposing traffic is unaffected — clear opposing signs
-    if (['TA-33', 'TA-35'].includes(taCode)) {
-      blueprint.opposing_approach = []; // Opposing traffic unaffected on divided highway
-    }
-  } else if (['TA-22', 'TA-23'].includes(taCode)) {
-    // Shoulder work: replace lane closure signs with shoulder work signs
-    for (const signs of [blueprint.primary_approach, blueprint.opposing_approach]) {
-      for (const sign of signs) {
-        if (sign.sign_code === 'W20-7a') {
-          sign.sign_code = 'W21-5b';
-          sign.label = 'SHOULDER WORK AHEAD';
-        }
-        if (sign.sign_code === 'W20-4') {
-          sign.sign_code = 'W21-5';
-          sign.label = 'SHOULDER CLOSED AHEAD';
-        }
-      }
-    }
-  }
-
-  // === DEVICE TYPE ENFORCEMENT based on duration ===
-  const isLongTerm = /long/i.test(duration);
-  if (isLongTerm) {
-    blueprint.taper.device_type = '42-inch Drums';
-  } else if (!blueprint.taper.device_type || blueprint.taper.device_type === 'Cones') {
-    blueprint.taper.device_type = '28-inch Cones';
-  }
+  // === DEVICE TYPE ENFORCEMENT based on duration (via MUTCD module) ===
+  const workDuration = MUTCD.parseDuration(duration);
+  const deviceReq = MUTCD.getDeviceRequirements(workDuration);
+  blueprint.taper.device_type = deviceReq.label;
 
   if (routeDistanceFt === 0 && startCoords && endCoords) {
     routeDistanceFt = Math.round(haversineDistanceFt(startCoords, endCoords));
