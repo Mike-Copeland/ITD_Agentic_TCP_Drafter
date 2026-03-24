@@ -60,6 +60,7 @@ export interface GenerationResult {
   opposingSigns: Sign[];
   compliance: ComplianceCheck[];
   corrections: CorrectionEntry[];
+  dataWarnings: string[];
 }
 
 // ===================================================================
@@ -491,7 +492,7 @@ function drawCoverSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: Dr
   const sheetNames = [
     'Cover Sheet & General Notes',
     ...ctx.operationTypes.map((op: string) => {
-      const ta = MUTCD.selectTA(op, ctx.totalLanes, parseInt(ctx.funcClass) || 99, ctx.isDivided, ctx.aadt);
+      const ta = MUTCD.selectTA(op, ctx.totalLanes, parseInt(ctx.funcClass) || 99, ctx.isDivided, ctx.aadt, ctx.terrain);
       return `${ta.code}: ${op}`;
     }),
     'Site-Specific Work Zone Layout',
@@ -2123,13 +2124,19 @@ export async function generateCAD(
     if (!sign.label) sign.label = 'ROAD WORK AHEAD';
   }
 
-  // === TA SELECTION via MUTCD module (single source of truth) ===
+  // === INPUT VALIDATION ===
   const fcCode = funcClass ? parseInt(funcClass) || 99 : 99;
+  const validation = MUTCD.validateInputData(roadName, speedMph, aadt, fcCode === 99 ? 0 : fcCode, totalLanes);
+  if (validation.warnings.length > 0) {
+    console.warn(`[cadGenerator] Data warnings: ${validation.warnings.join(' | ')}`);
+  }
+
+  // === TA SELECTION via MUTCD module (single source of truth) ===
   const isDivided = fcCode <= 3 && totalLanes >= 4;
   const hasTWLTL = totalLanes === 3 || totalLanes === 5;
   const isMultiLane = totalLanes >= 4 || (totalLanes === 3 && !hasTWLTL);
 
-  const taSelection = MUTCD.selectTA(operationType, totalLanes, fcCode, isDivided, aadt);
+  const taSelection = MUTCD.selectTA(operationType, totalLanes, fcCode, isDivided, aadt, terrain);
   const taCode = taSelection.code;
   const taDescription = taSelection.title;
   console.log(`[cadGenerator] TA Selection: ${taCode} (${taDescription}) | Lanes: ${totalLanes} | FC: ${fcCode} | Op: ${operationType}`);
@@ -2323,6 +2330,7 @@ export async function generateCAD(
             opposingSigns: [...blueprint.opposing_approach],
             compliance: compliance.map(c => ({ rule: c.rule, requirement: c.requirement, actual: c.actual, pass: c.pass })),
             corrections,
+            dataWarnings: validation.warnings,
           });
         } catch (dxfErr) {
           reject(new Error(`DXF write failed: ${dxfErr}`));
@@ -2340,7 +2348,7 @@ export async function generateCAD(
       // Sheet 2+: Typical Application(s) — one per operation phase
       const phases = operationTypes.length > 0 ? operationTypes : [operationType];
       for (const phaseOp of phases) {
-        const phaseTA = MUTCD.selectTA(phaseOp, totalLanes, fcCode, isDivided, aadt);
+        const phaseTA = MUTCD.selectTA(phaseOp, totalLanes, fcCode, isDivided, aadt, terrain);
         const phaseTaper = MUTCD.getTaperLength(phaseTA.code, laneWidthFt, speedMph);
         const phaseCtx: DrawContext = {
           ...ctx,

@@ -79,10 +79,6 @@ interface TestResult {
   error?: string;
 }
 
-// Collect server logs between test runs
-let serverLogBuffer = '';
-function captureServerLog(text: string) { serverLogBuffer += text; }
-
 async function runTest(test: TestCase): Promise<TestResult> {
   const t0 = Date.now();
   try {

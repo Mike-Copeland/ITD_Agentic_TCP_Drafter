@@ -19,16 +19,6 @@ async function main() {
   const results = fs.readFileSync(path.join(__dirname, '..', '..', 'data', 'autotest_results.json'), 'utf8');
   const mutcdModule = fs.readFileSync(path.join(__dirname, '..', 'engineering', 'mutcdPart6.ts'), 'utf8');
 
-  // Read backend logs for compliance details
-  const serverLog = (() => {
-    try {
-      // Find the most recent task output
-      const tmpDir = 'C:\\Users\\mcopelan\\AppData\\Local\\Temp\\claude';
-      const files = fs.readdirSync(tmpDir, { recursive: true }) as string[];
-      return 'Log parsing skipped — using test results JSON';
-    } catch { return 'Could not read server logs'; }
-  })();
-
   const prompt = `You are a senior traffic engineer reviewing the results of 15 automated TCP plan generation tests across diverse Idaho road conditions. Analyze the test results and identify systemic issues.
 
 ## TEST RESULTS

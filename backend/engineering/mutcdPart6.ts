@@ -9,6 +9,60 @@
  */
 
 // ===================================================================
+// INPUT DATA VALIDATION (Consensus: Claude Opus + Gemini)
+// ===================================================================
+export interface ValidationResult {
+  valid: boolean;
+  warnings: string[];
+  errors: string[];
+}
+
+export function validateInputData(
+  roadName: string, speedMph: number, aadt: number,
+  funcClassCode: number, totalLanes: number
+): ValidationResult {
+  const result: ValidationResult = { valid: true, warnings: [], errors: [] };
+
+  // Interstate validation
+  const isInterstate = /\b(I-\d+|Interstate)\b/i.test(roadName);
+  if (isInterstate) {
+    if (funcClassCode > 2 && funcClassCode !== 0) {
+      result.warnings.push(`${roadName} has FC ${funcClassCode}; expected FC 1-2 for Interstate. Data may be from adjacent road.`);
+    }
+    if (aadt > 0 && aadt < 5000) {
+      result.warnings.push(`${roadName} has AADT ${aadt}; unusually low for Interstate. Verify data source.`);
+    }
+  }
+
+  // Missing critical data
+  if (funcClassCode === 0 && aadt === 0) {
+    result.warnings.push('Both AADT and Functional Class unavailable. Classification defaults to rural (safer spacing).');
+  } else if (funcClassCode === 0) {
+    result.warnings.push('Functional Class unavailable. Classification reliability reduced.');
+  }
+  if (aadt === 0) {
+    result.warnings.push('AADT unavailable. Queue analysis and classification rely on heuristics.');
+  }
+  if (totalLanes === 0) {
+    result.warnings.push('Lane count unavailable. TA selection defaults to 2-lane configuration.');
+  }
+
+  // Speed sanity
+  if (speedMph > 80 || speedMph < 15) {
+    result.warnings.push(`Speed ${speedMph} MPH is outside normal range (15-80). Verify input.`);
+  }
+
+  // Cross-checks
+  if (aadt > 0 && funcClassCode > 0) {
+    if (funcClassCode <= 2 && aadt < 5000) {
+      result.warnings.push(`FC ${funcClassCode} (freeway) with AADT ${aadt} is unusual. Verify data source.`);
+    }
+  }
+
+  return result;
+}
+
+// ===================================================================
 // TABLE 6B-1: ADVANCE WARNING SIGN SPACING
 // ===================================================================
 export type RoadClass = 'urban_low' | 'urban_high' | 'rural' | 'expressway';
@@ -25,21 +79,52 @@ const SIGN_SPACING: Record<RoadClass, SignSpacing> = {
 /**
  * Determine road classification for sign spacing.
  * MUTCD Table 6B-1 "Road Type" is based on environment (urban/rural), not just FC.
- * Uses FC, terrain, speed, and area indicators (AADT, cross-street density) to classify.
+ *
+ * Multi-factor model (consensus of Claude Opus + Gemini review):
+ * - Rural indicators take precedence (longer spacing = safer default)
+ * - Urban requires convergence of multiple indicators
+ * - Missing data defaults to rural (safer) per MUTCD 6D.03
  */
 export function classifyRoad(speedMph: number, funcClassCode: number, terrain?: string, aadt = 0, crossStreetCount = 0): RoadClass {
-  // FC 1-2 = Interstate/Freeway — always expressway spacing
-  if (funcClassCode <= 2 || speedMph >= 65) return 'expressway';
+  // === EXPRESSWAY: FC 1-2 always, OR FC 3 at 65+ MPH (high-speed limited-access) ===
+  if (funcClassCode <= 2) return 'expressway';
+  if (speedMph >= 65 && funcClassCode <= 3) return 'expressway';
+  // 65+ on FC 4+ is a high-speed rural road, NOT expressway
+  if (speedMph >= 65) return 'rural';
 
-  // Determine if the environment is urban or rural.
-  // Urban indicators: high AADT, many cross-streets, lower speed, higher FC codes
-  // Rural indicators: low AADT, few cross-streets, mountainous/rolling terrain
-  const isUrbanContext = aadt >= 3000 || crossStreetCount >= 4 || funcClassCode >= 5;
+  // === TERRAIN-BASED RURAL (strong indicator, takes precedence) ===
   const isRuralTerrain = terrain && /mountainous|rolling/i.test(terrain);
-  const isRural = !isUrbanContext && (isRuralTerrain || (aadt > 0 && aadt < 1500));
+  if (isRuralTerrain && aadt < 10000) {
+    return speedMph >= 45 ? 'rural' : 'urban_low';
+  }
 
-  if (isRural) return speedMph >= 45 ? 'rural' : 'urban_low'; // Low-speed rural uses urban_low per MUTCD
-  // Urban: split by speed
+  // === MULTI-FACTOR URBAN/RURAL DETERMINATION ===
+  // Urban requires convergence of evidence, not a single trigger
+  const hasHighVolume = aadt >= 10000;
+  const hasModerateVolume = aadt >= 5000;
+  const hasLowSpeed = speedMph <= 35;
+  const isLocalRoad = funcClassCode >= 6;
+
+  // Strong urban: high volume alone is sufficient
+  const isUrban = hasHighVolume ||
+    (hasModerateVolume && isLocalRoad) ||
+    (hasModerateVolume && hasLowSpeed && crossStreetCount >= 6) ||
+    (isLocalRoad && hasLowSpeed);
+
+  // When AADT is unknown (0): default to rural for safety (longer spacing)
+  if (aadt === 0 && !isRuralTerrain) {
+    if (funcClassCode <= 3 && speedMph >= 45) return 'rural';
+    if (isLocalRoad && speedMph <= 35) return 'urban_low';
+    // Uncertain — default to rural (longer spacing = safer) per MUTCD 6D.03
+    return speedMph >= 45 ? 'rural' : 'urban_low';
+  }
+
+  // Low volume with arterial FC = rural
+  if (aadt > 0 && aadt < 5000 && funcClassCode <= 4) {
+    return speedMph >= 45 ? 'rural' : 'urban_low';
+  }
+
+  if (!isUrban) return speedMph >= 45 ? 'rural' : 'urban_low';
   if (speedMph > 40) return 'urban_high';
   return 'urban_low';
 }
@@ -268,6 +353,7 @@ export function selectTA(
   funcClassCode: number,
   isDivided: boolean,
   aadt = 0,
+  terrain = '',
 ): TASelection {
   const isFreeway = funcClassCode <= 2;
   const hasTWLTL = totalLanes === 3 || totalLanes === 5;
@@ -306,7 +392,9 @@ export function selectTA(
   if (operationType === 'Double Lane Closure') {
     if (isFreeway) return { code: 'TA-37', title: 'Double Lane Closure on Freeway', description: 'Two adjacent lanes closed on freeway' };
     if (isDivided) return { code: 'TA-34', title: 'Lane Closure with Temporary Traffic Barrier', description: 'Lane closure with barrier on divided highway' };
-    return { code: 'TA-33', title: 'Stationary Lane Closure on Divided Highway', description: 'Multi-lane closure on divided highway' };
+    if (isMultiLane) return { code: 'TA-30', title: 'Double Lane Closure on Multi-Lane Undivided', description: 'Two lanes closed on undivided multi-lane road — requires engineering review' };
+    // Two-lane road: double lane = full closure
+    return { code: 'TA-13', title: 'Temporary Road Closure', description: 'Double lane closure on two-lane road requires full closure with detour' };
   }
 
   // === SINGLE LANE CLOSURE (default) ===
@@ -320,9 +408,11 @@ export function selectTA(
     if (hasTWLTL) return { code: 'TA-31', title: 'Lane Closure with Uneven Directional Volumes', description: 'Lane closure on road with center turn lane' };
     return { code: 'TA-30', title: 'Interior Lane Closure on Multi-Lane Street', description: 'Single lane closure on multi-lane undivided road' };
   }
-  // 2-lane road: use flaggers for higher volume, yield signs for low volume
-  if (aadt > 0 && aadt < 400) {
-    return { code: 'TA-11', title: 'Lane Closure on Two-Lane Road (Low Volume)', description: 'One lane closure using yield signs (AADT < 400)' };
+  // 2-lane road: yield signs only for very low volume WITH adequate sight distance
+  // Per MUTCD 6C.10: yield control requires adequate sight distance — mountainous/rolling = flaggers
+  const isRestrictedSight = /mountainous|rolling/i.test(terrain);
+  if (aadt > 0 && aadt < 400 && !isRestrictedSight) {
+    return { code: 'TA-11', title: 'Lane Closure on Two-Lane Road (Low Volume)', description: 'One lane closure using yield signs (AADT < 400, adequate sight distance)' };
   }
   return { code: 'TA-10', title: 'Lane Closure Using Flaggers', description: 'One lane closure on two-lane road using flagging' };
 }

@@ -964,6 +964,11 @@ app.post('/api/generate-plan', async (req, res) => {
       `  Opposing Signs: ${genResult.opposingSigns.map(s => s.sign_code).join(', ') || 'None (divided/one-way)'}`,
       `  Total Sheets: ${genResult.totalSheets}`,
       ``,
+      ...(genResult.dataWarnings?.length > 0 ? [
+        `Data Quality Warnings:`,
+        ...genResult.dataWarnings.map(w => `  ⚠ ${w}`),
+        ``,
+      ] : []),
       ...(genResult.corrections.length > 0 ? [
         `Corrections Applied:`,
         ...genResult.corrections.map(c => `  ${c.field}: PE="${c.peValue}" → Corrected="${c.correctedValue}" (${c.reason})`),
