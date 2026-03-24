@@ -416,299 +416,279 @@ export default function App() {
   };
 
   if (!isAuthReady) {
-    return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-white"><Loader2 className="animate-spin" /></div>;
+    return <div className="fixed inset-0 bg-zinc-950 flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-emerald-500" /></div>;
   }
 
+  const lanes = contextData?.itdTotalLanes || 0;
+  const fc = parseInt(contextData?.itdFuncClass || '99') || 99;
+  const isDivided = fc <= 3 && lanes >= 4;
+  const isFreeway = fc <= 2;
+  const isMultiLane = lanes >= 4;
+  const allOps = [
+    { id: 'Single Lane Closure', label: 'Lane Closure', icon: '◄►', show: true },
+    { id: 'Double Lane Closure', label: 'Double Lane', icon: '◄◄', show: isMultiLane || isFreeway },
+    { id: 'Full Road Closure', label: 'Road Closure', icon: '⊘', show: true },
+    { id: 'Shoulder Work', label: 'Shoulder', icon: '▐', show: true },
+    { id: 'Median Crossover', label: 'Crossover', icon: '⇌', show: isDivided || lanes >= 4 },
+    { id: 'Mobile Operations', label: 'Mobile Ops', icon: '►', show: true },
+    { id: 'Intermittent Closure', label: 'Intermittent', icon: '⏱', show: true },
+  ].filter(o => o.show || !contextData);
+
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 font-sans flex flex-col">
-      <header className="border-b border-white/10 bg-zinc-900/50 backdrop-blur-md px-6 py-4 flex items-center justify-between sticky top-0 z-50">
+    <div className="fixed inset-0 bg-zinc-950 text-zinc-100 overflow-hidden">
+      {/* === IMMERSIVE MAP CANVAS === */}
+      <div className="absolute inset-0 z-0">
+        <Map startCoords={startCoords} endCoords={endCoords} onPinDrop={handlePinDrop} captureRef={mapCaptureRef} />
+      </div>
+      {/* Vignette overlay */}
+      <div className="absolute inset-0 z-10 bg-gradient-to-br from-zinc-950/80 via-transparent to-zinc-950/80 pointer-events-none" />
+      <div className="absolute inset-0 z-10 bg-gradient-to-t from-zinc-950/60 via-transparent to-zinc-950/40 pointer-events-none" />
+
+      {/* === TOP BAR (minimal, floating) === */}
+      <div className="absolute top-0 left-0 right-0 z-40 flex items-center justify-between px-6 py-4">
         <div className="flex items-center gap-3">
-          <div className="bg-emerald-500/20 p-2 rounded-lg">
-            <Settings className="w-5 h-5 text-emerald-400" />
-          </div>
-          <h1 className="text-xl font-semibold tracking-tight">ITD Agentic CAD Generator</h1>
+          <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <h1 className="text-sm font-mono tracking-widest uppercase text-zinc-400">ITD TCP DRAFTER</h1>
         </div>
-        <div>
+        <div className="flex items-center gap-4">
+          <div className="text-[10px] font-mono text-zinc-600 uppercase tracking-widest">
+            {!startCoords ? 'AWAITING START PIN' : !endCoords ? 'AWAITING END PIN' : 'READY'}
+          </div>
           {user ? (
-            <div className="flex items-center gap-4">
-              <span className="text-sm text-zinc-400">{user.email}</span>
-              <button onClick={logOut} className="flex items-center gap-2 text-sm bg-white/5 hover:bg-white/10 px-3 py-1.5 rounded-md transition-colors">
-                <LogOut className="w-4 h-4" /> Sign Out
-              </button>
-            </div>
+            <button onClick={logOut} className="text-[10px] font-mono text-zinc-500 hover:text-zinc-300 uppercase tracking-widest transition-colors">
+              {user.email?.split('@')[0]} ✕
+            </button>
           ) : (
-            <button onClick={signInWithGoogle} className="flex items-center gap-2 text-sm bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-md transition-colors font-medium">
-              <LogIn className="w-4 h-4" /> Sign In with Google
+            <button onClick={signInWithGoogle} className="text-[10px] font-mono text-emerald-500 hover:text-emerald-400 uppercase tracking-widest transition-colors">
+              Sign In
             </button>
           )}
         </div>
-      </header>
+      </div>
 
-      <main className="flex-1 max-w-[1600px] w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <motion.div
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="lg:col-span-4 flex flex-col gap-6"
-        >
-          <div className="bg-zinc-900 border border-white/10 rounded-2xl p-6 shadow-xl">
-            <h2 className="text-lg font-medium mb-6 flex items-center gap-2">
-              <FileText className="w-5 h-5 text-zinc-400" />
-              The Cookie Recipe
-            </h2>
-
-            <div className="space-y-5">
-              <div>
-                <label className="block text-sm font-medium text-zinc-400 mb-2">Operation Phases (select all that apply)</label>
-                <div className="grid grid-cols-2 gap-2">
-                  {(() => {
-                    const lanes = contextData?.itdTotalLanes || 0;
-                    const fc = parseInt(contextData?.itdFuncClass || '99') || 99;
-                    const isDivided = fc <= 3 && lanes >= 4;
-                    const isFreeway = fc <= 2;
-                    const isMultiLane = lanes >= 4;
-                    const allOps = [
-                      { id: 'Single Lane Closure', label: 'Lane Closure', show: true },
-                      { id: 'Double Lane Closure', label: 'Double Lane Closure', show: isMultiLane || isFreeway },
-                      { id: 'Full Road Closure', label: 'Road Closure / Detour', show: true },
-                      { id: 'Shoulder Work', label: 'Shoulder Work', show: true },
-                      { id: 'Median Crossover', label: 'Median Crossover', show: isDivided || lanes >= 4 },
-                      { id: 'Mobile Operations', label: 'Mobile Operations', show: true },
-                      { id: 'Intermittent Closure', label: 'Intermittent / Short Duration', show: true },
-                    ];
-                    return allOps.filter(o => o.show || !contextData).map(op => (
-                      <label key={op.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer text-sm transition-colors ${operationTypes.includes(op.id) ? 'bg-emerald-900/40 border-emerald-500/50 text-emerald-300' : 'bg-zinc-950 border-white/10 text-zinc-400 hover:border-white/20'}`}>
-                        <input
-                          type="checkbox"
-                          checked={operationTypes.includes(op.id)}
-                          onChange={(e) => {
-                            if (e.target.checked) setOperationTypes(prev => [...prev, op.id]);
-                            else setOperationTypes(prev => prev.filter(t => t !== op.id));
-                          }}
-                          className="accent-emerald-500"
-                        />
-                        {op.label}
-                      </label>
-                    ));
-                  })()}
-                </div>
-                {operationTypes.length === 0 && <p className="text-xs text-amber-400 mt-1">Select at least one operation type</p>}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-zinc-400 mb-1.5">Work Duration</label>
-                <select
-                  value={duration}
-                  onChange={(e) => setDuration(e.target.value)}
-                  className="w-full bg-zinc-950 border border-white/10 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
+      {/* === ENGINEERING COMMAND DECK (Left Panel) === */}
+      <motion.div
+        initial={{ opacity: 0, x: -40 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+        className="absolute top-16 left-6 bottom-6 w-[400px] bg-zinc-950/60 backdrop-blur-2xl border border-white/5 rounded-3xl z-40 flex flex-col shadow-2xl overflow-hidden"
+      >
+        <div className="flex-1 overflow-y-auto p-7 space-y-6" style={{ scrollbarWidth: 'none' }}>
+          {/* Operation Phases */}
+          <div>
+            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-500 mb-3">Operation Phases</p>
+            <div className="grid grid-cols-2 gap-2">
+              {allOps.map(op => (
+                <motion.button
+                  key={op.id}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  onClick={() => {
+                    if (operationTypes.includes(op.id)) setOperationTypes(prev => prev.filter(t => t !== op.id));
+                    else setOperationTypes(prev => [...prev, op.id]);
+                  }}
+                  className={`relative px-3 py-3 rounded-xl border text-left transition-all duration-200 ${
+                    operationTypes.includes(op.id)
+                      ? 'bg-emerald-500/10 border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.12)]'
+                      : 'bg-white/[0.03] border-white/[0.06] hover:border-white/10'
+                  }`}
                 >
-                  <option>Short-term (&lt;= 3 days)</option>
-                  <option>Long-term (&gt; 3 days)</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-1.5">Normal Speed (MPH)</label>
-                  <input
-                    type="number"
-                    value={normalSpeed}
-                    onChange={(e) => setNormalSpeed(Number(e.target.value))}
-                    className="w-full bg-zinc-950 border border-white/10 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-1.5">Work Zone Speed (MPH)</label>
-                  <input
-                    type="number"
-                    value={workZoneSpeed}
-                    onChange={(e) => setWorkZoneSpeed(Number(e.target.value))}
-                    className="w-full bg-zinc-950 border border-white/10 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-zinc-400 mb-1.5">Lane Width (Feet)</label>
-                <input
-                  type="number"
-                  value={laneWidth}
-                  onChange={(e) => setLaneWidth(Number(e.target.value))}
-                  className="w-full bg-zinc-950 border border-white/10 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                />
-              </div>
-
-              <div className="pt-4 border-t border-white/5 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-1.5 flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-emerald-400" /> Start Coordinates
-                  </label>
-                  <input
-                    readOnly
-                    value={startCoords ? `${startCoords.lat.toFixed(5)}, ${startCoords.lng.toFixed(5)}` : 'Click map to set...'}
-                    className="w-full bg-zinc-950/50 border border-white/5 rounded-lg px-3 py-2.5 text-sm text-zinc-500 cursor-not-allowed"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-1.5 flex items-center gap-2">
-                    <MapPin className="w-4 h-4 text-red-400" /> End Coordinates
-                  </label>
-                  <input
-                    readOnly
-                    value={endCoords ? `${endCoords.lat.toFixed(5)}, ${endCoords.lng.toFixed(5)}` : 'Click map to set...'}
-                    className="w-full bg-zinc-950/50 border border-white/5 rounded-lg px-3 py-2.5 text-sm text-zinc-500 cursor-not-allowed"
-                  />
-                </div>
-
-                <button
-                  onClick={handleAnalyzeArea}
-                  disabled={analysisLoading || !startCoords}
-                  className="w-full bg-zinc-800 hover:bg-zinc-700 disabled:bg-zinc-900 disabled:text-zinc-600 text-zinc-200 font-medium py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm"
-                >
-                  {analysisLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPin className="w-4 h-4" />}
-                  Analyze Area Context (Google Maps)
-                </button>
-
-                <div className="bg-zinc-950/80 border border-white/5 rounded-lg p-4 text-sm text-zinc-300 leading-relaxed">
-                  <h4 className="text-emerald-400 font-medium mb-2">Area Context</h4>
-                  <textarea
-                    value={areaAnalysis || ''}
-                    onChange={(e) => setAreaAnalysis(e.target.value)}
-                    placeholder="Click 'Analyze Area Context' or type manual site constraints here..."
-                    className="w-full bg-transparent border-none outline-none resize-y min-h-[100px] text-zinc-300 placeholder:text-zinc-600"
-                  />
-                </div>
-              </div>
-
-              {error && (
-                <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm px-4 py-3 rounded-lg flex items-start gap-2">
-                  <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
-                  <p>{error}</p>
-                </div>
-              )}
-
-              <button
-                onClick={handleGenerate}
-                disabled={loadingState > 0}
-                className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 disabled:text-zinc-500 text-white font-semibold py-4 rounded-xl shadow-lg transition-all active:scale-[0.98] mt-4 flex items-center justify-center gap-2"
-              >
-                {loadingState > 0 ? (
-                  <><Loader2 className="w-5 h-5 animate-spin" /> Generating Plan Set...</>
-                ) : (
-                  'Generate ITD Plan Set'
-                )}
-              </button>
-
+                  <span className={`text-lg ${operationTypes.includes(op.id) ? 'opacity-100' : 'opacity-30'}`}>{op.icon}</span>
+                  <p className={`text-[11px] font-medium mt-1 ${operationTypes.includes(op.id) ? 'text-emerald-400' : 'text-zinc-500'}`}>{op.label}</p>
+                </motion.button>
+              ))}
             </div>
           </div>
 
-          <AnimatePresence>
-            {loadingState > 0 && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="bg-zinc-900 border border-white/10 rounded-2xl p-6 shadow-xl overflow-hidden"
-              >
-                <h3 className="text-sm font-medium text-zinc-400 mb-4 uppercase tracking-wider">AI Pipeline Status</h3>
-                <div className="space-y-4">
-                  <div className={`flex items-center gap-3 ${loadingState >= 1 ? 'text-emerald-400' : 'text-zinc-600'}`}>
-                    {loadingState > 1 ? <CheckCircle className="w-5 h-5" /> : <Loader2 className={`w-5 h-5 ${loadingState === 1 ? 'animate-spin' : ''}`} />}
-                    <span className="text-sm">Step 1: Fetching Omniscient State & RAG...</span>
-                  </div>
-                  <div className={`flex items-center gap-3 ${loadingState >= 2 ? 'text-emerald-400' : 'text-zinc-600'}`}>
-                    {loadingState > 2 ? <CheckCircle className="w-5 h-5" /> : <Loader2 className={`w-5 h-5 ${loadingState === 2 ? 'animate-spin' : ''}`} />}
-                    <span className="text-sm">Step 2: Senior PE Agent Analysis...</span>
-                  </div>
-                  <div className={`flex items-center gap-3 ${loadingState >= 3 ? 'text-emerald-400' : 'text-zinc-600'}`}>
-                    {loadingState > 3 ? <CheckCircle className="w-5 h-5" /> : <Loader2 className={`w-5 h-5 ${loadingState === 3 ? 'animate-spin' : ''}`} />}
-                    <span className="text-sm">Step 3: Deterministic CAD Drafting...</span>
-                  </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <AnimatePresence>
-            {downloadUrl && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="bg-emerald-950/30 border border-emerald-500/30 rounded-2xl p-6 shadow-xl"
-              >
-                <div className="flex flex-col items-center text-center mb-6">
-                  <div className="w-12 h-12 bg-emerald-500/20 rounded-full flex items-center justify-center mb-4">
-                    <CheckCircle className="w-6 h-6 text-emerald-400" />
-                  </div>
-                  <h3 className="text-lg font-medium text-emerald-100">Plan Set Ready</h3>
-                  <p className="text-sm text-emerald-400/80 mt-1">DXF and PDF files generated successfully.</p>
-                </div>
-
-                <a
-                  href={downloadUrl}
-                  download="ITD_Plan_Set.zip"
-                  className="w-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-semibold py-3 rounded-xl shadow-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2 mb-4"
-                >
-                  <Download className="w-5 h-5" />
-                  📦 Download Plan Set (.DXF & .PDF)
-                </a>
-
-                {eacrAudit && (
-                  <div className="mt-4 border-t border-emerald-500/20 pt-4">
-                    <h4 className="text-sm font-semibold text-red-400 mb-2">🚨 EACR Adversarial Red Team Attack</h4>
-                    <p className="text-xs text-zinc-400 mb-4 italic">{eacrAudit.attack}</p>
-                    <h4 className="text-sm font-semibold text-emerald-400 mb-2">🛡️ Senior PE Defense & Countermeasures</h4>
-                    <p className="text-xs text-zinc-300">{eacrAudit.defense}</p>
-                  </div>
-                )}
-
-                {verifiedBlueprint && (
-                  <div className="mt-4 border-t border-emerald-500/20 pt-4">
-                    <button
-                      onClick={() => setIsExpanded(!isExpanded)}
-                      className="text-sm text-emerald-400 hover:text-emerald-300 flex items-center justify-between w-full"
-                    >
-                      <span>Verified Math Blueprint</span>
-                      <span className="text-xs bg-emerald-500/20 px-2 py-1 rounded">
-                        {isExpanded ? 'Hide' : 'Show'}
-                      </span>
-                    </button>
-                    <AnimatePresence>
-                      {isExpanded && (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: 'auto', opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          className="overflow-hidden"
-                        >
-                          <pre className="mt-4 p-4 bg-zinc-950 rounded-lg text-xs text-zinc-400 overflow-x-auto whitespace-pre-wrap font-mono border border-white/5">
-                            {verifiedBlueprint}
-                          </pre>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          className="lg:col-span-8 h-[600px] lg:h-auto relative rounded-2xl overflow-hidden shadow-2xl border border-white/10"
-        >
-          <Map startCoords={startCoords} endCoords={endCoords} onPinDrop={handlePinDrop} captureRef={mapCaptureRef} />
-
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[400] bg-zinc-900/90 backdrop-blur-md border border-white/10 px-4 py-2 rounded-full shadow-lg pointer-events-none">
-            <p className="text-sm font-medium text-zinc-200">
-              {!startCoords ? 'Click to drop Start Pin' : !endCoords ? 'Click to drop End Pin' : 'Pins set. Ready to generate.'}
-            </p>
+          {/* Duration */}
+          <div>
+            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-500 mb-2">Duration</p>
+            <div className="flex gap-2">
+              {['Short-term (<= 3 days)', 'Long-term (> 3 days)'].map(d => (
+                <button key={d} onClick={() => setDuration(d)}
+                  className={`flex-1 py-2 rounded-lg text-[11px] font-medium transition-all ${duration === d ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' : 'bg-white/[0.03] text-zinc-500 border border-white/[0.06]'}`}>
+                  {d.includes('Short') ? 'SHORT-TERM' : 'LONG-TERM'}
+                </button>
+              ))}
+            </div>
           </div>
-        </motion.div>
 
-      </main>
+          {/* Speed & Width — HUD Style */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="border-b border-white/10 pb-2">
+              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-zinc-600">Speed</p>
+              <input type="number" value={normalSpeed} onChange={(e) => setNormalSpeed(Number(e.target.value))}
+                className="w-full bg-transparent border-none outline-none font-mono text-lg text-emerald-400 p-0 mt-1" />
+              <p className="text-[9px] font-mono text-zinc-600">MPH</p>
+            </div>
+            <div className="border-b border-white/10 pb-2">
+              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-zinc-600">WZ Speed</p>
+              <input type="number" value={workZoneSpeed} onChange={(e) => setWorkZoneSpeed(Number(e.target.value))}
+                className="w-full bg-transparent border-none outline-none font-mono text-lg text-emerald-400 p-0 mt-1" />
+              <p className="text-[9px] font-mono text-zinc-600">MPH</p>
+            </div>
+            <div className="border-b border-white/10 pb-2">
+              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-zinc-600">Width</p>
+              <input type="number" value={laneWidth} onChange={(e) => setLaneWidth(Number(e.target.value))}
+                className="w-full bg-transparent border-none outline-none font-mono text-lg text-emerald-400 p-0 mt-1" />
+              <p className="text-[9px] font-mono text-zinc-600">FT</p>
+            </div>
+          </div>
+
+          {/* Coordinates */}
+          <div className="space-y-2">
+            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-500">Coordinates</p>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-emerald-500" />
+              <span className="font-mono text-[12px] text-zinc-400">{startCoords ? `${startCoords.lat.toFixed(5)}, ${startCoords.lng.toFixed(5)}` : '— awaiting pin —'}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-red-500" />
+              <span className="font-mono text-[12px] text-zinc-400">{endCoords ? `${endCoords.lat.toFixed(5)}, ${endCoords.lng.toFixed(5)}` : '— awaiting pin —'}</span>
+            </div>
+          </div>
+
+          {/* Analyze + Context */}
+          <div className="space-y-3">
+            <button onClick={handleAnalyzeArea} disabled={analysisLoading || !startCoords}
+              className="w-full py-2.5 rounded-xl text-[11px] font-mono uppercase tracking-widest transition-all border border-white/10 bg-white/[0.03] hover:bg-white/[0.06] disabled:opacity-30 flex items-center justify-center gap-2">
+              {analysisLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <MapPin className="w-3 h-3" />}
+              Analyze Site Context
+            </button>
+            {areaAnalysis && (
+              <div className="bg-zinc-950/80 border border-white/5 rounded-xl p-3 max-h-[120px] overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
+                <textarea value={areaAnalysis} onChange={(e) => setAreaAnalysis(e.target.value)}
+                  className="w-full bg-transparent border-none outline-none resize-none text-[11px] font-mono text-zinc-500 leading-relaxed min-h-[60px]" />
+              </div>
+            )}
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-[11px] px-4 py-3 rounded-xl flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <p>{error}</p>
+            </div>
+          )}
+        </div>
+
+        {/* Generate Button — pinned to bottom */}
+        <div className="p-5 border-t border-white/5">
+          <motion.button
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleGenerate}
+            disabled={loadingState > 0 || !startCoords || !endCoords}
+            className="w-full py-4 rounded-2xl font-semibold text-sm tracking-wide transition-all disabled:opacity-30 disabled:cursor-not-allowed bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white shadow-lg shadow-emerald-500/20"
+          >
+            {loadingState > 0 ? 'GENERATING...' : 'GENERATE PLAN SET'}
+          </motion.button>
+        </div>
+      </motion.div>
+
+      {/* === GOD-MODE GENERATION TERMINAL (Full-screen overlay) === */}
+      <AnimatePresence>
+        {loadingState > 0 && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-zinc-950/90 backdrop-blur-md flex items-center justify-center"
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 40, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="w-[600px] bg-zinc-950/90 border border-white/10 rounded-3xl p-10 shadow-2xl"
+            >
+              <div className="text-center mb-8">
+                <div className={`w-4 h-4 rounded-full mx-auto mb-4 animate-pulse ${loadingState === 1 ? 'bg-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.5)]' : loadingState === 2 ? 'bg-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.5)]' : 'bg-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.5)]'}`} />
+                <h2 className="font-mono text-lg tracking-tight text-zinc-200">
+                  {loadingState === 1 ? 'ESTABLISHING UPLINK' : loadingState === 2 ? 'PE AGENT ANALYSIS' : 'RENDERING ARTIFACTS'}
+                </h2>
+              </div>
+
+              <div className="space-y-5 font-mono text-[12px]">
+                <div className={`flex items-center gap-3 ${loadingState >= 1 ? 'text-cyan-400' : 'text-zinc-700'}`}>
+                  {loadingState > 1 ? <CheckCircle className="w-4 h-4" /> : <Loader2 className={`w-4 h-4 ${loadingState === 1 ? 'animate-spin' : ''}`} />}
+                  <span>SATELLITE UPLINK & MUTCD RAG VECTOR SEARCH</span>
+                </div>
+                <div className={`flex items-center gap-3 ${loadingState >= 2 ? 'text-amber-400' : 'text-zinc-700'}`}>
+                  {loadingState > 2 ? <CheckCircle className="w-4 h-4" /> : <Loader2 className={`w-4 h-4 ${loadingState === 2 ? 'animate-spin' : ''}`} />}
+                  <span>SENIOR PE AGENT: DETERMINISTIC GEOMETRY</span>
+                </div>
+                <div className={`flex items-center gap-3 ${loadingState >= 3 ? 'text-emerald-400' : 'text-zinc-700'}`}>
+                  {loadingState > 3 ? <CheckCircle className="w-4 h-4" /> : <Loader2 className={`w-4 h-4 ${loadingState === 3 ? 'animate-spin' : ''}`} />}
+                  <span>CAD ENGINE: PDF + DXF ARTIFACT GENERATION</span>
+                </div>
+              </div>
+
+              <div className="mt-8 bg-zinc-900/50 rounded-xl p-4 border border-white/5 max-h-[100px] overflow-hidden">
+                <p className="font-mono text-[10px] text-zinc-600 animate-pulse">
+                  {loadingState === 1 && '> Querying ITD ArcGIS... Speed zones, AADT, functional class, terrain, crash history...'}
+                  {loadingState === 2 && '> Gemini 3.1 Pro: Calculating taper L=WS, buffer (Table 6B-2), sign spacing (Table 6B-1)...'}
+                  {loadingState === 3 && '> pdfkit: Rendering sheets... dxf-writer: 14-layer CAD... archiver: Building ZIP...'}
+                </p>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* === ARTIFACT REVEAL (Right slide-in) === */}
+      <AnimatePresence>
+        {downloadUrl && (
+          <motion.div
+            initial={{ opacity: 0, x: 80 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 80 }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className="fixed right-6 top-1/2 -translate-y-1/2 w-[380px] z-50 bg-zinc-950/70 backdrop-blur-2xl border border-emerald-500/20 rounded-3xl p-8 shadow-2xl shadow-emerald-500/10"
+          >
+            <div className="text-center mb-6">
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ delay: 0.2, type: 'spring', stiffness: 300 }}
+                className="w-14 h-14 rounded-full bg-emerald-500/20 flex items-center justify-center mx-auto mb-4 shadow-[0_0_30px_rgba(16,185,129,0.2)]"
+              >
+                <CheckCircle className="w-7 h-7 text-emerald-400" />
+              </motion.div>
+              <h3 className="text-lg font-semibold tracking-tight text-white">Plan Set Approved</h3>
+              <p className="text-[11px] font-mono text-emerald-500/70 mt-1 uppercase tracking-widest">MUTCD 11th Ed. Compliant</p>
+            </div>
+
+            <motion.a
+              whileHover={{ scale: 1.03, boxShadow: '0 0 30px rgba(16,185,129,0.3)' }}
+              whileTap={{ scale: 0.97 }}
+              href={downloadUrl}
+              download="ITD_Plan_Set.zip"
+              className="block w-full py-4 rounded-2xl font-semibold text-center text-sm bg-gradient-to-r from-emerald-500 to-emerald-400 text-zinc-950 shadow-lg shadow-emerald-500/30 mb-6"
+            >
+              <Download className="w-5 h-5 inline mr-2" />
+              Download Plan Set
+            </motion.a>
+
+            {verifiedBlueprint && (
+              <div className="border-t border-white/5 pt-4">
+                <button onClick={() => setIsExpanded(!isExpanded)}
+                  className="text-[10px] font-mono text-zinc-500 hover:text-zinc-300 uppercase tracking-widest w-full text-left transition-colors">
+                  {isExpanded ? '▼' : '►'} Engineering Blueprint
+                </button>
+                <AnimatePresence>
+                  {isExpanded && (
+                    <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                      <pre className="mt-3 p-3 bg-zinc-900/50 rounded-xl text-[10px] font-mono text-emerald-400/60 overflow-x-auto max-h-[200px] overflow-y-auto whitespace-pre-wrap border border-white/5" style={{ scrollbarWidth: 'none' }}>
+                        {verifiedBlueprint}
+                      </pre>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
