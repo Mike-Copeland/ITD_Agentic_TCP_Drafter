@@ -963,6 +963,10 @@ app.post('/api/generate-plan', async (req, res) => {
     // PHASE 5: Archive — build ZIP from in-memory buffers
     // No file-system races: text artifacts are appended as strings directly.
     // ------------------------------------------------------------------
+    // Write corrected values back to blueprint before serialization
+    blueprint.taper.length_ft = genResult.taperLengthFt;
+    blueprint.primary_approach = genResult.primarySigns;
+    blueprint.opposing_approach = genResult.opposingSigns;
     const blueprintJson = JSON.stringify(blueprint, null, 2);
 
     const archive = archiver('zip', { zlib: { level: 9 } });

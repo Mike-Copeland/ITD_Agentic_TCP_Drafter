@@ -1982,11 +1982,15 @@ export async function generateCAD(
     label: req.label,
   }));
 
-  // Add W3-5 REDUCED SPEED + R2-1 SPEED LIMIT when WZ speed differs
+  // Add W3-5 REDUCED SPEED when WZ speed differs
+  // Place AFTER last warning sign (closest to taper) with proper B spacing
   if (speedMph !== wzSpeedMph) {
-    const lastPriDist = peDistances[peDistances.length - 1] ?? spacing.a;
+    const sortedDists = blueprint.primary_approach.map(s => s.distance_ft).sort((a, b) => a - b);
+    const closestSign = sortedDists[0] ?? spacing.a;
+    // W3-5 goes closer to the taper than the closest warning sign, maintaining B spacing
+    const w35dist = Math.max(closestSign - spacing.b, 50);
     blueprint.primary_approach.push(
-      { sign_code: 'W3-5', distance_ft: Math.max(lastPriDist - spacing.b, 150), label: `REDUCED SPEED ${wzSpeedMph} MPH AHEAD` },
+      { sign_code: 'W3-5', distance_ft: w35dist, label: `REDUCED SPEED ${wzSpeedMph} MPH AHEAD` },
     );
   }
 
