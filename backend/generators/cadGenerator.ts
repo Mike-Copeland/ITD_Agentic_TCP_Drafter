@@ -3,7 +3,7 @@ import fs from 'fs';
 import Drawing from 'dxf-writer';
 import * as MUTCD from '../engineering/mutcdPart6.js';
 import { ProjectAlignment, generateViewports, decodeGooglePolyline } from '../engineering/GeospatialEngine.js';
-import { fetchRoadNetwork, getOsmRoadStyle, type OsmRoadway } from '../services/osmFetcher.js';
+import { fetchRoadNetwork, type OsmRoadway } from '../services/osmFetcher.js';
 import { fetchItdRoadGeometryAlongRoute, type ItdRoadSegment } from '../services/itdRoadGeometry.js';
 
 // ===================================================================
@@ -1961,34 +1961,67 @@ function drawGeometryPlanSheet(
   doc.save();
   doc.rect(pageLeft, pageTop, pageRight - pageLeft, pageBot - pageTop).clip();
 
-  // === BASEMAP LAYER 1: ITD ArcGIS Road Geometry (authoritative, primary) ===
-  if (itdSegments.length > 0) {
-    for (const seg of itdSegments) {
-      if (seg.nodes.length < 2) continue;
-      const utmNodes = seg.nodes.map(n => alignment.projectGps(n));
-      doc.lineWidth(0.8).strokeColor('#AAAAAA');
-      drawUtmPolyline(utmNodes);
-    }
-  }
-
-  // === BASEMAP LAYER 2: OSM Supplemental (catches local streets ITD may miss) ===
-  if (basemapRoads.length > 0) {
-    for (const road of basemapRoads) {
-      if (road.nodes.length < 2) continue;
-      const style = getOsmRoadStyle(road.highway);
-      const utmNodes = road.nodes.map(n => alignment.projectGps(n));
-      doc.lineWidth(style.lineWidth).strokeColor(style.color);
-      drawUtmPolyline(utmNodes);
-    }
-  }
-
-  // === PRIMARY ROAD: Surface fill + edges (Professional CAD standards) ===
+  // === PREPARE ROAD GEOMETRIES ===
   const halfW = (ctx.totalLanes || 2) * ctx.laneWidthFt / 2;
   const leftEdge = alignment.getOffsetPolyline(-halfW);
   const rightEdge = alignment.getOffsetPolyline(halfW);
   const centerline = alignment.getUtmPoints();
 
-  // Road surface fill (light)
+  // Dynamic road width calculator (in feet)
+  const getWidthFt = (item: any, isItd: boolean): number => {
+    if (isItd) return 48;
+    const h = (item.highway || '').toLowerCase();
+    if (/motorway|trunk/.test(h)) return 60;
+    if (/primary|secondary/.test(h)) return 48;
+    if (/tertiary/.test(h)) return 36;
+    if (/residential|unclassified/.test(h)) return 24;
+    return 18;
+  };
+
+  // Prevent miter spikes on tight roundabout geometry
+  doc.lineJoin('round');
+  doc.lineCap('round');
+
+  // =========================================================
+  // Z-INDEX LAYER 1: ALL EDGES AND CURBS (drawn first)
+  // =========================================================
+
+  // 1A. Basemap road curbs (dark gray casing, slightly wider than road)
+  doc.strokeColor('#AAAAAA');
+  for (const seg of itdSegments) {
+    if (seg.nodes.length < 2) continue;
+    doc.lineWidth(Math.max(1.5, (getWidthFt(seg, true) + 4) / scaleFtPerPt));
+    drawUtmPolyline(seg.nodes.map(n => alignment.projectGps(n)));
+  }
+  for (const road of basemapRoads) {
+    if (road.nodes.length < 2) continue;
+    doc.lineWidth(Math.max(1.5, (getWidthFt(road, false) + 4) / scaleFtPerPt));
+    drawUtmPolyline(road.nodes.map(n => alignment.projectGps(n)));
+  }
+
+  // 1B. Primary road outer edges (black)
+  doc.lineWidth(PLOT.PRIMARY_EDGE.lineWidth).strokeColor(PLOT.PRIMARY_EDGE.color);
+  drawUtmPolyline(leftEdge);
+  drawUtmPolyline(rightEdge);
+
+  // =========================================================
+  // Z-INDEX LAYER 2: ALL PAVEMENT FILLS (drawn second — masks inner edge lines)
+  // =========================================================
+  doc.strokeColor('#f0f0f0');
+
+  // 2A. Basemap pavement fill
+  for (const seg of itdSegments) {
+    if (seg.nodes.length < 2) continue;
+    doc.lineWidth(Math.max(1, getWidthFt(seg, true) / scaleFtPerPt));
+    drawUtmPolyline(seg.nodes.map(n => alignment.projectGps(n)));
+  }
+  for (const road of basemapRoads) {
+    if (road.nodes.length < 2) continue;
+    doc.lineWidth(Math.max(1, getWidthFt(road, false) / scaleFtPerPt));
+    drawUtmPolyline(road.nodes.map(n => alignment.projectGps(n)));
+  }
+
+  // 2B. Primary road pavement fill
   if (rightEdge.length > 1 && leftEdge.length > 1) {
     const rPage = rightEdge.map(p => toPage(p.x, p.y));
     const lPage = leftEdge.map(p => toPage(p.x, p.y));
@@ -2000,22 +2033,30 @@ function drawGeometryPlanSheet(
     doc.restore();
   }
 
-  // Road edges (PRIMARY_EDGE plot style)
-  doc.lineWidth(PLOT.PRIMARY_EDGE.lineWidth).strokeColor(PLOT.PRIMARY_EDGE.color);
-  drawUtmPolyline(leftEdge);
-  drawUtmPolyline(rightEdge);
-
-  // Centerline (PRIMARY_CENTER plot style — dashed)
+  // =========================================================
+  // Z-INDEX LAYER 3: CENTERLINES (drawn on top of fills)
+  // =========================================================
   doc.lineWidth(PLOT.PRIMARY_CENTER.lineWidth).strokeColor(PLOT.PRIMARY_CENTER.color);
   doc.dash(PLOT.PRIMARY_CENTER.dash![0]!, { space: PLOT.PRIMARY_CENTER.dash![1] });
   drawUtmPolyline(centerline);
   doc.undash();
 
-  // === FIX 3: PLOT TCP DEVICES (signs, work zone, flaggers) ===
+  // Restore CAD line join/cap for remaining elements
+  doc.lineJoin('miter');
+  doc.lineCap('butt');
 
-  // Work zone polygon (crosshatched area between taper end and work end)
+  // =========================================================
+  // PLOT TCP DEVICES (signs, work zone, flaggers)
+  // =========================================================
+
+  // ---------------------------------------------------------
+  // THE RED HATCH MARKS: ACTIVE WORK AREA
+  // The physical space where construction/maintenance occurs.
+  // Sits inside the closed lane(s), starting AFTER the upstream
+  // buffer space and ending BEFORE the downstream buffer/taper.
+  // ---------------------------------------------------------
   const bufferFt = getBufferSpaceFt(ctx.speedMph);
-  const wzStartSta = ctx.taperLengthFt + bufferFt; // After taper + buffer
+  const wzStartSta = ctx.taperLengthFt + bufferFt;
   const wzEndSta = alignment.totalLengthFt - ctx.blueprint.downstream_taper.length_ft - bufferFt;
   if (wzEndSta > wzStartSta) {
     const wzPoly = alignment.getWorkZonePolygon(wzStartSta, wzEndSta, -halfW, 0);
