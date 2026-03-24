@@ -42,6 +42,13 @@ export interface ComplianceCheck {
   pass: boolean;
 }
 
+export interface CorrectionEntry {
+  field: string;
+  peValue: string;
+  correctedValue: string;
+  reason: string;
+}
+
 export interface GenerationResult {
   taCode: string;
   taDescription: string;
@@ -52,6 +59,7 @@ export interface GenerationResult {
   primarySigns: Sign[];
   opposingSigns: Sign[];
   compliance: ComplianceCheck[];
+  corrections: CorrectionEntry[];
 }
 
 // ===================================================================
@@ -455,6 +463,12 @@ function drawCoverSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: Dr
     `12. Taper Length: ${ctx.taperLengthFt} ft (${ctx.blueprint.taper.device_type}). Downstream Taper: ${ctx.blueprint.downstream_taper.length_ft} ft.`,
     `13. Minimum longitudinal buffer space: ${getBufferSpaceFt(ctx.speedMph)} ft (per MUTCD 11th Ed. Table 6C-2 for ${ctx.speedMph} MPH).`,
     `14. SINGLE PHASE OPERATION. All work shall be completed within a single traffic control setup.`,
+    ...(/mountainous|rolling/i.test(ctx.terrain) ? [
+      `15. MOUNTAINOUS/ROLLING TERRAIN: Reduced sight distance conditions may exist. Additional advance warning signs or portable changeable message signs may be required. Verify flagger sight distance meets Table 6B-2 minimum (${getBufferSpaceFt(ctx.speedMph)} ft for ${ctx.speedMph} MPH).`,
+    ] : []),
+    ...(ctx.routeDistanceFt > 5280 ? [
+      `${/mountainous|rolling/i.test(ctx.terrain) ? '16' : '15'}. LONG WORK ZONE (${(ctx.routeDistanceFt / 5280).toFixed(1)} mi): Consider intermediate W20-1 "ROAD WORK AHEAD" repeater signs at 1-mile intervals within the activity area per MUTCD 6C.04 guidance.`,
+    ] : []),
   ];
   let noteY = ny + 28;
   for (const note of notes) {
@@ -850,6 +864,16 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
   doc.text(`Taper: ${ctx.taperLengthFt} ft ${isTwoWayFlagger ? '(flagger)' : '(merging)'} | DN Taper: ${ctx.blueprint.downstream_taper.length_ft} ft | ${ctx.blueprint.taper.device_type}`, 45, 640, { width: 390 });
   doc.text(`Route: ${ctx.routeDistanceFt > 0 ? ctx.routeDistanceFt.toLocaleString() + ' ft' : 'N/A'} | Spacing: A=${spacing.a}' B=${spacing.b}' C=${spacing.c}' | Buffer: ${bufferFt}' (6C-2)`, 45, 652, { width: 390 });
   if (isMultiLaneClosure) doc.text('Arrow board (Type A) required at merging taper approach.', 45, 664, { width: 390 });
+  if (/mountainous|rolling/i.test(ctx.terrain)) {
+    doc.font('Helvetica-Bold').fillColor('#cc0000');
+    doc.text(`TERRAIN: ${ctx.terrain.toUpperCase()} — Verify flagger sight distance >= ${getBufferSpaceFt(ctx.speedMph)} ft. Consider PCMS for restricted-sight locations.`, 45, 676, { width: 390 });
+    doc.font('Helvetica').fillColor('black');
+  }
+  if (ctx.routeDistanceFt > 5280) {
+    doc.fillColor('#CC6600');
+    doc.text(`LONG ZONE: ${(ctx.routeDistanceFt / 5280).toFixed(1)} mi — Place W20-1 repeaters at 1-mi intervals within activity area.`, 45, 688, { width: 390 });
+    doc.fillColor('black');
+  }
 
   drawWatermark(doc);
   drawTitleBlock(doc, sheetNum, totalSheets, ctx.operationType, ctx.roadName);
@@ -1960,8 +1984,19 @@ export async function generateCAD(
   }
   console.log(`[cadGenerator] TA Selection: ${taCode} (${taDescription}) | Lanes: ${totalLanes} | FC: ${fcCode} | Op: ${operationType}`);
 
+  // === CAPTURE PE ORIGINALS FOR CORRECTION TRACKING ===
+  const peOriginalTaper = blueprint.taper.length_ft;
+  const peOriginalSigns = blueprint.primary_approach.map(s => s.sign_code).join(', ');
+  const peOriginalDevice = blueprint.taper.device_type;
+
   // Taper length determination (via MUTCD module)
   const taperLengthFt = MUTCD.getTaperLength(taCode, laneWidthFt, speedMph);
+
+  // Track corrections
+  const corrections: CorrectionEntry[] = [];
+  if (peOriginalTaper !== taperLengthFt) {
+    corrections.push({ field: 'Taper Length', peValue: `${peOriginalTaper} ft`, correctedValue: `${taperLengthFt} ft`, reason: taCode === 'TA-10' ? 'MUTCD 6C.08: flagger taper clamped 50-100 ft' : `MUTCD 6C.08: L=${speedMph >= 45 ? 'WS' : 'WS²/60'} = ${taperLengthFt} ft` });
+  }
 
   // === MUTCD-AUTHORITATIVE SIGN ENFORCEMENT ===
   // Use MUTCD module as the source of truth for sign codes.
@@ -2015,6 +2050,15 @@ export async function generateCAD(
   const workDuration = MUTCD.parseDuration(duration);
   const deviceReq = MUTCD.getDeviceRequirements(workDuration);
   blueprint.taper.device_type = deviceReq.label;
+
+  // Track sign and device corrections
+  const correctedSigns = blueprint.primary_approach.map(s => s.sign_code).join(', ');
+  if (peOriginalSigns !== correctedSigns) {
+    corrections.push({ field: 'Sign Codes', peValue: peOriginalSigns, correctedValue: correctedSigns, reason: `MUTCD TA ${taCode} required signs enforced` });
+  }
+  if (peOriginalDevice !== blueprint.taper.device_type) {
+    corrections.push({ field: 'Device Type', peValue: peOriginalDevice, correctedValue: blueprint.taper.device_type, reason: `MUTCD 6F.01: ${workDuration} requires ${deviceReq.label}` });
+  }
 
   if (routeDistanceFt === 0 && startCoords && endCoords) {
     routeDistanceFt = Math.round(haversineDistanceFt(startCoords, endCoords));
@@ -2088,6 +2132,7 @@ export async function generateCAD(
             primarySigns: [...blueprint.primary_approach],
             opposingSigns: [...blueprint.opposing_approach],
             compliance: compliance.map(c => ({ rule: c.rule, requirement: c.requirement, actual: c.actual, pass: c.pass })),
+            corrections,
           });
         } catch (dxfErr) {
           reject(new Error(`DXF write failed: ${dxfErr}`));
