@@ -167,8 +167,8 @@ export function getArrowBoardType(speedMph: number, roadClass: RoadClass): Arrow
 }
 
 export function isArrowBoardRequired(taCode: string): boolean {
-  // Required for lane closures on multi-lane roads and freeways
-  return ['TA-30', 'TA-31', 'TA-33', 'TA-34', 'TA-35', 'TA-36'].includes(taCode);
+  // Required for lane closures on multi-lane roads, freeways, and mobile ops
+  return ['TA-17', 'TA-30', 'TA-31', 'TA-33', 'TA-34', 'TA-35', 'TA-37', 'TA-38'].includes(taCode);
 }
 
 // ===================================================================
@@ -182,7 +182,7 @@ export interface FlaggerRequirements {
 }
 
 export function getFlaggerRequirements(taCode: string, speedMph: number, isNight: boolean): FlaggerRequirements {
-  const required = ['TA-10', 'TA-11', 'TA-12', 'TA-13'].includes(taCode);
+  const required = ['TA-10', 'TA-12', 'TA-27'].includes(taCode);
   return {
     required,
     sightDistanceFt: getBufferSpace(speedMph), // Use stopping sight distance
@@ -253,39 +253,70 @@ export interface TASelection {
 
 /**
  * Select the appropriate Typical Application based on road characteristics
- * and operation type.
+ * and operation type. MUTCD 11th Edition TA numbering.
  */
 export function selectTA(
   operationType: string,
   totalLanes: number,
   funcClassCode: number,
   isDivided: boolean,
+  aadt = 0,
 ): TASelection {
-  const isInterstate = funcClassCode <= 2;
+  const isFreeway = funcClassCode <= 2;
   const hasTWLTL = totalLanes === 3 || totalLanes === 5;
   const isMultiLane = totalLanes >= 4 || (totalLanes === 3 && !hasTWLTL);
 
+  // === FULL ROAD CLOSURE ===
+  if (operationType === 'Full Road Closure') {
+    return { code: 'TA-13', title: 'Temporary Road Closure', description: 'Complete road closure with signed detour route' };
+  }
+
+  // === MOBILE / MOVING OPERATIONS ===
+  if (operationType === 'Mobile Operations') {
+    if (isMultiLane || isFreeway) return { code: 'TA-35', title: 'Mobile Operation on Multi-Lane Road', description: 'Moving work with shadow vehicle and TMA on multi-lane road' };
+    return { code: 'TA-17', title: 'Mobile Operations on Two-Lane Road', description: 'Moving work with shadow vehicle on two-lane road' };
+  }
+
+  // === INTERMITTENT / SHORT DURATION ===
+  if (operationType === 'Intermittent Closure') {
+    if (isMultiLane || isFreeway) return { code: 'TA-35', title: 'Mobile Operation on Multi-Lane Road', description: 'Short-duration work with shadow vehicle' };
+    return { code: 'TA-17', title: 'Mobile Operations on Two-Lane Road', description: 'Short-duration intermittent work' };
+  }
+
+  // === SHOULDER WORK ===
   if (operationType === 'Shoulder Work') {
+    if (isFreeway) return { code: 'TA-5', title: 'Shoulder Closure on Freeway', description: 'Shoulder closure on a freeway' };
     if (isMultiLane) return { code: 'TA-23', title: 'Shoulder Work on Multi-Lane Road', description: 'Shoulder closure on a multi-lane road' };
     return { code: 'TA-22', title: 'Shoulder Work on Two-Lane Road', description: 'Shoulder closure on a two-lane road' };
   }
+
+  // === MEDIAN CROSSOVER ===
   if (operationType === 'Median Crossover') {
-    return { code: 'TA-18', title: 'Median Crossover', description: 'Traffic diverted through median opening to opposing lanes' };
+    return { code: 'TA-18', title: 'Lane Closure on Minor Street (Median Crossover)', description: 'Traffic diverted through median opening' };
   }
-  if (operationType === 'Full Road Closure') {
-    return { code: 'TA-14', title: 'Road Closure with Detour', description: 'Complete road closure requiring detour' };
+
+  // === DOUBLE LANE CLOSURE ===
+  if (operationType === 'Double Lane Closure') {
+    if (isFreeway) return { code: 'TA-37', title: 'Double Lane Closure on Freeway', description: 'Two adjacent lanes closed on freeway' };
+    if (isDivided) return { code: 'TA-34', title: 'Lane Closure with Temporary Traffic Barrier', description: 'Lane closure with barrier on divided highway' };
+    return { code: 'TA-33', title: 'Stationary Lane Closure on Divided Highway', description: 'Multi-lane closure on divided highway' };
   }
-  if (isInterstate) {
-    return { code: 'TA-35', title: 'Lane Closure on Interstate/Freeway', description: 'Single lane closure on a freeway or interstate' };
+
+  // === SINGLE LANE CLOSURE (default) ===
+  if (isFreeway) {
+    return { code: 'TA-38', title: 'Interior Lane Closure on Freeway', description: 'Single lane closure on freeway' };
   }
   if (isDivided) {
-    return { code: 'TA-33', title: 'Lane Closure on Divided Highway', description: 'Single lane closure on a divided highway' };
+    return { code: 'TA-33', title: 'Stationary Lane Closure on Divided Highway', description: 'Single lane closure on divided highway' };
   }
   if (isMultiLane) {
-    if (hasTWLTL) return { code: 'TA-31', title: 'Lane Closure with Center Turn Lane', description: 'Lane closure on road with TWLTL' };
-    return { code: 'TA-30', title: 'Lane Closure on Multi-Lane Undivided', description: 'Single lane closure on multi-lane undivided road' };
+    if (hasTWLTL) return { code: 'TA-31', title: 'Lane Closure with Uneven Directional Volumes', description: 'Lane closure on road with center turn lane' };
+    return { code: 'TA-30', title: 'Interior Lane Closure on Multi-Lane Street', description: 'Single lane closure on multi-lane undivided road' };
   }
-  // Default: 2-lane road
+  // 2-lane road: use flaggers for higher volume, yield signs for low volume
+  if (aadt > 0 && aadt < 400) {
+    return { code: 'TA-11', title: 'Lane Closure on Two-Lane Road (Low Volume)', description: 'One lane closure using yield signs (AADT < 400)' };
+  }
   return { code: 'TA-10', title: 'Lane Closure Using Flaggers', description: 'One lane closure on two-lane road using flagging' };
 }
 
@@ -304,76 +335,78 @@ export interface RequiredSign {
  * These are the MUTCD-required signs — PE Agent output is validated against this.
  */
 export function getRequiredSigns(taCode: string): { primary: RequiredSign[]; opposing: RequiredSign[] } {
+  const w = (code: string, label: string, pos: RequiredSign['position'] = 'advance_warning'): RequiredSign =>
+    ({ code, label, mandatory: true, position: pos });
+
   switch (taCode) {
-    case 'TA-10': return {
-      primary: [
-        { code: 'W20-1', label: 'ROAD WORK AHEAD', mandatory: true, position: 'advance_warning' },
-        { code: 'W20-4', label: 'ONE LANE ROAD AHEAD', mandatory: true, position: 'advance_warning' },
-        { code: 'W20-7a', label: 'FLAGGER AHEAD', mandatory: true, position: 'advance_warning' },
-      ],
-      opposing: [
-        { code: 'W20-1', label: 'ROAD WORK AHEAD', mandatory: true, position: 'advance_warning' },
-        { code: 'W20-4', label: 'ONE LANE ROAD AHEAD', mandatory: true, position: 'advance_warning' },
-        { code: 'W20-7a', label: 'FLAGGER AHEAD', mandatory: true, position: 'advance_warning' },
-      ],
+    // === TWO-LANE ROAD OPERATIONS ===
+    case 'TA-10': return { // Flaggers
+      primary: [w('W20-1', 'ROAD WORK AHEAD'), w('W20-4', 'ONE LANE ROAD AHEAD'), w('W20-7a', 'FLAGGER AHEAD')],
+      opposing: [w('W20-1', 'ROAD WORK AHEAD'), w('W20-4', 'ONE LANE ROAD AHEAD'), w('W20-7a', 'FLAGGER AHEAD')],
     };
-    case 'TA-22': return {
-      primary: [
-        { code: 'W20-1', label: 'ROAD WORK AHEAD', mandatory: true, position: 'advance_warning' },
-        { code: 'W21-5b', label: 'SHOULDER WORK AHEAD', mandatory: true, position: 'advance_warning' },
-      ],
-      opposing: [
-        { code: 'W20-1', label: 'ROAD WORK AHEAD', mandatory: true, position: 'advance_warning' },
-        { code: 'W21-5b', label: 'SHOULDER WORK AHEAD', mandatory: true, position: 'advance_warning' },
-      ],
+    case 'TA-11': return { // Low volume yield
+      primary: [w('W20-1', 'ROAD WORK AHEAD'), w('W20-4', 'ONE LANE ROAD AHEAD')],
+      opposing: [w('W20-1', 'ROAD WORK AHEAD'), w('W20-4', 'ONE LANE ROAD AHEAD')],
     };
-    case 'TA-23': return {
-      primary: [
-        { code: 'W20-1', label: 'ROAD WORK AHEAD', mandatory: true, position: 'advance_warning' },
-        { code: 'W21-5', label: 'SHOULDER CLOSED AHEAD', mandatory: true, position: 'advance_warning' },
-      ],
+    case 'TA-13': return { // Temporary road closure
+      primary: [w('W20-1', 'ROAD WORK AHEAD'), w('R11-2', 'ROAD CLOSED'), w('M4-9', 'DETOUR ARROW', 'transition')],
+      opposing: [w('W20-1', 'ROAD WORK AHEAD'), w('R11-2', 'ROAD CLOSED'), w('M4-9', 'DETOUR ARROW', 'transition')],
+    };
+    case 'TA-17': return { // Mobile ops 2-lane
+      primary: [w('W20-1', 'ROAD WORK AHEAD')],
+      opposing: [w('W20-1', 'ROAD WORK AHEAD')],
+    };
+    case 'TA-18': return { // Median crossover / minor street
+      primary: [w('W20-1', 'ROAD WORK AHEAD'), w('W20-4', 'ONE LANE ROAD AHEAD')],
+      opposing: [w('W20-1', 'ROAD WORK AHEAD')],
+    };
+
+    // === SHOULDER WORK ===
+    case 'TA-5': return { // Shoulder on freeway
+      primary: [w('W20-1', 'ROAD WORK AHEAD'), w('W21-5b', 'SHOULDER WORK AHEAD')],
       opposing: [],
     };
+    case 'TA-22': return { // Shoulder 2-lane
+      primary: [w('W20-1', 'ROAD WORK AHEAD'), w('W21-5b', 'SHOULDER WORK AHEAD')],
+      opposing: [w('W20-1', 'ROAD WORK AHEAD'), w('W21-5b', 'SHOULDER WORK AHEAD')],
+    };
+    case 'TA-23': return { // Shoulder multi-lane
+      primary: [w('W20-1', 'ROAD WORK AHEAD'), w('W21-5', 'SHOULDER CLOSED AHEAD')],
+      opposing: [],
+    };
+
+    // === MULTI-LANE UNDIVIDED ===
     case 'TA-30': case 'TA-31': return {
-      primary: [
-        { code: 'W20-1', label: 'ROAD WORK AHEAD', mandatory: true, position: 'advance_warning' },
-        { code: 'W20-5', label: 'RIGHT LANE CLOSED AHEAD', mandatory: true, position: 'advance_warning' },
-        { code: 'W4-2R', label: 'LANE ENDS (Right)', mandatory: true, position: 'advance_warning' },
-      ],
-      opposing: [
-        { code: 'W20-1', label: 'ROAD WORK AHEAD', mandatory: true, position: 'advance_warning' },
-        { code: 'W20-5', label: 'RIGHT LANE CLOSED AHEAD', mandatory: true, position: 'advance_warning' },
-      ],
+      primary: [w('W20-1', 'ROAD WORK AHEAD'), w('W20-5', 'RIGHT LANE CLOSED AHEAD'), w('W4-2R', 'LANE ENDS')],
+      opposing: [w('W20-1', 'ROAD WORK AHEAD'), w('W20-5', 'RIGHT LANE CLOSED AHEAD')],
     };
-    case 'TA-33': case 'TA-34': return {
-      primary: [
-        { code: 'W20-1', label: 'ROAD WORK AHEAD', mandatory: true, position: 'advance_warning' },
-        { code: 'W20-5R', label: 'RIGHT LANE CLOSED AHEAD', mandatory: true, position: 'advance_warning' },
-        { code: 'W4-2R', label: 'LANE ENDS (Right)', mandatory: true, position: 'advance_warning' },
-      ],
-      opposing: [], // Divided highway — opposing traffic unaffected
+
+    // === DIVIDED HIGHWAY ===
+    case 'TA-33': return { // Stationary lane closure
+      primary: [w('W20-1', 'ROAD WORK AHEAD'), w('W20-5R', 'RIGHT LANE CLOSED AHEAD'), w('W4-2R', 'LANE ENDS')],
+      opposing: [],
     };
-    case 'TA-35': case 'TA-36': return {
-      primary: [
-        { code: 'W20-1', label: 'ROAD WORK AHEAD', mandatory: true, position: 'advance_warning' },
-        { code: 'W20-5R', label: 'RIGHT LANE CLOSED AHEAD', mandatory: true, position: 'advance_warning' },
-        { code: 'W4-2R', label: 'LANE ENDS (Right)', mandatory: true, position: 'advance_warning' },
-      ],
-      opposing: [], // Freeway — opposing traffic unaffected
+    case 'TA-34': return { // Lane closure with barrier
+      primary: [w('W20-1', 'ROAD WORK AHEAD'), w('W20-5R', 'RIGHT LANE CLOSED AHEAD'), w('W4-2R', 'LANE ENDS')],
+      opposing: [],
     };
-    case 'TA-18': return {
-      primary: [
-        { code: 'W20-1', label: 'ROAD WORK AHEAD', mandatory: true, position: 'advance_warning' },
-        { code: 'W20-4', label: 'ONE LANE ROAD AHEAD', mandatory: true, position: 'advance_warning' },
-      ],
-      opposing: [
-        { code: 'W20-1', label: 'ROAD WORK AHEAD', mandatory: true, position: 'advance_warning' },
-      ],
+
+    // === FREEWAY ===
+    case 'TA-35': return { // Mobile ops multi-lane
+      primary: [w('W20-5L', 'LEFT LANE CLOSED AHEAD')],
+      opposing: [],
     };
+    case 'TA-37': return { // Double lane closure freeway
+      primary: [w('W20-1', 'ROAD WORK AHEAD'), w('W20-5aR', 'TWO RIGHT LANES CLOSED'), w('W4-2R', 'LANE ENDS')],
+      opposing: [],
+    };
+    case 'TA-38': return { // Interior lane closure freeway
+      primary: [w('W20-1', 'ROAD WORK AHEAD'), w('W20-5L', 'LEFT LANE CLOSED AHEAD'), w('W4-2L', 'LANE ENDS (Left)')],
+      opposing: [],
+    };
+
     default: return {
-      primary: [
-        { code: 'W20-1', label: 'ROAD WORK AHEAD', mandatory: true, position: 'advance_warning' },
-      ],
+      primary: [w('W20-1', 'ROAD WORK AHEAD')],
       opposing: [],
     };
   }

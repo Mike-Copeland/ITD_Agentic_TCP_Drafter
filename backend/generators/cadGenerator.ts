@@ -580,15 +580,18 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
 
   const roadCL = 355;
   const roadL = 30, roadR = 1194;
-  const isTwoWayFlagger = ctx.taCode === 'TA-10';
-  const isMultiLaneClosure = ['TA-30', 'TA-31', 'TA-33', 'TA-35'].includes(ctx.taCode);
-  const isShoulder = ['TA-22', 'TA-23'].includes(ctx.taCode);
+  const isTwoWayFlagger = ['TA-10', 'TA-11'].includes(ctx.taCode);
+  const isMultiLaneClosure = ['TA-30', 'TA-31', 'TA-33', 'TA-34', 'TA-37', 'TA-38'].includes(ctx.taCode);
+  const isShoulder = ['TA-5', 'TA-22', 'TA-23'].includes(ctx.taCode);
   const isMedianCrossover = ctx.taCode === 'TA-18';
+  const isMobileOps = ['TA-17', 'TA-35'].includes(ctx.taCode);
+  const isRoadClosure = ctx.taCode === 'TA-13';
+  const isDoubleLane = ctx.taCode === 'TA-37';
 
   // Zone boundaries adapt based on TA type
   // Multi-lane/divided: no opposing warning area (opposing traffic unaffected)
   // Shoulder: shorter taper, no lane closure
-  const zones = isTwoWayFlagger ? {
+  const zones = (isTwoWayFlagger || isRoadClosure) ? {
     priWarningStart: 40, priWarningEnd: 280,
     transitionStart: 280, transitionEnd: 355,
     bufferStart: 355, bufferEnd: 420,
@@ -630,13 +633,13 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
   };
 
   drawZoneLabel(zones.priWarningStart, zones.priWarningEnd, 'ADVANCE', 'WARNING AREA');
-  drawZoneLabel(zones.transitionStart, zones.transitionEnd, isTwoWayFlagger ? 'TRANSITION' : 'MERGING TAPER');
-  drawZoneLabel(zones.bufferStart, zones.bufferEnd, 'BUFFER');
-  drawZoneLabel(zones.activityStart, zones.activityEnd, 'ACTIVITY AREA');
-  drawZoneLabel(zones.dnBufferStart, zones.dnBufferEnd, isTwoWayFlagger ? 'BUFFER' : 'BUFFER');
+  drawZoneLabel(zones.transitionStart, zones.transitionEnd, isMobileOps ? 'SHADOW' : isRoadClosure ? 'CLOSURE' : isTwoWayFlagger ? 'TRANSITION' : 'MERGING TAPER');
+  drawZoneLabel(zones.bufferStart, zones.bufferEnd, isMobileOps ? 'SPACING' : 'BUFFER');
+  drawZoneLabel(zones.activityStart, zones.activityEnd, isMobileOps ? 'MOVING WORK' : isRoadClosure ? 'CLOSED AREA' : 'ACTIVITY AREA');
+  drawZoneLabel(zones.dnBufferStart, zones.dnBufferEnd, 'BUFFER');
   drawZoneLabel(zones.dnTransitionStart, zones.dnTransitionEnd, isTwoWayFlagger ? 'TRANS.' : 'DN TAPER');
   drawZoneLabel(zones.terminationStart, zones.terminationEnd, 'TERM.');
-  if (isTwoWayFlagger) {
+  if (isTwoWayFlagger || isRoadClosure) {
     drawZoneLabel(zones.oppWarningStart, zones.oppWarningEnd, 'ADVANCE', 'WARNING AREA');
   } else {
     drawZoneLabel(zones.oppWarningStart, zones.oppWarningEnd, 'END ROAD', 'WORK AREA');
@@ -757,10 +760,101 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
     }
     // Median barrier/delineation label
     doc.fontSize(5).fillColor('#666').text('MEDIAN', zones.activityStart + 5, medianY - 3, { lineBreak: false });
+  } else if (isMobileOps) {
+    // TA-17/35: Mobile operations — shadow vehicle with TMA, moving work vehicle
+    doc.lineWidth(1.5).strokeColor('black');
+    // Work vehicle (in activity area)
+    const wvX = zones.activityStart + 40, wvW = 50, wvH = 16;
+    doc.rect(wvX, roadY2 - wvH - 3, wvW, wvH).fillAndStroke('#FFD700', 'black');
+    doc.fontSize(4).fillColor('black').text('WORK', wvX + 5, roadY2 - wvH + 1, { lineBreak: false });
+    doc.text('VEHICLE', wvX + 5, roadY2 - wvH + 6, { lineBreak: false });
+    // Shadow vehicle with TMA (behind work vehicle)
+    const svX = zones.transitionStart + 20, svW = 40;
+    doc.rect(svX, roadY2 - wvH - 3, svW, wvH).fillAndStroke('#FF6600', 'black');
+    doc.fontSize(4).fillColor('white').text('SHADOW', svX + 3, roadY2 - wvH + 1, { lineBreak: false });
+    doc.text('+ TMA', svX + 3, roadY2 - wvH + 6, { lineBreak: false });
+    // Arrow board on shadow vehicle
+    doc.rect(svX + svW - 18, roadY2 - wvH - 12, 16, 8).fillAndStroke('#333', 'black');
+    doc.fontSize(3).fillColor('#FFAA00').text('>>>>', svX + svW - 16, roadY2 - wvH - 10, { lineBreak: false });
+    doc.fontSize(5).fillColor('black').text('ARROW BOARD', svX + svW + 2, roadY2 - wvH - 10, { lineBreak: false });
+    // Direction arrow showing movement
+    doc.lineWidth(1).strokeColor('#0066cc');
+    doc.moveTo(zones.activityStart + 10, roadCL - 5).lineTo(zones.activityEnd - 10, roadCL - 5).stroke();
+    doc.moveTo(zones.activityEnd - 15, roadCL - 8).lineTo(zones.activityEnd - 10, roadCL - 5).stroke();
+    doc.moveTo(zones.activityEnd - 15, roadCL - 2).lineTo(zones.activityEnd - 10, roadCL - 5).stroke();
+    doc.fontSize(5).fillColor('#0066cc').text('DIRECTION OF TRAVEL >>>', zones.activityStart + 15, roadCL - 14, { lineBreak: false });
+    // Note
+    doc.fontSize(5).fillColor('#666').text('MOVING OPERATION', zones.activityStart + 5, roadY2 + 3, { lineBreak: false });
+  } else if (isRoadClosure) {
+    // TA-13: Road closure — barriers across road, detour signs
+    doc.lineWidth(2).strokeColor('#cc0000');
+    // Barrier across road (primary approach)
+    const barX = zones.transitionEnd;
+    doc.moveTo(barX, roadY1).lineTo(barX, roadY2).stroke();
+    doc.moveTo(barX + 3, roadY1).lineTo(barX + 3, roadY2).stroke();
+    // Barrier across road (opposing approach)
+    const barX2 = zones.dnTransitionStart;
+    doc.moveTo(barX2, roadY1).lineTo(barX2, roadY2).stroke();
+    doc.moveTo(barX2 + 3, roadY1).lineTo(barX2 + 3, roadY2).stroke();
+    // Crosshatch entire work zone
+    drawCrosshatch(doc, barX + 5, roadY1 + 3, barX2 - 3, roadY2 - 3);
+    // ROAD CLOSED signs
+    doc.lineWidth(1).strokeColor('black');
+    doc.rect(barX - 30, roadY2 + 10, 35, 18).fillAndStroke('#ffffff', 'black');
+    doc.fontSize(4).fillColor('#cc0000').text('R11-2', barX - 28, roadY2 + 13, { lineBreak: false });
+    doc.text('ROAD', barX - 28, roadY2 + 19, { lineBreak: false });
+    doc.text('CLOSED', barX - 28, roadY2 + 25, { lineBreak: false });
+    // DETOUR arrow
+    doc.rect(barX + 10, roadY2 + 10, 35, 18).fillAndStroke('#FF8C00', 'black');
+    doc.fontSize(4).fillColor('black').text('M4-9', barX + 12, roadY2 + 13, { lineBreak: false });
+    doc.text('DETOUR', barX + 12, roadY2 + 19, { lineBreak: false });
+    doc.text('→', barX + 30, roadY2 + 17, { lineBreak: false });
+    // Barricade symbols (Type 3)
+    doc.lineWidth(1).strokeColor('#FF8C00');
+    for (let bx = barX - 5; bx <= barX + 5; bx += 5) {
+      doc.moveTo(bx, roadY1 - 3).lineTo(bx + 8, roadY1 + 3).stroke();
+      doc.moveTo(bx, roadY2 + 3).lineTo(bx + 8, roadY2 - 3).stroke();
+    }
+    doc.fontSize(5).fillColor('#cc0000').text('ROAD CLOSED', zones.activityStart + 20, roadCL - 5, { lineBreak: false });
+  } else if (isDoubleLane) {
+    // TA-37: Double lane closure — two staggered merging tapers
+    const closedLaneTop = roadCL;
+    const closedLaneBot = roadY2;
+    const midLane = roadCL + (roadY2 - roadCL) / 2;
+    doc.lineWidth(1).strokeColor('black');
+    // First taper (right lane) — starts earlier
+    doc.moveTo(zones.transitionStart, closedLaneBot).lineTo(zones.transitionStart + (zones.transitionEnd - zones.transitionStart) * 0.6, midLane).stroke();
+    // Second taper (middle lane) — starts later, staggered
+    const stagger = (zones.transitionEnd - zones.transitionStart) * 0.5;
+    doc.moveTo(zones.transitionStart + stagger, midLane).lineTo(zones.transitionEnd, closedLaneTop).stroke();
+    // Work area (two lanes)
+    drawCrosshatch(doc, zones.activityStart, closedLaneTop + 3, zones.activityEnd, closedLaneBot - 3);
+    // Channelizing devices along both tapers
+    for (let i = 0; i <= 6; i++) {
+      const frac = i / 6;
+      const cx1 = zones.transitionStart + frac * (zones.transitionEnd - zones.transitionStart) * 0.6;
+      const cy1 = closedLaneBot - frac * (closedLaneBot - midLane);
+      doc.circle(cx1, cy1, 2.5).fillAndStroke('orange', 'black');
+    }
+    for (let i = 0; i <= 6; i++) {
+      const frac = i / 6;
+      const cx2 = zones.transitionStart + stagger + frac * (zones.transitionEnd - zones.transitionStart - stagger);
+      const cy2 = midLane - frac * (midLane - closedLaneTop);
+      doc.circle(cx2, cy2, 2.5).fillAndStroke('orange', 'black');
+    }
+    // Two arrow boards
+    doc.rect(zones.transitionStart - 20, closedLaneBot - 18, 16, 8).fillAndStroke('#333', 'black');
+    doc.fontSize(3).fillColor('#FFAA00').text('>>>', zones.transitionStart - 18, closedLaneBot - 16, { lineBreak: false });
+    doc.rect(zones.transitionStart + stagger - 20, midLane - 18, 16, 8).fillAndStroke('#333', 'black');
+    doc.fontSize(3).fillColor('#FFAA00').text('>>>', zones.transitionStart + stagger - 18, midLane - 16, { lineBreak: false });
+    doc.fontSize(5).fillColor('black').text('2 ARROW BOARDS REQ\'D', zones.transitionStart - 25, closedLaneBot + 3, { lineBreak: false });
+    // Downstream taper
+    doc.lineWidth(1).strokeColor('black');
+    doc.moveTo(zones.dnTransitionStart, closedLaneTop).lineTo(zones.dnTransitionEnd, closedLaneBot).stroke();
   }
 
   // Work area label (shared)
-  const waLabelY = isMedianCrossover ? roadCL + 17 : (isShoulder ? roadY2 + 5 : (isTwoWayFlagger ? roadCL + 17 : roadCL + 10));
+  const waLabelY = isMobileOps ? roadCL + 5 : isRoadClosure ? roadCL - 5 : isMedianCrossover ? roadCL + 17 : (isShoulder ? roadY2 + 5 : (isTwoWayFlagger ? roadCL + 17 : roadCL + 10));
   const waX1 = zones.activityStart;
   const waX2 = zones.activityEnd;
   doc.save();
@@ -1952,36 +2046,15 @@ export async function generateCAD(
     if (!sign.label) sign.label = 'ROAD WORK AHEAD';
   }
 
-  // === TA SELECTION based on lane count + operation type + functional class ===
+  // === TA SELECTION via MUTCD module (single source of truth) ===
   const fcCode = funcClass ? parseInt(funcClass) || 99 : 99;
-  const isInterstate = fcCode <= 2;
   const isDivided = fcCode <= 3 && totalLanes >= 4;
-  // Infer median type: 5 lanes = TWLTL (2+turn+2), 4 lanes could be divided or undivided
   const hasTWLTL = totalLanes === 3 || totalLanes === 5;
   const isMultiLane = totalLanes >= 4 || (totalLanes === 3 && !hasTWLTL);
 
-  let taCode: string;
-  let taDescription: string;
-  if (operationType === 'Shoulder Work') {
-    taCode = isMultiLane ? 'TA-23' : 'TA-22';
-    taDescription = isMultiLane ? 'Shoulder Work on Multi-Lane Road' : 'Shoulder Work on Two-Lane Road';
-  } else if (operationType === 'Median Crossover') {
-    taCode = 'TA-18';
-    taDescription = 'Median Crossover';
-  } else if (isInterstate) {
-    taCode = 'TA-35';
-    taDescription = 'Lane Closure on Interstate/Freeway';
-  } else if (isDivided) {
-    taCode = 'TA-33';
-    taDescription = 'Lane Closure on Divided Highway';
-  } else if (isMultiLane) {
-    taCode = hasTWLTL ? 'TA-31' : 'TA-30';
-    taDescription = hasTWLTL ? 'Lane Closure with Center Turn Lane' : 'Lane Closure on Multi-Lane Road';
-  } else {
-    // 2-lane road
-    taCode = 'TA-10';
-    taDescription = 'Lane Closure Using Flaggers (Two-Lane Road)';
-  }
+  const taSelection = MUTCD.selectTA(operationType, totalLanes, fcCode, isDivided, aadt);
+  const taCode = taSelection.code;
+  const taDescription = taSelection.title;
   console.log(`[cadGenerator] TA Selection: ${taCode} (${taDescription}) | Lanes: ${totalLanes} | FC: ${fcCode} | Op: ${operationType}`);
 
   // === CAPTURE PE ORIGINALS FOR CORRECTION TRACKING ===

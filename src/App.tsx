@@ -460,9 +460,13 @@ export default function App() {
                     onChange={(e) => setOperationType(e.target.value)}
                     className="w-full bg-zinc-950 border border-white/10 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                   >
-                    <option>Median Crossover</option>
                     <option>Single Lane Closure</option>
+                    <option>Double Lane Closure</option>
+                    <option>Full Road Closure</option>
                     <option>Shoulder Work</option>
+                    <option>Median Crossover</option>
+                    <option>Mobile Operations</option>
+                    <option>Intermittent Closure</option>
                   </select>
                 </div>
 
