@@ -695,13 +695,14 @@ Output ONLY a JSON array matching the cross-street order: [{"name":"...","type":
       try {
         const { GoogleGenAI } = await import('@google/genai');
         const roadTypeAi = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-        const rtTimeout = new Promise<any>((_, rej) => setTimeout(() => rej(new Error('Road type vision timeout')), 20000));
+        const rtTimeout = new Promise<any>((_, rej) => setTimeout(() => rej(new Error('Road type vision timeout')), 45000));
         const rtRes = await Promise.race([roadTypeAi.models.generateContent({
-          model: 'gemini-3-flash-preview',
+          model: 'gemini-3.1-pro-preview',
           contents: { parts: [
             { inlineData: { data: staticMapB64, mimeType: 'image/jpeg' } },
             { text: 'Look at this satellite map image with two pins marking a road segment. What kind of road or intersection geometry exists between and around these pins? Classify as ONE of: straight_road, curved_road, roundabout, peanut_roundabout, dogbone_interchange, diamond_interchange, cloverleaf_interchange, signalized_intersection, T_intersection, Y_intersection, or other. Also note the number of lanes if visible. Respond with ONLY a JSON object: {"road_type": "...", "lanes_visible": 2, "notes": "brief description"}' },
           ]},
+          config: { temperature: 1.0, responseMimeType: 'application/json', thinkingConfig: { thinkingBudget: 24576 } },
         }), rtTimeout]);
         const rtText = rtRes?.text || '';
         const rtMatch = rtText.match(/\{[\s\S]*\}/);
