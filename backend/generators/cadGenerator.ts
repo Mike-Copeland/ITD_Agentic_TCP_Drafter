@@ -28,8 +28,10 @@ interface CrossStreet {
     hasSignal: boolean;
     hasStopSign: boolean;
     turnLanes: boolean;
-    approachAngle: number; // degrees from perpendicular (0 = perfect cross, 45 = angled)
-    legs: number; // 3 for T, 4 for cross, etc.
+    approachAngle: number;
+    legs: number;
+    intersectionType?: string; // OSM-derived: roundabout_single, roundabout_multi, interchange_dogbone, etc.
+    circulatoryLanes?: number;
   };
 }
 
@@ -1170,6 +1172,105 @@ function drawSiteLayoutSheet(doc: Doc, sheetNum: number, totalSheets: number, ct
 // ===================================================================
 // SHEET: INTERSECTION DETAIL (ENGINEERING-GRADE GEOMETRY)
 // ===================================================================
+// ===================================================================
+// ROUNDABOUT DRAWING UTILITY
+// ===================================================================
+function drawRoundabout(doc: Doc, cx: number, cy: number, radius: number, legs: number, _ctx: DrawContext) {
+  const legAngles = legs === 3 ? [0, 120, 240] :
+    legs === 5 ? [0, 72, 144, 216, 288] :
+    [0, 90, 180, 270]; // default 4-leg
+
+  // Outer circle (edge of circulatory roadway)
+  doc.lineWidth(2).strokeColor('black');
+  doc.circle(cx, cy, radius).stroke();
+
+  // Inner circle (central island)
+  const innerR = radius * 0.45;
+  doc.lineWidth(1.5).strokeColor('black');
+  doc.circle(cx, cy, innerR).stroke();
+  // Hatch the central island
+  doc.lineWidth(0.5).strokeColor('#999');
+  for (let a = 0; a < 360; a += 15) {
+    const rad = a * Math.PI / 180;
+    doc.moveTo(cx + innerR * 0.3 * Math.cos(rad), cy + innerR * 0.3 * Math.sin(rad))
+       .lineTo(cx + innerR * 0.9 * Math.cos(rad), cy + innerR * 0.9 * Math.sin(rad)).stroke();
+  }
+
+  // Circulatory roadway (between inner and outer)
+  doc.lineWidth(0.5).dash(4, { space: 4 }).strokeColor('#666');
+  const midR = (radius + innerR) / 2;
+  doc.circle(cx, cy, midR).stroke();
+  doc.undash();
+
+  // Approach legs
+  const legLen = radius * 1.8;
+  doc.lineWidth(2).strokeColor('black');
+  for (const angle of legAngles) {
+    const rad = (angle - 90) * Math.PI / 180; // -90 to start from top
+    const outerX = cx + radius * Math.cos(rad);
+    const outerY = cy + radius * Math.sin(rad);
+    const farX = cx + legLen * Math.cos(rad);
+    const farY = cy + legLen * Math.sin(rad);
+
+    // Road edges (two lines for each leg)
+    const perpRad = rad + Math.PI / 2;
+    const halfW = 15; // half road width in pixels
+    doc.moveTo(outerX + halfW * Math.cos(perpRad), outerY + halfW * Math.sin(perpRad))
+       .lineTo(farX + halfW * Math.cos(perpRad), farY + halfW * Math.sin(perpRad)).stroke();
+    doc.moveTo(outerX - halfW * Math.cos(perpRad), outerY - halfW * Math.sin(perpRad))
+       .lineTo(farX - halfW * Math.cos(perpRad), farY - halfW * Math.sin(perpRad)).stroke();
+
+    // Splitter island (triangle at entry)
+    const splitterLen = 20;
+    const splitterBase = cx + (radius + splitterLen) * Math.cos(rad);
+    const splitterBaseY = cy + (radius + splitterLen) * Math.sin(rad);
+    doc.lineWidth(1).strokeColor('#666');
+    doc.moveTo(outerX + halfW * 0.3 * Math.cos(perpRad), outerY + halfW * 0.3 * Math.sin(perpRad))
+       .lineTo(splitterBase, splitterBaseY)
+       .lineTo(outerX - halfW * 0.3 * Math.cos(perpRad), outerY - halfW * 0.3 * Math.sin(perpRad)).stroke();
+
+    // Yield triangle at entry
+    doc.lineWidth(0.5).strokeColor('#cc0000');
+    const yieldX = outerX + 3 * Math.cos(rad);
+    const yieldY = outerY + 3 * Math.sin(rad);
+    doc.moveTo(yieldX - 4 * Math.cos(perpRad), yieldY - 4 * Math.sin(perpRad))
+       .lineTo(yieldX + 4 * Math.cos(perpRad), yieldY + 4 * Math.sin(perpRad))
+       .lineTo(yieldX + 6 * Math.cos(rad), yieldY + 6 * Math.sin(rad))
+       .closePath().stroke();
+  }
+
+  // Circulation arrows (curved arrows showing traffic flow)
+  doc.lineWidth(1).strokeColor('#0066cc');
+  for (let i = 0; i < 4; i++) {
+    const startAngle = i * 90 + 20;
+    const endAngle = i * 90 + 70;
+    const arrowR = midR;
+    const sRad = (startAngle - 90) * Math.PI / 180;
+    // Draw arc segment
+    doc.moveTo(cx + arrowR * Math.cos(sRad), cy + arrowR * Math.sin(sRad));
+    // Approximate arc with line segments
+    for (let a = startAngle + 5; a <= endAngle; a += 5) {
+      const r = (a - 90) * Math.PI / 180;
+      doc.lineTo(cx + arrowR * Math.cos(r), cy + arrowR * Math.sin(r));
+    }
+    doc.stroke();
+    // Arrowhead
+    const tipRad = (endAngle - 90) * Math.PI / 180;
+    const tipX = cx + arrowR * Math.cos(tipRad);
+    const tipY = cy + arrowR * Math.sin(tipRad);
+    doc.save();
+    doc.moveTo(tipX, tipY)
+       .lineTo(tipX - 4 * Math.cos(tipRad + 0.5), tipY - 4 * Math.sin(tipRad + 0.5))
+       .lineTo(tipX - 4 * Math.cos(tipRad - 0.5), tipY - 4 * Math.sin(tipRad - 0.5))
+       .closePath().fill('#0066cc');
+    doc.restore();
+  }
+
+  // Label
+  doc.fontSize(6).fillColor('#666');
+  doc.text('ROUNDABOUT', cx - 25, cy - 4, { width: 50, align: 'center', lineBreak: false });
+}
+
 function drawIntersectionSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawContext, cs: CrossStreet) {
   doc.addPage({ size: 'tabloid', layout: 'landscape', margin: 0 });
 
@@ -1186,8 +1287,116 @@ function drawIntersectionSheet(doc: Doc, sheetNum: number, totalSheets: number, 
   // Geometry type label
   const geoLabel = geo.type === '4-way' ? '4-WAY INTERSECTION' :
     geo.type.startsWith('T-') ? `T-INTERSECTION (${geo.type.replace('T-', '').toUpperCase()})` :
-    geo.type === 'Y' ? 'Y-INTERSECTION' : geo.type === 'roundabout' ? 'ROUNDABOUT' : 'INTERSECTION';
+    geo.type === 'Y' ? 'Y-INTERSECTION' : geo.type === 'roundabout' ? 'ROUNDABOUT / CIRCULAR INTERSECTION' : 'INTERSECTION';
   doc.fontSize(8).fillColor('#666').text(geoLabel, 0, 60, { align: 'center' });
+
+  // === ROUNDABOUT: Use circular template ===
+  if (geo.type === 'roundabout') {
+    const roundaboutR = 80;
+    drawRoundabout(doc, cx, cy, roundaboutR, geo.legs || 4, ctx);
+
+    // Title and classification
+    doc.fontSize(10).fillColor('black');
+    doc.text(ctx.roadName || 'MAIN ROAD', cx + roundaboutR * 2 + 20, cy - 5, { lineBreak: false });
+    doc.fontSize(9);
+    doc.text(cs.name.toUpperCase(), cx - 60, cy - roundaboutR * 2 - 25, { width: 120, align: 'center', lineBreak: false });
+
+    // Work zone overlay (shade one quadrant)
+    doc.save();
+    doc.lineWidth(0.5).strokeColor('#cc0000');
+    const wzStartAngle = 0, wzEndAngle = 90;
+    for (let a = wzStartAngle; a <= wzEndAngle; a += 3) {
+      const r = (a - 90) * Math.PI / 180;
+      const innerR = roundaboutR * 0.45;
+      doc.moveTo(cx + innerR * Math.cos(r), cy + innerR * Math.sin(r))
+         .lineTo(cx + roundaboutR * Math.cos(r), cy + roundaboutR * Math.sin(r)).stroke();
+    }
+    doc.restore();
+    doc.fontSize(5).fillColor('#cc0000').text('WORK ZONE', cx + roundaboutR * 0.5, cy - roundaboutR * 0.5, { lineBreak: false });
+
+    // Advance warning signs on each approach leg
+    const legAngles = geo.legs === 3 ? [0, 120, 240] : [0, 90, 180, 270];
+    legAngles.forEach((angle) => {
+      const rad = (angle - 90) * Math.PI / 180;
+      const signDist = roundaboutR * 2.2;
+      const sx = cx + signDist * Math.cos(rad);
+      const sy = cy + signDist * Math.sin(rad);
+      drawSignDiamond(doc, sx, sy, 'W20-1', 'ROAD WORK\nAHEAD');
+      // W2-6 Roundabout Ahead on each approach
+      const w26x = cx + (signDist - 40) * Math.cos(rad);
+      const w26y = cy + (signDist - 40) * Math.sin(rad);
+      drawSignDiamond(doc, w26x, w26y, 'W2-6', 'ROUNDABOUT\nAHEAD');
+    });
+
+    // Notes
+    const noteX = 50, noteY = 530;
+    doc.lineWidth(0.5).rect(noteX, noteY, 1120, 130).stroke();
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('black').text('ROUNDABOUT TRAFFIC CONTROL NOTES:', noteX + 10, noteY + 8);
+    doc.font('Helvetica').fontSize(6.5);
+    const rbNotes = [
+      `1. This is a CIRCULAR INTERSECTION (roundabout). Standard linear TAs do not apply. Use TA-52/53/54 per MUTCD Chapter 6P.`,
+      `2. Place W2-6 "ROUNDABOUT AHEAD" signs on ALL approach legs at minimum ${getABCSpacing(ctx.speedMph, ctx.terrain, ctx.funcClass).a} ft from the circulatory roadway.`,
+      `3. Channelizing device spacing in the circulatory roadway shall be ${Math.round(ctx.speedMph / 2)} ft maximum (1/2 × S per TA-53 Note 8).`,
+      `4. Maintain YIELD (R1-2) signs at all roundabout entries. Cover or remove signs that become inapplicable during construction.`,
+      `5. Flaggers controlling roundabout entries must coordinate to prevent conflicting movements in the circulatory roadway.`,
+      `6. Ensure adequate truck turning radius is maintained through the work zone. WB-67 swept path analysis recommended.`,
+      `7. Cover permanent WRONG WAY and DO NOT ENTER signs that become inapplicable per TA-52 Standard Note 5.`,
+      `8. ${ctx.crashCount >= 10 ? 'HIGH CRASH LOCATION (' + ctx.crashCount + ' crashes): Deploy PCMS on all approaches. Consider law enforcement during peak hours.' : 'Monitor approach speeds. Deploy speed feedback signs if warranted.'}`,
+    ];
+    rbNotes.forEach((n, i) => doc.text(n, noteX + 10, noteY + 22 + i * 13, { width: 1100 }));
+
+    drawWatermark(doc);
+    drawTitleBlock(doc, sheetNum, totalSheets, ctx.operationType, ctx.roadName);
+    return;
+  }
+
+  // === DOG-BONE INTERCHANGE: Two roundabouts + bridge ===
+  if (geo.intersectionType === 'interchange_dogbone') {
+    const r1x = cx - 120, r2x = cx + 120;
+    const rR = 55;
+    doc.fontSize(14).fillColor('black').text('DOG-BONE INTERCHANGE', 0, 25, { align: 'center' });
+    doc.fontSize(8).fillColor('#666').text('Two roundabouts connected by bridge overpass', 0, 60, { align: 'center' });
+
+    // Draw both roundabouts
+    drawRoundabout(doc, r1x, cy, rR, geo.legs || 4, ctx);
+    drawRoundabout(doc, r2x, cy, rR, geo.legs || 4, ctx);
+
+    // Bridge connecting segment
+    doc.lineWidth(2).strokeColor('black');
+    doc.rect(r1x + rR, cy - 12, r2x - r1x - 2 * rR, 24).stroke();
+    doc.lineWidth(0.5).strokeColor('#999');
+    doc.moveTo(r1x + rR, cy).lineTo(r2x - rR, cy).dash(4, { space: 4 }).stroke();
+    doc.undash();
+    doc.fontSize(5).fillColor('#666').text('BRIDGE / OVERPASS', cx - 30, cy - 3, { lineBreak: false });
+
+    // Labels
+    doc.fontSize(7).fillColor('black');
+    doc.text('ROUNDABOUT 1', r1x - 30, cy + rR + 15, { width: 60, align: 'center', lineBreak: false });
+    doc.text('ROUNDABOUT 2', r2x - 30, cy + rR + 15, { width: 60, align: 'center', lineBreak: false });
+    doc.fontSize(9).text(cs.name.toUpperCase(), cx - 60, cy - rR * 2 - 30, { width: 120, align: 'center', lineBreak: false });
+    doc.text(ctx.roadName || 'MAIN ROAD', cx + 200, cy - 5, { lineBreak: false });
+
+    // Notes
+    const noteX = 50, noteY = 530;
+    doc.lineWidth(0.5).rect(noteX, noteY, 1120, 130).stroke();
+    doc.font('Helvetica-Bold').fontSize(8).fillColor('black').text('DOG-BONE INTERCHANGE TRAFFIC CONTROL NOTES:', noteX + 10, noteY + 8);
+    doc.font('Helvetica').fontSize(6.5);
+    const dbNotes = [
+      '1. DOG-BONE INTERCHANGE requires INDEPENDENT traffic control at EACH roundabout.',
+      '2. Decompose work zone into sub-segments: Approach legs, Roundabout 1, Bridge, Roundabout 2.',
+      '3. Flaggers at each roundabout entry MUST coordinate — only one direction released at a time.',
+      '4. Bridge segment requires positive protection per MUTCD 6M.02 (temporary traffic barriers).',
+      '5. Use TA-52/53/54 for circulatory roadway work, NOT standard linear TAs.',
+      '6. Cover permanent WRONG WAY, DO NOT ENTER signs that become inapplicable during each phase.',
+      '7. Multi-phase staging required — cannot close entire corridor simultaneously without full detour.',
+      '8. Maintain pedestrian crossings at each leg or provide ADA-compliant alternate routes.',
+    ];
+    dbNotes.forEach((n, i) => doc.text(n, noteX + 10, noteY + 22 + i * 13, { width: 1100 }));
+
+    drawWatermark(doc);
+    drawTitleBlock(doc, sheetNum, totalSheets, ctx.operationType, ctx.roadName);
+    return;
+  }
 
   // Main road (horizontal)
   const intRoad = drawRoadway(doc, cx - mainLen / 2, cx + mainLen / 2, cy, ctx);

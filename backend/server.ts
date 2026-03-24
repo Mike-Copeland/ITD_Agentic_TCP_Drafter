@@ -5,6 +5,7 @@ import path from 'path';
 import archiver from 'archiver';
 import { fileURLToPath } from 'url';
 import { generateCAD } from './generators/cadGenerator.js';
+import { classifyRouteIntersections } from './services/intersectionClassifier.js';
 // Agentic loop disabled — it bypassed all cadGenerator fixes. Re-enable via ENABLE_AGENTIC=true.
 // import { runAgenticLoop } from './agents/agenticLoop.js';
 
@@ -687,6 +688,40 @@ Output ONLY a JSON array matching the cross-street order: [{"name":"...","type":
     }
 
     // ------------------------------------------------------------------
+    // 5b. INTERSECTION GEOMETRY CLASSIFICATION (OSM Overpass API)
+    // ------------------------------------------------------------------
+    let intersectionData: any = null;
+    try {
+      intersectionData = await classifyRouteIntersections(
+        startCoords, endCoords,
+        positionedCrossStreets.map((cs: any) => ({ name: cs.name, position: cs.position }))
+      );
+      if (intersectionData.routeHasRoundabouts) {
+        console.log(`[site-context] ROUNDABOUT DETECTED: ${intersectionData.roundaboutCount} roundabout(s) found via OSM`);
+        // Update cross-street geometry with roundabout classification
+        for (const intx of intersectionData.intersections) {
+          if (intx.classification.type.includes('roundabout') || intx.classification.type.includes('interchange')) {
+            const match = positionedCrossStreets.find((cs: any) => cs.name === intx.name);
+            if (match) {
+              (match as any).geometry = {
+                type: 'roundabout',
+                hasSignal: intx.classification.hasSignal,
+                hasStopSign: false,
+                turnLanes: false,
+                approachAngle: 0,
+                legs: intx.classification.legs,
+                intersectionType: intx.classification.type,
+                circulatoryLanes: intx.classification.circulatoryLanes || 1,
+              };
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[site-context] Intersection classification failed:', err);
+    }
+
+    // ------------------------------------------------------------------
     // 6. BUILD ENRICHED CONTEXT STRING
     // ------------------------------------------------------------------
     const roadContext = [
@@ -724,6 +759,8 @@ Output ONLY a JSON array matching the cross-street order: [{"name":"...","type":
       itdBridges: itd.bridgeDetails || [],
       itdContext: itd.contextString || '',
       positionedCrossStreets: positionedCrossStreets || [],
+      routeHasRoundabouts: intersectionData?.routeHasRoundabouts || false,
+      roundaboutCount: intersectionData?.roundaboutCount || 0,
     });
   } catch (e) {
     console.error('[site-context] Error:', e);

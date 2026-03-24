@@ -552,6 +552,81 @@ export function getRequiredSigns(taCode: string): { primary: RequiredSign[]; opp
 // ===================================================================
 // TERMINATION SIGNS (shared across all TAs)
 // ===================================================================
+// ===================================================================
+// ROUNDABOUT-SPECIFIC TAs (MUTCD Chapter 6P)
+// ===================================================================
+
+/** Determine if a roundabout-specific TA should be used */
+export function isRoundaboutTA(intersectionType: string): boolean {
+  return ['roundabout_single', 'roundabout_multi', 'interchange_dogbone'].includes(intersectionType);
+}
+
+/**
+ * Select roundabout-specific TA based on conditions.
+ * MUTCD 11th Ed TA-52, TA-53, TA-54
+ */
+export function selectRoundaboutTA(
+  circulatoryLanes: number,
+  duration: WorkDuration,
+  hasFlagger: boolean,
+): TASelection {
+  if (duration === 'short_duration' || duration === 'short_term') {
+    return { code: 'TA-52', title: 'Short-Term Work in Circular Intersection', description: 'Short-duration work within or adjacent to roundabout' };
+  }
+  if (circulatoryLanes >= 2) {
+    return { code: 'TA-54', title: 'Inside Lane Closure on Multi-Lane Roundabout', description: 'Lane closure within multi-lane circular intersection' };
+  }
+  if (hasFlagger) {
+    return { code: 'TA-53', title: 'Flagging Operation on Single-Lane Roundabout', description: 'Flagger-controlled one-lane operation in single-lane roundabout' };
+  }
+  return { code: 'TA-52', title: 'Work in Circular Intersection', description: 'Work within or adjacent to roundabout' };
+}
+
+/** Get required signs for roundabout TAs */
+export function getRoundaboutSigns(taCode: string): { approach: RequiredSign[]; circulatory: RequiredSign[] } {
+  const w = (code: string, label: string, pos: RequiredSign['position'] = 'advance_warning'): RequiredSign =>
+    ({ code, label, mandatory: true, position: pos });
+
+  const commonApproach = [
+    w('W20-1', 'ROAD WORK AHEAD'),
+    w('W2-6', 'ROUNDABOUT AHEAD'),
+    w('W20-7a', 'FLAGGER AHEAD'),
+  ];
+
+  switch (taCode) {
+    case 'TA-52': return {
+      approach: [w('W20-1', 'ROAD WORK AHEAD'), w('W2-6', 'ROUNDABOUT AHEAD')],
+      circulatory: [],
+    };
+    case 'TA-53': return {
+      approach: commonApproach,
+      circulatory: [
+        w('W20-4', 'ONE LANE ROAD AHEAD', 'transition'),
+        w('R1-2', 'YIELD', 'transition'),
+      ],
+    };
+    case 'TA-54': return {
+      approach: [
+        w('W20-1', 'ROAD WORK AHEAD'),
+        w('W2-6', 'ROUNDABOUT AHEAD'),
+        w('W20-5', 'RIGHT LANE CLOSED AHEAD'),
+      ],
+      circulatory: [
+        w('W4-2R', 'LANE ENDS', 'transition'),
+      ],
+    };
+    default: return {
+      approach: [w('W20-1', 'ROAD WORK AHEAD')],
+      circulatory: [],
+    };
+  }
+}
+
+/** Device spacing in roundabout circulatory roadway — half the standard per TA-53 Note 8 */
+export function roundaboutDeviceSpacing(speedMph: number): number {
+  return Math.round(speedMph / 2); // 1/2 S per MUTCD TA-53 Guidance Note 8
+}
+
 export const TERMINATION_SIGN: RequiredSign = {
   code: 'G20-2', label: 'END ROAD WORK', mandatory: false, position: 'termination',
 };
