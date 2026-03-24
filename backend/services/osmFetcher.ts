@@ -3,7 +3,10 @@
  * Fetches all road geometries within a bounding box from OpenStreetMap Overpass API.
  * Used as a basemap layer for Geometry Plan sheets.
  */
-const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
+const OVERPASS_URLS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+];
 
 export interface OsmRoadway {
   name: string;
@@ -49,24 +52,27 @@ export async function fetchRoadNetwork(
     out body geom;
   `;
 
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 12000);
-    const res = await fetch(OVERPASS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `data=${encodeURIComponent(query)}`,
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
+  // Try each endpoint with retry
+  for (const OVERPASS_URL of OVERPASS_URLS) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      const res = await fetch(OVERPASS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `data=${encodeURIComponent(query)}`,
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
 
-    if (!res.ok) {
-      console.warn(`[osmFetcher] Overpass returned ${res.status}`);
-      return [];
-    }
+      if (!res.ok) {
+        console.warn(`[osmFetcher] Overpass ${OVERPASS_URL} returned ${res.status}`);
+        continue;
+      }
 
-    const data = await res.json() as any;
-    const elements = data.elements || [];
+      const data = await res.json() as any;
+      const elements = data.elements || [];
+      if (elements.length === 0) continue; // Try next endpoint
 
     const roads: OsmRoadway[] = elements
       .filter((el: any) => el.type === 'way' && el.geometry?.length >= 2)
@@ -78,13 +84,16 @@ export async function fetchRoadNetwork(
         lanes: parseInt(el.tags?.lanes) || (el.tags?.highway === 'motorway' ? 4 : 2),
       }));
 
-    console.log(`[osmFetcher] Fetched ${roads.length} roads from Overpass`);
+    console.log(`[osmFetcher] Fetched ${roads.length} roads from ${OVERPASS_URL}`);
     basemapCache.set(cacheKey, { roads, fetchedAt: Date.now() });
     return roads;
-  } catch (err) {
-    console.warn(`[osmFetcher] Overpass fetch failed:`, err);
-    return [];
+    } catch (err) {
+      console.warn(`[osmFetcher] ${OVERPASS_URL} failed:`, err);
+      continue;
+    }
   }
+  console.warn('[osmFetcher] All Overpass endpoints failed');
+  return [];
 }
 
 /**

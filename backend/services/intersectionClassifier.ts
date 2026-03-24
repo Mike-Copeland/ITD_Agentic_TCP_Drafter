@@ -38,11 +38,15 @@ export interface RouteIntersectionResult {
   }[];
 }
 
-const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
+// Multiple Overpass endpoints for reliability
+const OVERPASS_URLS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+];
 
-// Simple cache to avoid Overpass rate limiting between site-context calls
+// Aggressive cache — roundabouts don't move
 const osmCache = new Map<string, { roundabouts: any[]; interchanges: any[]; timestamp: number }>();
-const CACHE_TTL_MS = 120000; // 2 minutes
+const CACHE_TTL_MS = 600000; // 10 minutes
 
 /**
  * Query OpenStreetMap for roundabouts near a route segment.
@@ -51,7 +55,7 @@ const CACHE_TTL_MS = 120000; // 2 minutes
 async function queryOverpassRoundabouts(
   startLat: number, startLng: number,
   endLat: number, endLng: number,
-  bufferMeters = 500
+  bufferMeters = 800 // Increased from 500 for better coverage
 ): Promise<any[]> {
   // Build bounding box with buffer
   const latMin = Math.min(startLat, endLat) - bufferMeters / 111000;
@@ -69,24 +73,33 @@ async function queryOverpassRoundabouts(
     out center body;
   `;
 
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
-    const res = await fetch(OVERPASS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `data=${encodeURIComponent(query)}`,
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
+  // Try each endpoint with retry
+  for (const url of OVERPASS_URLS) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 12000);
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `data=${encodeURIComponent(query)}`,
+          signal: controller.signal,
+        });
+        clearTimeout(timeout);
 
-    if (!res.ok) return [];
-    const data = await res.json() as any;
-    return data.elements || [];
-  } catch (err) {
-    console.warn('[intersectionClassifier] Overpass query failed:', err);
-    return [];
+        if (!res.ok) { continue; }
+        const data = await res.json() as any;
+        const elements = data.elements || [];
+        if (elements.length > 0) return elements; // Got data — use it
+        // Got empty result — try again or next endpoint
+        if (attempt === 0) await new Promise(r => setTimeout(r, 1000)); // Brief wait before retry
+      } catch {
+        if (attempt === 0) await new Promise(r => setTimeout(r, 1000));
+      }
+    }
   }
+  console.warn('[intersectionClassifier] All Overpass endpoints failed for roundabouts');
+  return [];
 }
 
 /**
@@ -112,23 +125,23 @@ async function queryOverpassInterchanges(
     out center body;
   `;
 
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
-    const res = await fetch(OVERPASS_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: `data=${encodeURIComponent(query)}`,
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-
-    if (!res.ok) return [];
-    const data = await res.json() as any;
-    return data.elements || [];
-  } catch {
-    return [];
+  for (const url of OVERPASS_URLS) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 12000);
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `data=${encodeURIComponent(query)}`,
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+      if (!res.ok) continue;
+      const data = await res.json() as any;
+      return data.elements || [];
+    } catch { continue; }
   }
+  return [];
 }
 
 /**
