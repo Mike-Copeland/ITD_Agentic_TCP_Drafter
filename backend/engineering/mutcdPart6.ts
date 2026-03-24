@@ -404,8 +404,11 @@ export function selectTA(
   if (isDivided) {
     return { code: 'TA-33', title: 'Stationary Lane Closure on Divided Highway', description: 'Single lane closure on divided highway' };
   }
+  // TWLTL (3-lane or 5-lane): shift traffic into center turn lane — NOT flaggers
+  if (hasTWLTL) {
+    return { code: 'TA-31', title: 'Lane Closure with Center Turn Lane', description: 'Shift traffic into TWLTL — maintain two-way flow' };
+  }
   if (isMultiLane) {
-    if (hasTWLTL) return { code: 'TA-31', title: 'Lane Closure with Uneven Directional Volumes', description: 'Lane closure on road with center turn lane' };
     return { code: 'TA-30', title: 'Interior Lane Closure on Multi-Lane Street', description: 'Single lane closure on multi-lane undivided road' };
   }
   // 2-lane road: yield signs only for very low volume WITH adequate sight distance

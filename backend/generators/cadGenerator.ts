@@ -489,9 +489,16 @@ function drawCoverSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: Dr
   doc.lineWidth(1).rect(ix, iy, 400, 200).stroke();
   doc.font('Helvetica-Bold').fontSize(10).text("SHEET INDEX", ix + 10, iy + 8, { underline: true });
   doc.font('Helvetica').fontSize(8);
+  // Filter operations compatible with road geometry (same logic as sheet generation)
+  const compatOps = ctx.operationTypes.filter((op: string) => {
+    if (op === 'Median Crossover' && ctx.hasTWLTL) return false;
+    if (op === 'Median Crossover' && !ctx.isDivided && ctx.totalLanes < 4) return false;
+    if (op === 'Double Lane Closure' && ctx.totalLanes < 3) return false;
+    return true;
+  });
   const sheetNames = [
     'Cover Sheet & General Notes',
-    ...ctx.operationTypes.map((op: string) => {
+    ...compatOps.map((op: string) => {
       const ta = MUTCD.selectTA(op, ctx.totalLanes, parseInt(ctx.funcClass) || 99, ctx.isDivided, ctx.aadt, ctx.terrain);
       return `${ta.code}: ${op}`;
     }),
@@ -525,16 +532,18 @@ function drawCoverSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: Dr
     `12. Taper Length: ${ctx.taperLengthFt} ft (${ctx.blueprint.taper.device_type}). Downstream Taper: ${ctx.blueprint.downstream_taper.length_ft} ft.`,
     `13. Minimum longitudinal buffer space: ${getBufferSpaceFt(ctx.speedMph)} ft (per MUTCD 11th Ed. Table 6C-2 for ${ctx.speedMph} MPH).`,
     `14. SINGLE PHASE OPERATION. All work shall be completed within a single traffic control setup.`,
-    ...(/mountainous|rolling/i.test(ctx.terrain) ? [
-      `15. MOUNTAINOUS/ROLLING TERRAIN: Reduced sight distance conditions may exist. Additional advance warning signs or portable changeable message signs may be required. Verify flagger sight distance meets Table 6B-2 minimum (${getBufferSpaceFt(ctx.speedMph)} ft for ${ctx.speedMph} MPH).`,
-    ] : []),
-    ...(ctx.routeDistanceFt > 5280 ? [
-      `${/mountainous|rolling/i.test(ctx.terrain) ? '16' : '15'}. LONG WORK ZONE (${(ctx.routeDistanceFt / 5280).toFixed(1)} mi): Consider intermediate W20-1 "ROAD WORK AHEAD" repeater signs at 1-mile intervals within the activity area per MUTCD 6C.04 guidance.`,
-    ] : []),
-    ...(ctx.crashCount >= 10 ? [
-      `${ctx.routeDistanceFt > 5280 ? '17' : /mountainous|rolling/i.test(ctx.terrain) ? '16' : '15'}. HIGH CRASH LOCATION (${ctx.crashCount} crashes): ENHANCED MEASURES REQUIRED — Deploy portable changeable message signs (PCMS), speed feedback signs, and/or law enforcement presence. Document enhanced measures in field TCP log.`,
-    ] : []),
   ];
+  // Conditional notes with dynamic numbering
+  let noteNum = 15;
+  if (/mountainous|rolling/i.test(ctx.terrain)) {
+    notes.push(`${noteNum++}. MOUNTAINOUS/ROLLING TERRAIN: Reduced sight distance conditions may exist. Additional advance warning signs or PCMS may be required. Verify flagger sight distance meets Table 6B-2 minimum (${getBufferSpaceFt(ctx.speedMph)} ft for ${ctx.speedMph} MPH).`);
+  }
+  if (ctx.routeDistanceFt > 5280) {
+    notes.push(`${noteNum++}. LONG WORK ZONE (${(ctx.routeDistanceFt / 5280).toFixed(1)} mi): Place W20-1 "ROAD WORK AHEAD" repeater signs at 1-mile intervals within the activity area per MUTCD 6C.04.`);
+  }
+  if (ctx.crashCount >= 10) {
+    notes.push(`${noteNum++}. HIGH CRASH LOCATION (${ctx.crashCount} crashes): ENHANCED MEASURES REQUIRED — Deploy PCMS, speed feedback signs, and/or law enforcement presence. Document enhanced measures in field TCP log.`);
+  }
   let noteY = ny + 28;
   for (const note of notes) {
     doc.text(note, 60, noteY, { width: 760 });
@@ -2275,8 +2284,15 @@ export async function generateCAD(
     return true;
   }).slice(0, 6);
 
-  const phaseCount = operationTypes.length > 0 ? operationTypes.length : 1;
-  const totalSheets = 2 + phaseCount + filteredCrossStreets.length + 3; // cover + phases + site + intersections + queue + special + signs
+  // Filter phases for compatibility before counting sheets
+  const compatPhases = (operationTypes.length > 0 ? operationTypes : [operationType]).filter(op => {
+    if (op === 'Median Crossover' && hasTWLTL) return false;
+    if (op === 'Median Crossover' && !isDivided && totalLanes < 4) return false;
+    if (op === 'Double Lane Closure' && totalLanes < 3) return false;
+    return true;
+  });
+  const phaseCount = compatPhases.length || 1;
+  const totalSheets = 2 + phaseCount + filteredCrossStreets.length + 3;
 
   const ctx: DrawContext = {
     blueprint, staticMapBase64, startCoords, endCoords,
@@ -2346,7 +2362,15 @@ export async function generateCAD(
       drawCoverSheet(doc, sheetNum++, totalSheets, ctx);
 
       // Sheet 2+: Typical Application(s) — one per operation phase
-      const phases = operationTypes.length > 0 ? operationTypes : [operationType];
+      // Filter out operations incompatible with road geometry
+      const allPhases = operationTypes.length > 0 ? operationTypes : [operationType];
+      const phases = allPhases.filter(op => {
+        if (op === 'Median Crossover' && hasTWLTL) return false; // TWLTL has no median
+        if (op === 'Median Crossover' && !isDivided && totalLanes < 4) return false;
+        if (op === 'Double Lane Closure' && totalLanes < 3) return false; // Can't close 2 of 2 lanes
+        return true;
+      });
+      if (phases.length === 0) phases.push(operationType); // Ensure at least primary op
       for (const phaseOp of phases) {
         const phaseTA = MUTCD.selectTA(phaseOp, totalLanes, fcCode, isDivided, aadt, terrain);
         const phaseTaper = MUTCD.getTaperLength(phaseTA.code, laneWidthFt, speedMph);

@@ -1,0 +1,176 @@
+{
+  "stamp_ready": false,
+  "overall_grade": "F",
+  "sheet_reviews": [
+    {
+      "sheet_number": 1,
+      "sheet_type": "Cover Sheet",
+      "grade": "C",
+      "issues": [
+        {
+          "severity": "minor",
+          "description": "General Notes numbering skips Note 16 (jumps from 15 to 17).",
+          "fix": "Renumber the notes sequentially."
+        },
+        {
+          "severity": "major",
+          "description": "Sheet index lists multiple unrelated/contradictory TAs (e.g., Full Road Closure, Median Crossover) for a project scoped as a 'Single Lane Closure'.",
+          "fix": "Remove unused sheets from the plan set and update the index, or clearly label them as 'Optional/Contingency TAs'."
+        }
+      ],
+      "positives": [
+        "Title block is well-organized.",
+        "Legend is clear and MUTCD-compliant."
+      ]
+    },
+    {
+      "sheet_number": 2,
+      "sheet_type": "TA Schematics",
+      "grade": "F",
+      "issues": [
+        {
+          "severity": "critical",
+          "description": "Engineering Judgment Failure: Applying TA-10 (Flaggers) to a 3-lane road with a TWLTL is inappropriate. The closed bottom lane should be shifted into the TWLTL to maintain two-way traffic without flaggers. Using flaggers unnecessarily cuts capacity to 1,400 vph, failing the peak demand of 1,539 vph.",
+          "fix": "Redesign the traffic control strategy using a lane shift into the TWLTL (e.g., TA-31) instead of flaggers."
+        },
+        {
+          "severity": "major",
+          "description": "The opposing flagger is shown standing in an open travel lane, stopping traffic unnecessarily since the work area only occupies the bottom lane.",
+          "fix": "Remove flaggers. If flaggers must be used, ensure they are controlling a truly shared single lane."
+        },
+        {
+          "severity": "minor",
+          "description": "W3-5 sign is only shown on the primary approach, but the sign schedule indicates it should be on both approaches.",
+          "fix": "Ensure the drawing matches the sign schedule."
+        }
+      ],
+      "positives": [
+        "Sign spacing and taper lengths correctly reflect urban low-speed requirements."
+      ]
+    },
+    {
+      "sheet_number": 3,
+      "sheet_type": "TA Schematics",
+      "grade": "D",
+      "issues": [
+        {
+          "severity": "major",
+          "description": "Title is 'FULL ROAD CLOSURE', but the diagram only shows the bottom lane and TWLTL closed, leaving the top lane open. A full closure must close all lanes.",
+          "fix": "Correct the diagram to span channelizing devices across the entire roadway."
+        }
+      ],
+      "positives": []
+    },
+    {
+      "sheet_number": 4,
+      "sheet_type": "TA Schematics",
+      "grade": "D",
+      "issues": [
+        {
+          "severity": "major",
+          "description": "Sheet depicts a 'Median Crossover' (TA-18), but the roadway is defined as having a center turn lane (TWLTL), not a physical median.",
+          "fix": "Remove this sheet as it is geometrically incompatible with the project site."
+        }
+      ],
+      "positives": []
+    },
+    {
+      "sheet_number": 6,
+      "sheet_type": "TA Schematics",
+      "grade": "F",
+      "issues": [
+        {
+          "severity": "critical",
+          "description": "Sheet is titled 'DOUBLE LANE CLOSURE' but uses the exact same drawing as the Full Road Closure (Sheet 3), complete with 'ROAD CLOSED' and 'DETOUR' signs. A double lane closure on a 3-lane road leaves 1 lane open and does not require a detour.",
+          "fix": "Redraw the typical application to correctly show a double lane closure with a flagging operation for the remaining open lane."
+        }
+      ],
+      "positives": []
+    },
+    {
+      "sheet_number": 9,
+      "sheet_type": "Site Layout Sheet",
+      "grade": "A",
+      "issues": [],
+      "positives": [
+        "High-quality satellite imagery.",
+        "Clear coordinate mapping and intersection identification.",
+        "Properly scaled with a North arrow."
+      ]
+    },
+    {
+      "sheet_number": 10,
+      "sheet_type": "Intersection Detail Sheets",
+      "grade": "C",
+      "issues": [
+        {
+          "severity": "major",
+          "description": "The intersection details (Sheets 10-15) show the cross-street warning signs but completely omit the mainline work area and channelizing devices. Contractors need to know how cones are routed through the intersections.",
+          "fix": "Overlay the mainline lane closure footprint and cone placement onto the intersection diagrams."
+        }
+      ],
+      "positives": [
+        "Notes explicitly address sight distance and cross-street sign requirements."
+      ]
+    },
+    {
+      "sheet_number": 16,
+      "sheet_type": "Queue Analysis Sheet",
+      "grade": "B",
+      "issues": [
+        {
+          "severity": "critical",
+          "description": "The analysis correctly identifies that a flagging operation will cause a V/C ratio of 1.10 and a 3,558 ft queue. However, the plan still permits daytime work windows. A PE cannot stamp a plan that knowingly fails capacity without mandating night-work ONLY.",
+          "fix": "Change the TCP design to a TWLTL lane shift to increase capacity. If flagging is absolutely required, change the allowable work windows to 'Nighttime Only'."
+        }
+      ],
+      "positives": [
+        "Calculations for demand vs. capacity are mathematically sound.",
+        "Crash history notes are highly relevant."
+      ]
+    },
+    {
+      "sheet_number": 17,
+      "sheet_type": "Special Considerations",
+      "grade": "A",
+      "issues": [],
+      "positives": [
+        "Excellent notes on emergency access, pedestrian accommodations, and nighttime operations."
+      ]
+    },
+    {
+      "sheet_number": 18,
+      "sheet_type": "Sign Schedule",
+      "grade": "D",
+      "issues": [
+        {
+          "severity": "major",
+          "description": "Sign quantities contradict the diagrams. W3-5 is listed as Qty 3 overall (1 for primary, 2 for 'Both approaches'), which is contradictory and doesn't match Sheet 2.",
+          "fix": "Reconcile the sign schedule quantities to exactly match the finalized typical application drawings."
+        }
+      ],
+      "positives": [
+        "Sign sizes (36x36) are correct for the speed limit."
+      ]
+    }
+  ],
+  "formatting_issues": [
+    {
+      "description": "Text inside the sign diamonds on the typical application drawings is overlapping and cramped.",
+      "fix": "Use standard MUTCD sign symbol graphics instead of writing full text strings inside the diamond shapes on the schematics."
+    }
+  ],
+  "missing_for_stamp": [
+    "Complete redesign of the primary TCP strategy: Do not use flaggers (TA-10) for a single lane closure on a TWLTL roadway. Shift traffic into the center turn lane to maintain two-way traffic flow and prevent the massive 3,500 ft queue.",
+    "Removal or correction of erroneously titled sheets (Sheets 3, 4, 6) which contain copy-pasted or geometrically impossible drawings.",
+    "Update intersection details to show the interaction between the mainline closure cones and cross-street traffic.",
+    "Correction of the Sign Schedule to match the actual drawings.",
+    "Correction of the numbering typo in the General Notes."
+  ],
+  "would_you_stamp_this": "no",
+  "conditions_for_stamp": [
+    "The traffic control strategy must be changed to utilize the center turn lane.",
+    "The V/C ratio must be brought below 1.0 during allowable work windows.",
+    "All duplicate/incorrect standard drawings must be removed."
+  ]
+}

@@ -99,7 +99,7 @@ async function callGemini(prompt: string, pdfBase64?: string): Promise<string> {
   const result = await ai.models.generateContent({
     model: 'gemini-3.1-pro-preview',
     contents: { parts },
-    config: { temperature: 1.0, topP: 0.95, thinkingConfig: { thinkingBudget: 24576 }, mediaResolution: 'high' as any },
+    config: { temperature: 1.0, topP: 0.95, thinkingConfig: { thinkingBudget: 24576 } },
   });
 
   return result?.text || '';
