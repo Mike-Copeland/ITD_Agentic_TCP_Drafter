@@ -623,8 +623,8 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="mt-8 bg-zinc-900/50 rounded-xl p-4 border border-white/5 max-h-[100px] overflow-hidden">
-                <p className="font-mono text-[10px] text-zinc-600 animate-pulse">
+              <div className="mt-8 bg-zinc-900/70 rounded-xl p-4 border border-white/10 max-h-[100px] overflow-hidden">
+                <p className="font-mono text-[11px] text-zinc-300 animate-pulse">
                   {loadingState === 1 && '> Querying ITD ArcGIS... Speed zones, AADT, functional class, terrain, crash history...'}
                   {loadingState === 2 && '> Gemini 3.1 Pro: Calculating taper L=WS, buffer (Table 6B-2), sign spacing (Table 6B-1)...'}
                   {loadingState === 3 && '> pdfkit: Rendering sheets... dxf-writer: 14-layer CAD... archiver: Building ZIP...'}
