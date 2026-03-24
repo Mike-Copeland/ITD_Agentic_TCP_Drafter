@@ -495,7 +495,7 @@ app.post('/api/site-context', async (req, res) => {
           }
           // Filter out garbage: navigation instructions, long strings, parenthetical text
           if (name && name.length > 50) name = '';
-          if (name && /turn|pass by|onto|destination|continue|head /i.test(name)) name = '';
+          if (name && /turn|pass by|onto|destination|continue|head\s|toward|will be on/i.test(name)) name = '';
           if (name && !isMainRoad(name) && !detectedRoads.has(name)) {
             detectedRoads.add(name);
             crossStreets.push(name);

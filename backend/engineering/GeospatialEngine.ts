@@ -353,7 +353,7 @@ export interface Viewport {
  */
 export function generateViewports(
   alignment: ProjectAlignment,
-  tileSizeFt = 2000, // Each tile covers ~2000x2000 ft
+  tileSizeFt?: number,
 ): Viewport[] {
   const viewports: Viewport[] = [];
   const pts = alignment.getUtmPoints();
@@ -387,14 +387,18 @@ export function generateViewports(
     return viewports;
   }
 
+  // Dynamic tile size: target ~4-8 total detail sheets max
+  // Scale tile size so the larger extent dimension fits in 2-3 tiles
+  const maxExtent = Math.max(extentX, extentY);
+  const effectiveTileSize = tileSizeFt || Math.max(2000, Math.ceil(maxExtent / 3 / 500) * 500);
+
   // Grid tiling for long/curvy routes
-  // Add padding around bounding box
-  const pad = tileSizeFt * 0.2;
+  const pad = effectiveTileSize * 0.2;
   const gridMinX = minX - pad, gridMinY = minY - pad;
   const gridMaxX = maxX + pad, gridMaxY = maxY + pad;
 
-  const cols = Math.max(1, Math.ceil((gridMaxX - gridMinX) / tileSizeFt));
-  const rows = Math.max(1, Math.ceil((gridMaxY - gridMinY) / tileSizeFt));
+  const cols = Math.max(1, Math.ceil((gridMaxX - gridMinX) / effectiveTileSize));
+  const rows = Math.max(1, Math.ceil((gridMaxY - gridMinY) / effectiveTileSize));
 
   // Adjust tile size to evenly divide the extent
   const tileW = (gridMaxX - gridMinX) / cols;
