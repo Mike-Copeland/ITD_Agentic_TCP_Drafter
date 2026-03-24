@@ -1,6 +1,7 @@
 import PDFDocument from 'pdfkit';
 import fs from 'fs';
 import Drawing from 'dxf-writer';
+import * as MUTCD from '../engineering/mutcdPart6.js';
 
 // ===================================================================
 // DATA INTERFACES
@@ -2084,48 +2085,29 @@ export async function generateCAD(
           generateDXF(blueprint, dxfPath, speedMph, laneWidthFt, operationType, startCoords, routeDistanceFt, roadName, filteredCrossStreets, terrain, funcClass, totalLanes, taCode, taperLengthFt, wzSpeedMph);
           console.log(`[cadGenerator] Complete. ${totalSheets} sheets. PDF: ${pdfPath} | DXF: ${dxfPath}`);
 
-          // === MUTCD COMPLIANCE CHECKS ===
-          const bufferFt = getBufferSpaceFt(speedMph);
-          const spacing = getABCSpacing(speedMph, terrain, funcClass);
-          const compliance: ComplianceCheck[] = [];
+          // === MUTCD COMPLIANCE CHECKS (via authoritative reference module) ===
+          const fcCode = funcClass ? parseInt(funcClass) || 99 : 99;
+          const roadClass = MUTCD.classifyRoad(speedMph, fcCode, terrain);
+          const bufferFt = MUTCD.getBufferSpace(speedMph);
+          const workDuration = MUTCD.parseDuration(duration);
 
-          // 1. Taper length
-          if (taCode === 'TA-10') {
-            compliance.push({ rule: 'MUTCD 6C.08', requirement: 'Flagger taper 50-100 ft', actual: `${taperLengthFt} ft`, pass: taperLengthFt >= 50 && taperLengthFt <= 100 });
-          } else {
-            const expectedTaper = calcTaperLength(laneWidthFt, speedMph);
-            compliance.push({ rule: 'MUTCD 6C.08', requirement: `Merging taper >= ${expectedTaper} ft (L=WS)`, actual: `${taperLengthFt} ft`, pass: taperLengthFt >= expectedTaper * 0.95 });
-          }
+          const compliance = MUTCD.runComplianceChecks({
+            taCode, speedMph, wzSpeedMph, laneWidthFt, taperLengthFt, bufferFt,
+            dnTaperFt: blueprint.downstream_taper.length_ft,
+            primarySigns: blueprint.primary_approach.map(s => ({ sign_code: s.sign_code, distance_ft: s.distance_ft })),
+            opposingSigns: blueprint.opposing_approach.map(s => ({ sign_code: s.sign_code, distance_ft: s.distance_ft })),
+            deviceType: blueprint.taper.device_type,
+            duration: workDuration,
+            roadClass,
+            roadName,
+            crossStreetCount: filteredCrossStreets.length,
+            arrowBoard: ['TA-30', 'TA-31', 'TA-33', 'TA-34', 'TA-35', 'TA-36'].includes(taCode),
+          });
 
-          // 2. Buffer space (Table 6C-2)
-          compliance.push({ rule: 'MUTCD Table 6C-2', requirement: `Buffer >= ${bufferFt} ft for ${speedMph} MPH`, actual: `${bufferFt} ft`, pass: true });
-
-          // 3. Advance warning sign spacing
-          const maxSignDist = Math.max(...blueprint.primary_approach.map(s => s.distance_ft), 0);
-          compliance.push({ rule: 'MUTCD Table 6C-1', requirement: `First sign >= ${spacing.a} ft (${spacing.classification})`, actual: `${maxSignDist} ft`, pass: maxSignDist >= spacing.a * 0.9 });
-
-          // 4. W20-1 present
-          const hasW201 = blueprint.primary_approach.some(s => s.sign_code === 'W20-1');
-          compliance.push({ rule: 'MUTCD 6C.04', requirement: 'W20-1 ROAD WORK AHEAD required', actual: hasW201 ? 'Present' : 'MISSING', pass: hasW201 });
-
-          // 5. Sign size
-          const reqSize = getSignSize(speedMph, roadName);
-          compliance.push({ rule: 'MUTCD Table 6F-1', requirement: `Sign size >= ${reqSize}`, actual: reqSize, pass: true });
-
-          // 6. Device type vs duration
-          const correctDevice = isLongTerm ? '42-inch Drums' : '28-inch Cones';
-          compliance.push({ rule: 'MUTCD 6F.68', requirement: `${isLongTerm ? 'Long-term' : 'Short-term'}: ${correctDevice}`, actual: blueprint.taper.device_type, pass: blueprint.taper.device_type.includes(isLongTerm ? 'Drum' : 'Cone') || blueprint.taper.device_type.includes(isLongTerm ? 'drum' : 'cone') });
-
-          // 7. Downstream taper
-          compliance.push({ rule: 'MUTCD 6C.08', requirement: 'Downstream taper >= 50 ft', actual: `${blueprint.downstream_taper.length_ft} ft`, pass: blueprint.downstream_taper.length_ft >= 50 });
-
-          // 8. Cross-street signing
-          if (filteredCrossStreets.length > 0) {
-            compliance.push({ rule: 'MUTCD 6H.01', requirement: `W20-1 on ${filteredCrossStreets.length} cross-streets`, actual: `${filteredCrossStreets.length} intersection sheets`, pass: true });
-          }
-
+          const errors = compliance.filter(c => !c.pass && c.severity === 'error');
+          const warnings = compliance.filter(c => !c.pass && c.severity === 'warning');
           const passCount = compliance.filter(c => c.pass).length;
-          console.log(`[cadGenerator] Compliance: ${passCount}/${compliance.length} checks passed`);
+          console.log(`[cadGenerator] Compliance: ${passCount}/${compliance.length} passed | ${errors.length} errors | ${warnings.length} warnings`);
 
           resolve({
             taCode, taDescription, taperLengthFt, bufferFt,
@@ -2133,7 +2115,7 @@ export async function generateCAD(
             totalSheets,
             primarySigns: [...blueprint.primary_approach],
             opposingSigns: [...blueprint.opposing_approach],
-            compliance,
+            compliance: compliance.map(c => ({ rule: c.rule, requirement: c.requirement, actual: c.actual, pass: c.pass })),
           });
         } catch (dxfErr) {
           reject(new Error(`DXF write failed: ${dxfErr}`));

@@ -1,0 +1,1621 @@
+{
+  "table_6C1_advance_warning_spacing": {
+    "description": "Table 6B-1 from MUTCD 11th Ed. Recommended Advance Warning Sign Minimum Spacing. A is the distance from the transition/restriction to the first sign. B is the distance between the first and second signs. C is the distance between the second and third signs.",
+    "road_types": [
+      {
+        "type": "Urban (low speed)",
+        "speed_category": "Determined by highway agency, typically 30 mph or less.",
+        "A_ft": 100,
+        "B_ft": 100,
+        "C_ft": 100
+      },
+      {
+        "type": "Urban (high speed)",
+        "speed_category": "Determined by highway agency, typically over 30 mph.",
+        "A_ft": 350,
+        "B_ft": 350,
+        "C_ft": 350
+      },
+      {
+        "type": "Rural",
+        "speed_category": "N/A",
+        "A_ft": 500,
+        "B_ft": 500,
+        "C_ft": 500
+      },
+      {
+        "type": "Expressway / Freeway",
+        "speed_category": "N/A",
+        "A_ft": 1000,
+        "B_ft": 1500,
+        "C_ft": 2640
+      }
+    ]
+  },
+  "table_6C2_buffer_space": {
+    "description": "Table 6B-2 from MUTCD 11th Ed. Stopping Sight Distance as a Function of Speed, used to determine longitudinal buffer space length.",
+    "speeds": [
+      {
+        "speed_mph": 20,
+        "buffer_ft": 115
+      },
+      {
+        "speed_mph": 25,
+        "buffer_ft": 155
+      },
+      {
+        "speed_mph": 30,
+        "buffer_ft": 200
+      },
+      {
+        "speed_mph": 35,
+        "buffer_ft": 250
+      },
+      {
+        "speed_mph": 40,
+        "buffer_ft": 305
+      },
+      {
+        "speed_mph": 45,
+        "buffer_ft": 360
+      },
+      {
+        "speed_mph": 50,
+        "buffer_ft": 425
+      },
+      {
+        "speed_mph": 55,
+        "buffer_ft": 495
+      },
+      {
+        "speed_mph": 60,
+        "buffer_ft": 570
+      },
+      {
+        "speed_mph": 65,
+        "buffer_ft": 645
+      },
+      {
+        "speed_mph": 70,
+        "buffer_ft": 730
+      },
+      {
+        "speed_mph": 75,
+        "buffer_ft": 820
+      }
+    ]
+  },
+  "taper_formulas": {
+    "description": "Formulas for determining taper length (L) in feet, where W is the width of offset in feet and S is the speed in mph (posted, 85th-percentile, or anticipated operating speed).",
+    "merging_taper_high_speed": "L = W * S (for S >= 45 mph)",
+    "merging_taper_low_speed": "L = (W * S^2) / 60 (for S <= 40 mph)",
+    "shifting_taper": "at least 0.5 * L",
+    "shoulder_taper": "at least 0.33 * L",
+    "downstream_taper": {
+      "min_ft": 50,
+      "max_ft": 100
+    },
+    "one_lane_two_way_taper": {
+      "min_ft": 50,
+      "max_ft": 100
+    }
+  },
+  "channelizing_device_spacing": {
+    "description": "Maximum spacing in feet, where S is the speed in mph.",
+    "taper": "1 * S",
+    "tangent": "2 * S",
+    "one_lane_two_way_taper": "20 ft maximum"
+  },
+  "typical_applications": [
+    {
+      "ta_number": "TA-1",
+      "title": "Work Beyond the Shoulder",
+      "when_to_use": "Work is being performed beyond the shoulder, 15 feet or more from the edge of the traveled way, but equipment or vehicles may be distracting.",
+      "required_signs": [
+        {
+          "code": "W20-1",
+          "label": "ROAD WORK AHEAD",
+          "mandatory": false,
+          "position": "advance warning",
+          "notes": "Optional if work is behind a barrier, >24in behind curb, or >15ft from roadway. Can be replaced with SHOULDER WORK sign."
+        }
+      ],
+      "required_devices": [
+        "None required, but a work vehicle with high-intensity lights can be used."
+      ],
+      "arrow_board": "not_applicable",
+      "flaggers": "not_applicable",
+      "notes": [
+        "For short-term, short-duration or mobile operation, all signs may be eliminated if a vehicle with activated high-intensity rotating, flashing, oscillating, or strobe lights is used."
+      ]
+    },
+    {
+      "ta_number": "TA-2",
+      "title": "Blasting Zone",
+      "when_to_use": "Blasting caps are used within 1,000 feet of a roadway.",
+      "required_signs": [
+        {
+          "code": "W22-1",
+          "label": "BLASTING ZONE AHEAD",
+          "mandatory": true,
+          "position": "advance warning, 1000 ft min before R22-2"
+        },
+        {
+          "code": "R22-2",
+          "label": "TURN OFF 2-WAY RADIO AND CELL PHONE",
+          "mandatory": true,
+          "position": "at least 1,000 ft before blasting zone"
+        },
+        {
+          "code": "W22-3",
+          "label": "END BLASTING ZONE",
+          "mandatory": true,
+          "position": "minimum 1,000 ft past blasting zone"
+        }
+      ],
+      "required_devices": [],
+      "arrow_board": "not_applicable",
+      "flaggers": "not_applicable",
+      "notes": [
+        "Signs shall be covered or removed when no explosives are in the area.",
+        "Prior to blasting, road users shall not be permitted to pass if there is danger."
+      ]
+    },
+    {
+      "ta_number": "TA-3",
+      "title": "Work on the Shoulders",
+      "when_to_use": "Work is being performed on the shoulder with no encroachment into the traveled way.",
+      "required_signs": [
+        {
+          "code": "W21-5",
+          "label": "SHOULDER WORK",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "G20-2",
+          "label": "END ROAD WORK",
+          "mandatory": false,
+          "position": "termination"
+        }
+      ],
+      "required_devices": [
+        "Shoulder taper using channelizing devices with length of 1/3 L is required if paved shoulder is 8 ft or wider."
+      ],
+      "arrow_board": "not_applicable",
+      "flaggers": "not_applicable",
+      "notes": [
+        "For short-duration operations of 60 minutes or less, all signs and devices may be eliminated if a vehicle with high-intensity lights is used."
+      ]
+    },
+    {
+      "ta_number": "TA-4",
+      "title": "Short-Duration or Mobile Operation on a Shoulder",
+      "when_to_use": "Mobile or short-duration work is being performed on the shoulder.",
+      "required_signs": [
+        {
+          "code": "W20-1",
+          "label": "ROAD WORK AHEAD",
+          "mandatory": false,
+          "position": "advance warning (stationary sign)"
+        },
+        {
+          "code": "W21-5",
+          "label": "SHOULDER WORK",
+          "mandatory": false,
+          "position": "vehicle-mounted on shadow vehicle"
+        }
+      ],
+      "required_devices": [
+        "Work vehicle and shadow vehicle, both with high-intensity lights. Shadow vehicle may have truck-mounted attenuator."
+      ],
+      "arrow_board": "optional, caution mode only",
+      "flaggers": "not_applicable",
+      "notes": [
+        "Stationary signs may be omitted if work vehicle displays high-intensity lights.",
+        "Vehicle-mounted signs shall be covered or turned from view when work is not in progress."
+      ]
+    },
+    {
+      "ta_number": "TA-5",
+      "title": "Shoulder Closure on a Freeway",
+      "when_to_use": "Long-term closure of a shoulder on a limited-access highway.",
+      "required_signs": [
+        {
+          "code": "W20-1",
+          "label": "ROAD WORK AHEAD",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W21-5aR",
+          "label": "RIGHT SHOULDER CLOSED",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W7-3aP",
+          "label": "NEXT XX MILES",
+          "mandatory": false,
+          "position": "supplemental to W21-5aR"
+        }
+      ],
+      "required_devices": [
+        "Shoulder taper using channelizing devices with length of 1/3 L.",
+        "Optional temporary traffic barrier for long-term project.",
+        "Optional crash cushion at upstream end of barrier."
+      ],
+      "arrow_board": "not_applicable",
+      "flaggers": "not_applicable",
+      "notes": [
+        "Use of temporary traffic barrier shall be based on engineering judgment and must comply with Section 6M.02."
+      ]
+    },
+    {
+      "ta_number": "TA-6",
+      "title": "Shoulder Work with Minor Encroachment",
+      "when_to_use": "Work on the shoulder encroaches slightly into the traveled way on a low-speed, low-volume road, leaving at least 10 ft of lane width.",
+      "required_signs": [
+        {
+          "code": "W20-1",
+          "label": "ROAD WORK AHEAD",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "G20-2",
+          "label": "END ROAD WORK",
+          "mandatory": false,
+          "position": "termination"
+        }
+      ],
+      "required_devices": [
+        "Channelizing devices to taper traffic slightly away from the work space."
+      ],
+      "arrow_board": "not_applicable",
+      "flaggers": "not_applicable",
+      "notes": [
+        "For higher-speed traffic, a full lane closure should be used.",
+        "For short-duration work, taper and devices may be omitted if a shadow vehicle with high-intensity lights is used."
+      ]
+    },
+    {
+      "ta_number": "TA-7",
+      "title": "Road Closure with a Diversion",
+      "when_to_use": "A two-lane road is closed and traffic is diverted onto a temporary roadway within the right-of-way.",
+      "required_signs": [
+        {
+          "code": "W20-1",
+          "label": "ROAD WORK XX FT",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W24-1L",
+          "label": "Double Reverse Curve (Left)",
+          "mandatory": true,
+          "position": "at start of diversion"
+        },
+        {
+          "code": "W1-6L",
+          "label": "Large Arrow (Left)",
+          "mandatory": false,
+          "position": "on curves"
+        },
+        {
+          "code": "W1-6R",
+          "label": "Large Arrow (Right)",
+          "mandatory": false,
+          "position": "on curves"
+        },
+        {
+          "code": "W13-1P",
+          "label": "Advisory Speed Plaque",
+          "mandatory": false,
+          "position": "below W24-1L"
+        },
+        {
+          "code": "G20-2",
+          "label": "END ROAD WORK",
+          "mandatory": false,
+          "position": "termination"
+        }
+      ],
+      "required_devices": [
+        "Temporary traffic barriers and end treatments (crash cushions) are required.",
+        "Pavement markings for the diversion must be installed, and conflicting old markings removed."
+      ],
+      "arrow_board": "not_applicable",
+      "flaggers": "not_applicable",
+      "notes": [
+        "Devices must be placed for both directions of travel.",
+        "Barriers and end treatments must be crashworthy."
+      ]
+    },
+    {
+      "ta_number": "TA-8",
+      "title": "Road Closure with an Off-Site Detour",
+      "when_to_use": "A road is closed and traffic is detoured onto other existing roads.",
+      "required_signs": [
+        {
+          "code": "W20-3",
+          "label": "ROAD CLOSED AHEAD",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "R11-3a",
+          "label": "ROAD CLOSED XX MILES AHEAD, LOCAL TRAFFIC ONLY",
+          "mandatory": true,
+          "position": "at detour turn"
+        },
+        {
+          "code": "M4-10L",
+          "label": "DETOUR Arrow (Left)",
+          "mandatory": true,
+          "position": "at detour turn"
+        },
+        {
+          "code": "M4-8",
+          "label": "DETOUR",
+          "mandatory": true,
+          "position": "confirming route"
+        },
+        {
+          "code": "R11-2",
+          "label": "ROAD CLOSED",
+          "mandatory": true,
+          "position": "at point of closure"
+        }
+      ],
+      "required_devices": [
+        "Type 3 Barricade at the point of closure."
+      ],
+      "arrow_board": "not_applicable",
+      "flaggers": "not_applicable",
+      "notes": [
+        "Regulatory signs (like STOP signs) may need to be modified for the duration of the detour."
+      ]
+    },
+    {
+      "ta_number": "TA-9",
+      "title": "Overlapping Routes with a Detour",
+      "when_to_use": "A detour route overlaps with one or more existing numbered routes.",
+      "required_signs": [
+        {
+          "code": "R11-2",
+          "label": "ROAD CLOSED",
+          "mandatory": true,
+          "position": "at point of closure"
+        },
+        {
+          "code": "M4-10R",
+          "label": "DETOUR Arrow (Right)",
+          "mandatory": true,
+          "position": "at point of closure"
+        },
+        {
+          "code": "M4-8",
+          "label": "DETOUR",
+          "mandatory": true,
+          "position": "used with route markers to guide traffic"
+        },
+        {
+          "code": "W20-2",
+          "label": "DETOUR AHEAD",
+          "mandatory": true,
+          "position": "advance warning"
+        }
+      ],
+      "required_devices": [
+        "Type 3 Barricade at the point of closure."
+      ],
+      "arrow_board": "not_applicable",
+      "flaggers": "not_applicable",
+      "notes": [
+        "All route sign assemblies must be used to clearly guide traffic along the detour and back to the original route."
+      ]
+    },
+    {
+      "ta_number": "TA-10",
+      "title": "Lane Closure on a Two-Lane Road Using Flaggers",
+      "when_to_use": "Closing one lane of a two-lane, two-way road for work in the traveled way.",
+      "required_signs": [
+        {
+          "code": "W20-1",
+          "label": "ROAD WORK XX FT",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W20-4",
+          "label": "ONE LANE ROAD XX FT",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W20-7",
+          "label": "Flagger Symbol",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W16-2P",
+          "label": "Distance Plaque (XX FEET)",
+          "mandatory": false,
+          "position": "below W20-7"
+        },
+        {
+          "code": "G20-2",
+          "label": "END ROAD WORK",
+          "mandatory": false,
+          "position": "termination"
+        }
+      ],
+      "required_devices": [
+        "Channelizing devices for a one-lane, two-way taper and tangent section."
+      ],
+      "arrow_board": "not_applicable",
+      "flaggers": "required",
+      "notes": [
+        "At night, flagger stations shall be illuminated, except in emergencies.",
+        "Buffer space should be extended to place taper before a curve.",
+        "Automated Flagger Assistance Devices (AFADs) are an option."
+      ]
+    },
+    {
+      "ta_number": "TA-11",
+      "title": "Lane Closure on a Two-Lane Road with Low Traffic Volumes",
+      "when_to_use": "Closing one lane of a two-lane, two-way road where traffic is low enough to self-regulate.",
+      "required_signs": [
+        {
+          "code": "W20-1",
+          "label": "ROAD WORK AHEAD",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W20-4",
+          "label": "ONE LANE ROAD AHEAD",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "R1-2",
+          "label": "YIELD",
+          "mandatory": true,
+          "position": "at start of taper for one direction"
+        },
+        {
+          "code": "W1-4R",
+          "label": "Reverse Turn (Right)",
+          "mandatory": true,
+          "position": "at start of taper for non-yielding direction"
+        },
+        {
+          "code": "G20-2",
+          "label": "END ROAD WORK",
+          "mandatory": false,
+          "position": "termination"
+        }
+      ],
+      "required_devices": [
+        "Channelizing devices to delineate the work area and guide traffic."
+      ],
+      "arrow_board": "not_applicable",
+      "flaggers": "not_applicable",
+      "notes": [
+        "Only for use when road users from both directions can see approaching traffic through and beyond the worksite.",
+        "If traffic cannot self-regulate, flaggers must be used (see TA-10)."
+      ]
+    },
+    {
+      "ta_number": "TA-12",
+      "title": "Lane Closure on a Two-Lane Road Using Temporary Traffic Control Signals",
+      "when_to_use": "Long-term closure of one lane on a two-lane, two-way road, especially at night.",
+      "required_signs": [
+        {
+          "code": "W20-1",
+          "label": "ROAD WORK AHEAD",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W20-4",
+          "label": "ONE LANE ROAD AHEAD",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W3-3",
+          "label": "Signal Ahead",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "R10-6",
+          "label": "STOP HERE ON RED",
+          "mandatory": true,
+          "position": "at stop line"
+        },
+        {
+          "code": "G20-2",
+          "label": "END ROAD WORK",
+          "mandatory": false,
+          "position": "termination"
+        }
+      ],
+      "required_devices": [
+        "Temporary traffic control signals at each end of the one-lane section.",
+        "Stop lines.",
+        "Channelizing devices to delineate the work area."
+      ],
+      "arrow_board": "not_applicable",
+      "flaggers": "not_applicable",
+      "notes": [
+        "Signals must meet all requirements of MUTCD Part 4.",
+        "Red clearance intervals must be adequate to clear the one-lane section.",
+        "Conflicting pavement markings must be removed for long-term closures."
+      ]
+    },
+    {
+      "ta_number": "TA-13",
+      "title": "Temporary Road Closure",
+      "when_to_use": "A planned, short-term (not exceeding 20 minutes) closure of a two-lane road during the daytime.",
+      "required_signs": [
+        {
+          "code": "W20-1",
+          "label": "ROAD WORK AHEAD",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W20-7",
+          "label": "Flagger Symbol",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W3-4",
+          "label": "BE PREPARED TO STOP",
+          "mandatory": false,
+          "position": "advance warning, before Flagger sign"
+        }
+      ],
+      "required_devices": [],
+      "arrow_board": "not_applicable",
+      "flaggers": "required",
+      "notes": [
+        "A flagger or uniformed law enforcement officer shall be used for this application."
+      ]
+    },
+    {
+      "ta_number": "TA-14",
+      "title": "Haul Road Crossing",
+      "when_to_use": "A haul road for construction vehicles crosses a public roadway.",
+      "required_signs": [
+        {
+          "code": "W20-1",
+          "label": "ROAD WORK AHEAD",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W14-3",
+          "label": "NO PASSING ZONE",
+          "mandatory": true,
+          "position": "advance warning (flagger method)"
+        },
+        {
+          "code": "R4-1",
+          "label": "DO NOT PASS",
+          "mandatory": true,
+          "position": "advance warning (flagger method)"
+        },
+        {
+          "code": "W3-3",
+          "label": "Signal Ahead",
+          "mandatory": true,
+          "position": "advance warning (signal method)"
+        },
+        {
+          "code": "R10-6",
+          "label": "STOP HERE ON RED",
+          "mandatory": true,
+          "position": "at stop line (signal method)"
+        }
+      ],
+      "required_devices": [
+        "Either flaggers or temporary traffic signals must be used to control the crossing."
+      ],
+      "arrow_board": "not_applicable",
+      "flaggers": "optional (method A)",
+      "notes": [
+        "At night, flagger stations must be illuminated.",
+        "If using signals, they must meet Part 4 requirements."
+      ]
+    },
+    {
+      "ta_number": "TA-15",
+      "title": "Work in the Center of a Road with Low Traffic Volumes",
+      "when_to_use": "Work is in the center of a low-volume, low-speed road, allowing traffic to pass on both sides.",
+      "required_signs": [
+        {
+          "code": "W20-1",
+          "label": "ROAD WORK AHEAD",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "R4-7",
+          "label": "KEEP RIGHT",
+          "mandatory": true,
+          "position": "at start of taper"
+        },
+        {
+          "code": "G20-2",
+          "label": "END ROAD WORK",
+          "mandatory": false,
+          "position": "termination"
+        }
+      ],
+      "required_devices": [
+        "Channelizing devices to form a taper and delineate the work area."
+      ],
+      "arrow_board": "not_applicable",
+      "flaggers": "not_applicable",
+      "notes": [
+        "Lanes on either side should have a minimum width of 10 feet."
+      ]
+    },
+    {
+      "ta_number": "TA-16",
+      "title": "Surveying Along the Center Line of a Road with Low Traffic Volumes",
+      "when_to_use": "Surveying work is performed on the center line of a low-volume road.",
+      "required_signs": [
+        {
+          "code": "W21-6",
+          "label": "SURVEY CREW",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W20-7",
+          "label": "Flagger Symbol",
+          "mandatory": true,
+          "position": "advance warning"
+        }
+      ],
+      "required_devices": [
+        "Optional cones along the center line."
+      ],
+      "arrow_board": "not_applicable",
+      "flaggers": "required (to warn workers)",
+      "notes": [
+        "For high-volume roads, a full lane closure (TA-10) shall be used."
+      ]
+    },
+    {
+      "ta_number": "TA-17",
+      "title": "Mobile Operations on a Two-Lane Road",
+      "when_to_use": "Mobile work (e.g., striping, pothole patching) is performed on a two-lane road.",
+      "required_signs": [
+        {
+          "code": "Varies",
+          "label": "Appropriate warning sign (e.g., ROAD WORK AHEAD)",
+          "mandatory": true,
+          "position": "vehicle-mounted on shadow vehicle"
+        }
+      ],
+      "required_devices": [
+        "Work vehicle and at least one shadow vehicle, both with high-intensity lights.",
+        "Shadow vehicle should have a truck-mounted attenuator."
+      ],
+      "arrow_board": "required, caution mode only",
+      "flaggers": "not_applicable",
+      "notes": [
+        "Vehicles should pull over periodically to allow traffic to pass.",
+        "Vehicle-mounted signs shall be covered or turned from view when work is not in progress."
+      ]
+    },
+    {
+      "ta_number": "TA-18",
+      "title": "Lane Closure on a Minor Street",
+      "when_to_use": "Work closes a lane on a low-speed, low-volume minor street.",
+      "required_signs": [
+        {
+          "code": "W21-1",
+          "label": "Workers Symbol",
+          "mandatory": true,
+          "position": "advance warning"
+        }
+      ],
+      "required_devices": [
+        "Channelizing devices to taper traffic and delineate the work area."
+      ],
+      "arrow_board": "not_applicable",
+      "flaggers": "optional (required if traffic cannot self-regulate)",
+      "notes": [
+        "If traffic cannot self-regulate, flaggers must be used per TA-10."
+      ]
+    },
+    {
+      "ta_number": "TA-19",
+      "title": "Detour for One Travel Direction",
+      "when_to_use": "One direction of a two-way street is closed and detoured.",
+      "required_signs": [
+        {
+          "code": "R11-2",
+          "label": "ROAD CLOSED",
+          "mandatory": true,
+          "position": "at point of closure"
+        },
+        {
+          "code": "M4-9R",
+          "label": "DETOUR (Right)",
+          "mandatory": true,
+          "position": "at detour turn"
+        },
+        {
+          "code": "W20-2",
+          "label": "DETOUR AHEAD",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "R5-1",
+          "label": "DO NOT ENTER",
+          "mandatory": false,
+          "position": "on closed street"
+        },
+        {
+          "code": "R6-1R",
+          "label": "ONE WAY (Right)",
+          "mandatory": true,
+          "position": "on detour route"
+        }
+      ],
+      "required_devices": [
+        "Type 3 Barricade at the point of closure."
+      ],
+      "arrow_board": "not_applicable",
+      "flaggers": "not_applicable",
+      "notes": [
+        "Used for streets without posted route numbers.",
+        "Street Name sign shall be placed above the Detour sign."
+      ]
+    },
+    {
+      "ta_number": "TA-20",
+      "title": "Detour for a Closed Street",
+      "when_to_use": "A street is closed to all through traffic and a detour is provided.",
+      "required_signs": [
+        {
+          "code": "W20-2",
+          "label": "DETOUR AHEAD",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "R11-4",
+          "label": "ROAD CLOSED TO THRU TRAFFIC",
+          "mandatory": true,
+          "position": "at detour turn"
+        },
+        {
+          "code": "M4-10L",
+          "label": "DETOUR Arrow (Left)",
+          "mandatory": true,
+          "position": "at detour turn"
+        },
+        {
+          "code": "R11-2",
+          "label": "ROAD CLOSED",
+          "mandatory": true,
+          "position": "at point of closure"
+        },
+        {
+          "code": "M4-8a",
+          "label": "END DETOUR",
+          "mandatory": true,
+          "position": "at end of detour"
+        }
+      ],
+      "required_devices": [
+        "Type 3 Barricade at the point of closure."
+      ],
+      "arrow_board": "not_applicable",
+      "flaggers": "not_applicable",
+      "notes": [
+        "Used for streets without posted route numbers.",
+        "Street Name sign shall be placed above the Detour sign."
+      ]
+    },
+    {
+      "ta_number": "TA-21",
+      "title": "Lane Closure on the Near Side of an Intersection",
+      "when_to_use": "Work closes a lane on the approach to an intersection.",
+      "required_signs": [
+        {
+          "code": "W20-1",
+          "label": "ROAD WORK AHEAD",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W9-3L",
+          "label": "Interior Lane Shift (Left)",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W12-1",
+          "label": "Double Arrow",
+          "mandatory": true,
+          "position": "at start of taper"
+        }
+      ],
+      "required_devices": [
+        "Merging taper using channelizing devices."
+      ],
+      "arrow_board": "not_applicable",
+      "flaggers": "not_applicable",
+      "notes": [
+        "The merging taper shall direct traffic into either the right-hand or left-hand lane, but not both.",
+        "If work space extends across a crosswalk, it must be closed per TA-29."
+      ]
+    },
+    {
+      "ta_number": "TA-22",
+      "title": "Right-Hand Lane Closure on the Far Side of an Intersection",
+      "when_to_use": "Work closes the right-hand lane immediately after an intersection.",
+      "required_signs": [
+        {
+          "code": "W20-1",
+          "label": "ROAD WORK AHEAD",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W20-5R",
+          "label": "RIGHT LANE CLOSED AHEAD",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W4-2R",
+          "label": "Lane Ends Symbol (Right)",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "R3-7R",
+          "label": "RIGHT LANE MUST TURN RIGHT",
+          "mandatory": false,
+          "position": "optional, to create a mandatory turn lane"
+        }
+      ],
+      "required_devices": [
+        "Merging taper using channelizing devices after the intersection."
+      ],
+      "arrow_board": "not_applicable",
+      "flaggers": "not_applicable",
+      "notes": [
+        "If work space extends across a crosswalk, it must be closed per TA-29."
+      ]
+    },
+    {
+      "ta_number": "TA-23",
+      "title": "Left-Hand Lane Closure on the Far Side of an Intersection",
+      "when_to_use": "Work closes the left-hand lane immediately after an intersection.",
+      "required_signs": [
+        {
+          "code": "W20-1",
+          "label": "ROAD WORK AHEAD",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W20-5L",
+          "label": "LEFT LANE CLOSED AHEAD",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W4-2L",
+          "label": "Lane Ends Symbol (Left)",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "R3-7L",
+          "label": "LEFT LANE MUST TURN LEFT",
+          "mandatory": false,
+          "position": "optional, to create a mandatory turn lane"
+        }
+      ],
+      "required_devices": [
+        "Merging taper using channelizing devices after the intersection."
+      ],
+      "arrow_board": "not_applicable",
+      "flaggers": "not_applicable",
+      "notes": [
+        "If work space extends across a crosswalk, it must be closed per TA-29."
+      ]
+    },
+    {
+      "ta_number": "TA-24",
+      "title": "Half Road Closure on the Far Side of an Intersection",
+      "when_to_use": "Work closes half of the road on the far side of an intersection, requiring traffic to shift.",
+      "required_signs": [
+        {
+          "code": "W20-1",
+          "label": "ROAD WORK AHEAD",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W20-5R",
+          "label": "RIGHT LANE CLOSED AHEAD",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W4-2R",
+          "label": "Lane Ends Symbol (Right)",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "R3-2",
+          "label": "No Left Turn Symbol",
+          "mandatory": false,
+          "position": "optional, to prohibit turns"
+        }
+      ],
+      "required_devices": [
+        "Merging taper after the intersection.",
+        "Channelizing devices to separate opposing traffic through the intersection."
+      ],
+      "arrow_board": "not_applicable",
+      "flaggers": "not_applicable",
+      "notes": [
+        "When turn prohibitions are implemented, two signs should be used (near side and far side)."
+      ]
+    },
+    {
+      "ta_number": "TA-25",
+      "title": "Multiple Lane Closures at an Intersection",
+      "when_to_use": "Work requires closing multiple lanes on the approach to and/or departure from an intersection.",
+      "required_signs": [
+        {
+          "code": "W20-1",
+          "label": "ROAD WORK AHEAD",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W20-5L",
+          "label": "LEFT LANE CLOSED AHEAD",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W4-2L",
+          "label": "Lane Ends Symbol (Left)",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "R3-7L",
+          "label": "LEFT LANE MUST TURN LEFT",
+          "mandatory": true,
+          "position": "at intersection"
+        },
+        {
+          "code": "R3-2",
+          "label": "No Left Turn Symbol",
+          "mandatory": true,
+          "position": "at intersection"
+        }
+      ],
+      "required_devices": [
+        "Merging taper before the intersection.",
+        "Channelizing devices to guide traffic through the intersection."
+      ],
+      "arrow_board": "not_applicable",
+      "flaggers": "not_applicable",
+      "notes": [
+        "The normal procedure is to close on the near side any lane that is not carried through the intersection."
+      ]
+    },
+    {
+      "ta_number": "TA-26",
+      "title": "Closure in the Center of an Intersection",
+      "when_to_use": "Work is located in the center of an intersection.",
+      "required_signs": [
+        {
+          "code": "W20-1",
+          "label": "ROAD WORK AHEAD",
+          "mandatory": true,
+          "position": "advance warning on all approaches"
+        },
+        {
+          "code": "R4-7",
+          "label": "KEEP RIGHT",
+          "mandatory": true,
+          "position": "at start of channelization"
+        }
+      ],
+      "required_devices": [
+        "Channelizing devices to guide traffic around the central work area."
+      ],
+      "arrow_board": "not_applicable",
+      "flaggers": "not_applicable",
+      "notes": [
+        "All lanes should be a minimum of 10 feet wide.",
+        "Left turns may be prohibited if geometry is restrictive."
+      ]
+    },
+    {
+      "ta_number": "TA-27",
+      "title": "Closure at the Side of an Intersection",
+      "when_to_use": "Work is located in one quadrant of an intersection, requiring flagger control.",
+      "required_signs": [
+        {
+          "code": "W20-1",
+          "label": "ROAD WORK AHEAD",
+          "mandatory": true,
+          "position": "advance warning on all approaches"
+        },
+        {
+          "code": "W20-4",
+          "label": "ONE LANE ROAD AHEAD",
+          "mandatory": true,
+          "position": "advance warning on all approaches"
+        },
+        {
+          "code": "W20-7",
+          "label": "Flagger Symbol",
+          "mandatory": true,
+          "position": "advance warning on all approaches"
+        }
+      ],
+      "required_devices": [
+        "Channelizing devices to delineate the work area."
+      ],
+      "arrow_board": "not_applicable",
+      "flaggers": "required",
+      "notes": [
+        "At night, flagger stations shall be illuminated, except in emergencies.",
+        "Turns may be prohibited as required by traffic conditions."
+      ]
+    },
+    {
+      "ta_number": "TA-28",
+      "title": "Sidewalk Detour or Diversion",
+      "when_to_use": "A sidewalk is closed and pedestrians are either detoured to the other side of the street or diverted to a temporary path.",
+      "required_signs": [
+        {
+          "code": "R9-9",
+          "label": "SIDEWALK CLOSED",
+          "mandatory": true,
+          "position": "at point of closure"
+        },
+        {
+          "code": "R9-11a",
+          "label": "SIDEWALK CLOSED CROSS HERE",
+          "mandatory": true,
+          "position": "at crosswalk"
+        },
+        {
+          "code": "W20-1",
+          "label": "ROAD WORK AHEAD",
+          "mandatory": false,
+          "position": "optional for vehicular traffic"
+        }
+      ],
+      "required_devices": [
+        "Pedestrian channelizing devices (e.g., barricades, continuous walls) across the full width of the closed sidewalk.",
+        "Temporary ramps must provide a 12:1 (8.33%) or flatter slope."
+      ],
+      "arrow_board": "not_applicable",
+      "flaggers": "not_applicable",
+      "notes": [
+        "Temporary facilities shall be detectable and include accessibility features consistent with the existing facility.",
+        "Audible information devices shall be provided where midblock sidewalk closings cause inadequate communication."
+      ]
+    },
+    {
+      "ta_number": "TA-29",
+      "title": "Crosswalk Closures and Pedestrian Detours",
+      "when_to_use": "A crosswalk is closed, requiring pedestrians to be detoured to an alternate crossing.",
+      "required_signs": [
+        {
+          "code": "R9-9",
+          "label": "SIDEWALK CLOSED",
+          "mandatory": true,
+          "position": "at point of closure"
+        },
+        {
+          "code": "R9-11",
+          "label": "SIDEWALK CLOSED AHEAD, CROSS HERE",
+          "mandatory": true,
+          "position": "advance of closure"
+        },
+        {
+          "code": "W11-2",
+          "label": "Pedestrian Crossing Symbol",
+          "mandatory": true,
+          "position": "at new temporary crosswalk"
+        },
+        {
+          "code": "W16-7PL",
+          "label": "Diagonal Arrow Plaque",
+          "mandatory": true,
+          "position": "with W11-2"
+        }
+      ],
+      "required_devices": [
+        "Pedestrian channelizing devices across the full width of the closed sidewalk/crosswalk.",
+        "Temporary markings for new crosswalk lines."
+      ],
+      "arrow_board": "not_applicable",
+      "flaggers": "not_applicable",
+      "notes": [
+        "Temporary facilities shall be detectable and include accessibility features.",
+        "Audible information devices shall be provided where changed crosswalk areas cause inadequate communication."
+      ]
+    },
+    {
+      "ta_number": "TA-30",
+      "title": "Interior Lane Closure on a Multi-Lane Street",
+      "when_to_use": "An interior lane is closed on a multi-lane, low-speed, low-volume urban street.",
+      "required_signs": [
+        {
+          "code": "W20-1",
+          "label": "ROAD WORK AHEAD",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W20-5L",
+          "label": "LEFT LANE CLOSED AHEAD",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W4-2L",
+          "label": "Lane Ends Symbol (Left)",
+          "mandatory": true,
+          "position": "at start of taper"
+        }
+      ],
+      "required_devices": [
+        "Merging taper using channelizing devices.",
+        "Optional shadow vehicle with truck-mounted attenuator."
+      ],
+      "arrow_board": "optional",
+      "flaggers": "not_applicable",
+      "notes": [
+        "For higher speed or volume, additional signing such as LEFT LANE CLOSED XX FT should be used."
+      ]
+    },
+    {
+      "ta_number": "TA-31",
+      "title": "Lane Closure on a Street with Uneven Directional Volumes",
+      "when_to_use": "A lane is closed on a multi-lane street, and a lane from the opposing direction is temporarily reversed to maintain capacity during peak periods.",
+      "required_signs": [
+        {
+          "code": "W20-1",
+          "label": "ROAD WORK AHEAD",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W4-2L",
+          "label": "Lane Ends Symbol (Left)",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W1-4bR",
+          "label": "Reverse Curve (Right, 2 lanes)",
+          "mandatory": true,
+          "position": "at start of shift"
+        },
+        {
+          "code": "W1-4bL",
+          "label": "Reverse Curve (Left, 2 lanes)",
+          "mandatory": true,
+          "position": "at end of shift"
+        }
+      ],
+      "required_devices": [
+        "Shifting taper and channelizing devices to separate opposing traffic."
+      ],
+      "arrow_board": "not_applicable",
+      "flaggers": "not_applicable",
+      "notes": [
+        "Conflicting pavement markings should be removed for long-term projects.",
+        "If impracticable, channelizing devices should be placed at a maximum spacing of 1/2 S feet."
+      ]
+    },
+    {
+      "ta_number": "TA-32",
+      "title": "Half Road Closure on a Multi-Lane, High-Speed Highway",
+      "when_to_use": "Half of a multi-lane, high-speed highway is closed, and traffic is shifted to the other half, with one lane in each direction.",
+      "required_signs": [
+        {
+          "code": "W20-1",
+          "label": "ROAD WORK AHEAD",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W20-5R",
+          "label": "RIGHT LANE CLOSED XX FT",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W4-2R",
+          "label": "Lane Ends Symbol (Right)",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W1-4L",
+          "label": "Reverse Curve (Left)",
+          "mandatory": true,
+          "position": "at start of shift"
+        }
+      ],
+      "required_devices": [
+        "Merging taper, shifting taper, and channelizing devices to separate opposing traffic."
+      ],
+      "arrow_board": "not_applicable",
+      "flaggers": "not_applicable",
+      "notes": [
+        "Pavement markings no longer applicable shall be removed or obliterated as soon as practical.",
+        "Temporary markings shall be provided to clearly delineate the temporary travel path."
+      ]
+    },
+    {
+      "ta_number": "TA-33",
+      "title": "Stationary Lane Closure on a Divided Highway",
+      "when_to_use": "A single lane is closed on a divided highway or freeway for stationary work.",
+      "required_signs": [
+        {
+          "code": "W20-1",
+          "label": "ROAD WORK XX MILE",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W20-5R",
+          "label": "RIGHT LANE CLOSED XX MILE",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W4-2R",
+          "label": "Lane Ends Symbol (Right)",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "G20-2",
+          "label": "END ROAD WORK",
+          "mandatory": false,
+          "position": "termination"
+        }
+      ],
+      "required_devices": [
+        "Merging taper using channelizing devices."
+      ],
+      "arrow_board": "required",
+      "flaggers": "not_applicable",
+      "notes": [
+        "An arrow board shall be used when a freeway lane is closed.",
+        "For a left lane closure, LEFT LANE CLOSED signs shall be substituted."
+      ]
+    },
+    {
+      "ta_number": "TA-34",
+      "title": "Lane Closure with a Temporary Traffic Barrier",
+      "when_to_use": "A lane is closed for a long-term project using a temporary traffic barrier for positive protection.",
+      "required_signs": [
+        {
+          "code": "W20-1",
+          "label": "ROAD WORK AHEAD",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W20-5R",
+          "label": "RIGHT LANE CLOSED AHEAD",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W4-2R",
+          "label": "Lane Ends Symbol (Right)",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "G20-2",
+          "label": "END ROAD WORK",
+          "mandatory": false,
+          "position": "termination"
+        }
+      ],
+      "required_devices": [
+        "Merging taper using channelizing devices.",
+        "Temporary traffic barrier along the work space.",
+        "Crash cushion at the upstream end of the barrier."
+      ],
+      "arrow_board": "required",
+      "flaggers": "not_applicable",
+      "notes": [
+        "The barrier shall not be placed along the merging taper; the lane must first be closed with channelizing devices.",
+        "Temporary traffic barriers must be crashworthy."
+      ]
+    },
+    {
+      "ta_number": "TA-35",
+      "title": "Mobile Operation on a Multi-Lane Road",
+      "when_to_use": "Mobile work (e.g., striping, sweeping) is performed on a multi-lane road, closing one lane.",
+      "required_signs": [
+        {
+          "code": "W20-5L",
+          "label": "LEFT LANE CLOSED AHEAD",
+          "mandatory": true,
+          "position": "vehicle-mounted on Shadow Vehicle 2"
+        }
+      ],
+      "required_devices": [
+        "Work vehicle.",
+        "Shadow Vehicle 1 with arrow board and truck-mounted attenuator.",
+        "Shadow Vehicle 2 with arrow board and vehicle-mounted sign."
+      ],
+      "arrow_board": "required (on both shadow vehicles)",
+      "flaggers": "not_applicable",
+      "notes": [
+        "An arrow board shall be used when a freeway lane is closed.",
+        "All vehicles shall display high-intensity rotating, flashing, oscillating, or strobe lights."
+      ]
+    },
+    {
+      "ta_number": "TA-36",
+      "title": "Lane Shift on a Freeway",
+      "when_to_use": "Traffic is shifted to the shoulder or another realigned path on a freeway to bypass a work space, keeping all lanes open.",
+      "required_signs": [
+        {
+          "code": "W20-1",
+          "label": "ROAD WORK AHEAD",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W1-4cR",
+          "label": "Reverse Curve (Right, 3 lanes)",
+          "mandatory": true,
+          "position": "at start of shift"
+        },
+        {
+          "code": "W1-4cL",
+          "label": "Reverse Curve (Left, 3 lanes)",
+          "mandatory": true,
+          "position": "at end of shift"
+        },
+        {
+          "code": "W13-1P",
+          "label": "Advisory Speed Plaque",
+          "mandatory": false,
+          "position": "below curve signs"
+        }
+      ],
+      "required_devices": [
+        "Shifting taper using channelizing devices.",
+        "Optional temporary traffic barrier and crash cushion."
+      ],
+      "arrow_board": "not_applicable",
+      "flaggers": "not_applicable",
+      "notes": [
+        "For long-term work, conflicting pavement markings shall be removed and temporary markings installed.",
+        "The minimum width of the shoulder lane shall be 10 feet."
+      ]
+    },
+    {
+      "ta_number": "TA-37",
+      "title": "Double Lane Closure on a Freeway",
+      "when_to_use": "Two adjacent lanes are closed on a freeway.",
+      "required_signs": [
+        {
+          "code": "W20-1",
+          "label": "ROAD WORK 1 MILE",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W20-5aR",
+          "label": "2 RIGHT LANES CLOSED 1/2 MILE",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W4-2R",
+          "label": "Lane Ends Symbol (Right)",
+          "mandatory": true,
+          "position": "advance warning"
+        }
+      ],
+      "required_devices": [
+        "Two sequential merging tapers using channelizing devices, separated by a distance of 2L."
+      ],
+      "arrow_board": "required (one for each closed lane)",
+      "flaggers": "not_applicable",
+      "notes": [
+        "A separate arrow board shall be used for each closed lane.",
+        "The second arrow board is typically placed in the closed exterior lane at the start of the second taper."
+      ]
+    },
+    {
+      "ta_number": "TA-38",
+      "title": "Interior Lane Closure on a Freeway",
+      "when_to_use": "An interior (center) lane is closed on a freeway with three or more lanes in one direction.",
+      "required_signs": [
+        {
+          "code": "W20-1",
+          "label": "ROAD WORK XX MILE",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W20-5L",
+          "label": "LEFT LANE CLOSED XX MILE",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W4-2L",
+          "label": "Lane Ends Symbol (Left)",
+          "mandatory": true,
+          "position": "advance warning"
+        },
+        {
+          "code": "W9-3L",
+          "label": "Interior Lane Shift (Left)",
+          "mandatory": true,
+          "position": "at start of split"
+        },
+        {
+          "code": "R4-9",
+          "label": "STAY IN LANE",
+          "mandatory": false,
+          "position": "optional, in split section"
+        }
+      ],
+      "required_devices": [
+        "Channelizing devices to create a taper and split traffic around the work area."
+      ],
+      "arrow_board": "required",
+      "flaggers": "not_applicable",
+      "notes": [
+        "An arrow board shall be used for the lane closure.",
+        "For long-term work, existing conflicting pavement markings shall be removed and temporary markings installed."
+      ]
+    }
+  ],
+  "sign_sizes": {
+    "description": "Sign sizes for TTC zones. See Tables 6G-1, 6H-1, and 6I-1 for specific sign dimensions.",
+    "minimum": {
+      "size": "Varies by sign, specified in 'Minimum' column of tables.",
+      "when_to_use": "Low-volume rural roads, local streets, or roadways where the operating speed is 30 mph or less."
+    },
+    "conventional_roads": {
+      "size": "Varies by sign, specified in 'Conventional Road' column of tables. Typically 36x36 inches for diamond-shaped warning signs."
+    },
+    "expressways_freeways": {
+      "size": "Varies by sign, specified in 'Freeway or Expressway' column of tables. Typically 48x48 inches for diamond-shaped warning signs."
+    },
+    "table_reference": "Tables 6G-1, 6H-1, 6I-1"
+  },
+  "arrow_board_requirements": {
+    "description": "Requirements for arrow boards from Section 6L.06 and Figure 6L-3.",
+    "type_A": {
+      "when_required": "Low-speed urban streets.",
+      "size": "48 x 24 inches",
+      "min_legibility": "1/2 mile"
+    },
+    "type_B": {
+      "when_required": "Intermediate-speed facilities and for maintenance or mobile operations on high-speed roadways.",
+      "size": "60 x 30 inches",
+      "min_legibility": "3/4 mile"
+    },
+    "type_C": {
+      "when_required": "High-speed, high-volume motor vehicle traffic control projects.",
+      "size": "96 x 48 inches",
+      "min_legibility": "1 mile"
+    },
+    "type_D": {
+      "when_required": "Vehicles authorized by the State or local agency.",
+      "size": "Conforms to shape of arrow, 48-inch length",
+      "min_legibility": "1/2 mile"
+    },
+    "general_rules": [
+      "Shall be used only to indicate a lane closure, not a lane shift.",
+      "Shall be used only in the caution mode for shoulder work or closures on two-lane roads.",
+      "Shall be used when a freeway lane is closed.",
+      "A separate arrow board shall be used for each closed freeway lane.",
+      "Shall be capable of 50% dimming for nighttime operation."
+    ]
+  },
+  "flagger_requirements": {
+    "positioning": "On the shoulder adjacent to the traffic being controlled or in the closed lane. Only stand in the lane being used by moving traffic after traffic has stopped.",
+    "sight_distance_ft": "Sufficient stopping sight distance must be provided in advance of the flagger station. Use Table 6B-2 for distances.",
+    "equipment": [
+      "STOP/SLOW paddle (primary and preferred device), 18x18 inches minimum.",
+      "Red flags (emergency situations only), 24x24 inches minimum."
+    ],
+    "apparel": "For daytime, ANSI/ISEA 107 Performance Class 2 or 3. For nighttime, ANSI/ISEA 107 Performance Class 3."
+  },
+  "work_zone_speed": {
+    "max_reduction_mph": 10,
+    "regulatory_vs_advisory": "Reduced speed limits (regulatory) should be avoided as much as practical. Use only in specific portions of the TTC zone where conditions or restrictive features are present. Advisory speeds can be used with warning signs for temporary conditions.",
+    "when_required": "A reduction of more than 10 mph should be used only when required by restrictive features in the TTC zone. If used, additional driver notification (such as stepped-down speed limits) should be provided."
+  },
+  "night_operations": {
+    "retroreflectivity": "All signs used at night shall be either retroreflective or illuminated. All channelizing devices shall have retroreflective material.",
+    "illumination": "Flagger stations shall be illuminated, except in emergencies. Floodlights should be used to illuminate the work area, equipment crossings, and other areas, but must be aimed to avoid glare for drivers.",
+    "enhanced_devices": "Retroreflective and/or illuminated devices shall be used in long-term and intermediate-term stationary TTC zones."
+  },
+  "pedestrian_bicycle": {
+    "minimum_path_width_inches": 60,
+    "passing_space": "If a 60-inch width cannot be maintained, a 60 x 60-inch passing space must be provided at least every 200 feet.",
+    "detectable_edges": "When channelization is used to delineate a pedestrian pathway, a continuous detectable edging shall be provided throughout the length of the facility for users with vision disabilities.",
+    "sign_requirements": [
+      "Where pedestrian routes are closed, alternate routes shall be provided.",
+      "Temporary facilities shall be detectable and include accessibility features consistent with the existing facility.",
+      "Audible information devices or detectable barriers shall be used to communicate blocked routes to pedestrians with vision disabilities."
+    ]
+  },
+  "device_types": {
+    "short_term": {
+      "description": "Simplified control procedures may be warranted. Use of more dominant devices like high-intensity lights on work vehicles can offset a reduction in the number of devices.",
+      "types": [
+        "Cones (18-inch minimum height)",
+        "Vehicle-mounted signs",
+        "High-intensity rotating, flashing, oscillating, or strobe lights on vehicles"
+      ]
+    },
+    "intermediate_term": {
+      "description": "Retroreflective and/or illuminated devices shall be used as operations extend into nighttime.",
+      "types": [
+        "Cones (28-inch minimum height)",
+        "Drums",
+        "Barricades (Type 1, 2)",
+        "Vertical Panels"
+      ]
+    },
+    "long_term": {
+      "description": "Full range of TTC procedures and devices are used. Retroreflective and/or illuminated devices shall be used.",
+      "types": [
+        "Drums",
+        "Barricades (Type 2, 3)",
+        "Temporary Traffic Barriers",
+        "Crash Cushions",
+        "Altered Pavement Markings"
+      ]
+    }
+  },
+  "duration_definitions": {
+    "long_term_stationary": "Work that occupies a location more than 3 days.",
+    "intermediate_term_stationary": "Work that occupies a location more than one daylight period up to 3 days, or nighttime work lasting more than 1 hour.",
+    "short_term_stationary": "Daytime work that occupies a location for more than 1 hour within a single daylight period.",
+    "short_duration": "Work that occupies a location up to 1 hour.",
+    "mobile": "Work that moves intermittently or continuously."
+  }
+}
