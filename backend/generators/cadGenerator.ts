@@ -4,6 +4,7 @@ import Drawing from 'dxf-writer';
 import * as MUTCD from '../engineering/mutcdPart6.js';
 import { ProjectAlignment, generateViewports, decodeGooglePolyline } from '../engineering/GeospatialEngine.js';
 import { fetchRoadNetwork, getOsmRoadStyle, type OsmRoadway } from '../services/osmFetcher.js';
+import { fetchItdRoadGeometryAlongRoute, type ItdRoadSegment } from '../services/itdRoadGeometry.js';
 
 // ===================================================================
 // DATA INTERFACES
@@ -1918,6 +1919,7 @@ function drawGeometryPlanSheet(
   alignment: ProjectAlignment, viewportIndex: number, viewportTotal: number,
   viewportStartSta: number, viewportEndSta: number,
   basemapRoads: OsmRoadway[] = [],
+  itdSegments: ItdRoadSegment[] = [],
 ) {
   doc.addPage({ size: 'tabloid', layout: 'landscape', margin: 0 });
 
@@ -1959,7 +1961,17 @@ function drawGeometryPlanSheet(
   doc.save();
   doc.rect(pageLeft, pageTop, pageRight - pageLeft, pageBot - pageTop).clip();
 
-  // === FIX 1: OSM BASEMAP LAYER (full road network context) ===
+  // === BASEMAP LAYER 1: ITD ArcGIS Road Geometry (authoritative, primary) ===
+  if (itdSegments.length > 0) {
+    for (const seg of itdSegments) {
+      if (seg.nodes.length < 2) continue;
+      const utmNodes = seg.nodes.map(n => alignment.projectGps(n));
+      doc.lineWidth(0.8).strokeColor('#AAAAAA');
+      drawUtmPolyline(utmNodes);
+    }
+  }
+
+  // === BASEMAP LAYER 2: OSM Supplemental (catches local streets ITD may miss) ===
   if (basemapRoads.length > 0) {
     for (const road of basemapRoads) {
       if (road.nodes.length < 2) continue;
@@ -2817,12 +2829,23 @@ export async function generateCAD(
     geoPlanSheets,
   };
 
-  // Pre-fetch OSM basemap for geometry plan sheets (before entering Promise)
+  // Pre-fetch basemap: ITD primary (authoritative), OSM supplemental
   let geoBasemapRoads: OsmRoadway[] = [];
+  let itdRoadSegments: ItdRoadSegment[] = [];
   if (routePolyline && startCoords && endCoords) {
+    // ITD primary — authoritative Idaho road geometry
     try {
-      geoBasemapRoads = await fetchRoadNetwork(startCoords.lat, startCoords.lng, endCoords.lat, endCoords.lng, 600);
-    } catch { /* graceful degradation — geometry plan renders without basemap */ }
+      itdRoadSegments = await fetchItdRoadGeometryAlongRoute(
+        startCoords.lat, startCoords.lng, endCoords.lat, endCoords.lng, 600
+      );
+    } catch { /* ITD may timeout */ }
+
+    // OSM supplemental — catches local streets ITD may miss
+    if (itdRoadSegments.length < 5) {
+      try {
+        geoBasemapRoads = await fetchRoadNetwork(startCoords.lat, startCoords.lng, endCoords.lat, endCoords.lng, 600);
+      } catch { /* graceful degradation */ }
+    }
   }
 
   return new Promise((resolve, reject) => {
@@ -2928,9 +2951,9 @@ export async function generateCAD(
             const viewports = generateViewports(alignment);
             for (let vi = 0; vi < viewports.length; vi++) {
               const vp = viewports[vi]!;
-              drawGeometryPlanSheet(doc, sheetNum++, totalSheets, ctx, alignment, vi + 1, viewports.length, vp.startStation, vp.endStation, geoBasemapRoads);
+              drawGeometryPlanSheet(doc, sheetNum++, totalSheets, ctx, alignment, vi + 1, viewports.length, vp.startStation, vp.endStation, geoBasemapRoads, itdRoadSegments);
             }
-            console.log(`[cadGenerator] Geometry plan: ${viewports.length} sheet(s), ${gpsPoints.length}-point polyline (${Math.round(alignment.totalLengthFt)} ft, UTM Zone ${alignment.utmZoneNumber}N), ${geoBasemapRoads.length} basemap roads`);
+            console.log(`[cadGenerator] Geometry plan: ${viewports.length} sheet(s), ${gpsPoints.length}-point polyline (${Math.round(alignment.totalLengthFt)} ft, UTM Zone ${alignment.utmZoneNumber}N), ${itdRoadSegments.length} ITD + ${geoBasemapRoads.length} OSM roads`);
           }
         } catch (geoErr) {
           console.warn('[cadGenerator] Geometry plan generation failed:', geoErr);
