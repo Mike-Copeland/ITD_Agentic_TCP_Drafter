@@ -2,6 +2,7 @@ import PDFDocument from 'pdfkit';
 import fs from 'fs';
 import Drawing from 'dxf-writer';
 import * as MUTCD from '../engineering/mutcdPart6.js';
+import { ProjectAlignment, generateViewports, decodeGooglePolyline } from '../engineering/GeospatialEngine.js';
 
 // ===================================================================
 // DATA INTERFACES
@@ -508,6 +509,7 @@ function drawCoverSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: Dr
     ...ctx.crossStreets.map(cs => `Intersection Detail: ${cs.name}`),
     'Traffic Data & Queue Analysis',
     'Special Considerations',
+    ...(ctx.geoPlanSheets > 0 ? (ctx.geoPlanSheets === 1 ? ['Geometry Plan'] : Array.from({ length: ctx.geoPlanSheets }, (_, i) => `Geometry Plan (${i + 1}/${ctx.geoPlanSheets})`)) : []),
     'Sign Schedule & Quantities',
   ];
   sheetNames.forEach((name, i) => {
@@ -1862,6 +1864,153 @@ function drawSpecialConsiderationsSheet(doc: Doc, sheetNum: number, totalSheets:
 }
 
 // ===================================================================
+// SHEET: GEOMETRY PLAN (True Road Shape from GPS Polyline)
+// ===================================================================
+function drawGeometryPlanSheet(
+  doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawContext,
+  alignment: ProjectAlignment, viewportIndex: number, viewportTotal: number,
+  viewportStartSta: number, viewportEndSta: number,
+) {
+  doc.addPage({ size: 'tabloid', layout: 'landscape', margin: 0 });
+
+  const vpLabel = viewportTotal > 1 ? ` (${viewportIndex}/${viewportTotal})` : '';
+  doc.fontSize(12).fillColor('black').text(`GEOMETRY PLAN${vpLabel}`, 0, 20, { align: 'center' });
+  doc.fontSize(8).text(`${ctx.roadName || 'Project Road'} — STA ${ProjectAlignment.formatStation(viewportStartSta)} to STA ${ProjectAlignment.formatStation(viewportEndSta)}`, 0, 36, { align: 'center' });
+
+  // Page drawing area
+  const pageLeft = 60, pageRight = 1164, pageTop = 60, pageBot = 680;
+  const pageCx = (pageLeft + pageRight) / 2;
+  const pageCy = (pageTop + pageBot) / 2;
+  const pageW = pageRight - pageLeft;
+
+  // Calculate viewport transform
+  const midSta = (viewportStartSta + viewportEndSta) / 2;
+  const midPt = alignment.getCoordinatesAtStation(midSta);
+  const coverageFt = viewportEndSta - viewportStartSta;
+  const scaleFtPerPt = coverageFt / (pageW * 0.85); // Leave margins
+
+  // Collect road centerline points within this viewport
+  const utmPts = alignment.getUtmPoints();
+  const stations: number[] = [0];
+  for (let i = 1; i < utmPts.length; i++) {
+    const dx = utmPts[i]!.x - utmPts[i - 1]!.x;
+    const dy = utmPts[i]!.y - utmPts[i - 1]!.y;
+    stations.push(stations[i - 1]! + Math.sqrt(dx * dx + dy * dy));
+  }
+
+  // Transform UTM → page coordinates
+  const rotation = -midPt.heading + 90; // Rotate so road goes left-to-right
+  const rotRad = rotation * Math.PI / 180;
+  const toPage = (ux: number, uy: number) => {
+    const dx = ux - midPt.x;
+    const dy = uy - midPt.y;
+    const rx = dx * Math.cos(rotRad) - dy * Math.sin(rotRad);
+    const ry = dx * Math.sin(rotRad) + dy * Math.cos(rotRad);
+    return { px: pageCx + rx / scaleFtPerPt, py: pageCy - ry / scaleFtPerPt };
+  };
+
+  // Draw road edges (offset ± half road width)
+  const halfW = (ctx.totalLanes || 2) * ctx.laneWidthFt / 2;
+  const leftEdge = alignment.getOffsetPolyline(-halfW);
+  const rightEdge = alignment.getOffsetPolyline(halfW);
+  const centerline = utmPts;
+
+  // Draw road surface (light fill)
+  doc.save();
+  if (rightEdge.length > 1 && leftEdge.length > 1) {
+    const rPage = rightEdge.map(p => toPage(p.x, p.y));
+    const lPage = leftEdge.map(p => toPage(p.x, p.y));
+    doc.moveTo(rPage[0]!.px, rPage[0]!.py);
+    rPage.forEach(p => doc.lineTo(p.px, p.py));
+    [...lPage].reverse().forEach(p => doc.lineTo(p.px, p.py));
+    doc.closePath().fill('#f0f0f0');
+  }
+  doc.restore();
+
+  // Draw road edges (solid black)
+  doc.lineWidth(1.5).strokeColor('black');
+  const drawPolyline = (pts: { x: number; y: number }[]) => {
+    if (pts.length < 2) return;
+    const page = pts.map(p => toPage(p.x, p.y));
+    doc.moveTo(page[0]!.px, page[0]!.py);
+    for (let i = 1; i < page.length; i++) doc.lineTo(page[i]!.px, page[i]!.py);
+    doc.stroke();
+  };
+  drawPolyline(leftEdge);
+  drawPolyline(rightEdge);
+
+  // Draw centerline (dashed)
+  doc.lineWidth(0.8).dash(8, { space: 6 }).strokeColor('#CC9900');
+  drawPolyline(centerline);
+  doc.undash();
+
+  // Station tick marks every 100 ft
+  doc.lineWidth(0.5).strokeColor('#999');
+  doc.fontSize(5).fillColor('#666');
+  for (let sta = Math.ceil(viewportStartSta / 100) * 100; sta <= viewportEndSta; sta += 100) {
+    const pt = alignment.getCoordinatesAtStation(sta);
+    const pg = toPage(pt.x, pt.y);
+    const perpRad = (pt.heading + 90) * Math.PI / 180;
+    const tickLen = sta % 500 === 0 ? 12 : 6;
+    const tx = Math.sin(perpRad) / scaleFtPerPt * tickLen;
+    const ty = -Math.cos(perpRad) / scaleFtPerPt * tickLen;
+    doc.moveTo(pg.px - tx, pg.py - ty).lineTo(pg.px + tx, pg.py + ty).stroke();
+    if (sta % 500 === 0) {
+      doc.text(ProjectAlignment.formatStation(sta), pg.px - 15, pg.py + tickLen / scaleFtPerPt + 3, { width: 30, align: 'center', lineBreak: false });
+    }
+  }
+
+  // Cross-street stubs
+  doc.lineWidth(1).strokeColor('#0066cc');
+  for (const cs of ctx.crossStreets) {
+    const sta = cs.position * alignment.totalLengthFt;
+    if (sta < viewportStartSta || sta > viewportEndSta) continue;
+    const pt = alignment.getCoordinatesAtStation(sta);
+    const pg = toPage(pt.x, pt.y);
+    const perpRad = (pt.heading + 90) * Math.PI / 180;
+    const stubLen = 40;
+    const sx = Math.sin(perpRad) / scaleFtPerPt * stubLen;
+    const sy = -Math.cos(perpRad) / scaleFtPerPt * stubLen;
+    doc.moveTo(pg.px - sx * 1.5, pg.py - sy * 1.5).lineTo(pg.px + sx * 1.5, pg.py + sy * 1.5).stroke();
+    doc.fontSize(5).fillColor('#0066cc');
+    doc.text(cs.name.toUpperCase(), pg.px + sx * 1.8, pg.py + sy * 1.8 - 3, { lineBreak: false });
+  }
+
+  // Scale bar
+  const sbX = pageLeft + 20, sbY = pageBot - 20;
+  const scaleBarFt = Math.round(coverageFt / 8 / 50) * 50 || 100;
+  const scaleBarPx = scaleBarFt / scaleFtPerPt;
+  doc.lineWidth(1).strokeColor('black');
+  doc.moveTo(sbX, sbY).lineTo(sbX + scaleBarPx, sbY).stroke();
+  doc.moveTo(sbX, sbY - 4).lineTo(sbX, sbY + 4).stroke();
+  doc.moveTo(sbX + scaleBarPx, sbY - 4).lineTo(sbX + scaleBarPx, sbY + 4).stroke();
+  doc.fontSize(6).fillColor('black');
+  doc.text('0', sbX - 3, sbY + 6, { lineBreak: false });
+  doc.text(`${scaleBarFt} FT`, sbX + scaleBarPx - 10, sbY + 6, { lineBreak: false });
+  doc.fontSize(5).fillColor('#666');
+  doc.text(`UTM Zone ${alignment.utmZoneNumber}N | NAD83 | US Survey Feet`, sbX, sbY + 16, { lineBreak: false });
+
+  // North arrow
+  const naX = pageRight - 40, naY = pageTop + 30;
+  doc.save();
+  doc.translate(naX, naY).rotate(-rotation);
+  doc.lineWidth(1.5).strokeColor('black');
+  doc.moveTo(0, 15).lineTo(0, -15).stroke();
+  doc.moveTo(0, -15).lineTo(-5, -7).lineTo(5, -7).closePath().fill('black');
+  doc.restore();
+  doc.font('Helvetica-Bold').fontSize(8).fillColor('black');
+  doc.text('N', naX - 4, naY - 28, { lineBreak: false });
+  doc.font('Helvetica');
+
+  // Disclaimer
+  doc.fontSize(5).fillColor('#999');
+  doc.text('SCHEMATIC LEVEL ACCURACY (~5m). NOT FOR SURVEY-GRADE STAKING. Coordinate data is for approximate field layout and MUTCD spacing verification only.', pageLeft, pageBot + 2, { width: pageW, align: 'center' });
+
+  drawWatermark(doc);
+  drawTitleBlock(doc, sheetNum, totalSheets, ctx.operationType, ctx.roadName);
+}
+
+// ===================================================================
 // SHEET: SIGN SCHEDULE
 // ===================================================================
 function drawSignScheduleSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawContext) {
@@ -1984,6 +2133,7 @@ interface DrawContext {
   bridges: any[];
   duration: string;
   operationTypes: string[];
+  geoPlanSheets: number;
 }
 
 // ===================================================================
@@ -2313,6 +2463,7 @@ export async function generateCAD(
   duration = 'Short-term (<= 3 days)',
   maxGradePercent = 0,
   operationTypes: string[] = [],
+  routePolyline = '',
 ): Promise<GenerationResult> {
   // === BLUEPRINT VALIDATION — ensure all required fields exist ===
   if (!blueprint.primary_approach || !Array.isArray(blueprint.primary_approach)) blueprint.primary_approach = [];
@@ -2501,7 +2652,18 @@ export async function generateCAD(
     return true;
   });
   const phaseCount = compatPhases.length || 1;
-  const totalSheets = 2 + phaseCount + filteredCrossStreets.length + 3;
+  // Count geometry plan sheets
+  let geoPlanSheets = 0;
+  if (routePolyline) {
+    try {
+      const testPts = decodeGooglePolyline(routePolyline);
+      if (testPts.length >= 2) {
+        const testAlign = new ProjectAlignment(testPts);
+        geoPlanSheets = generateViewports(testAlign).length;
+      }
+    } catch { /* skip */ }
+  }
+  const totalSheets = 2 + phaseCount + filteredCrossStreets.length + 3 + geoPlanSheets;
 
   const ctx: DrawContext = {
     blueprint, staticMapBase64, startCoords, endCoords,
@@ -2511,6 +2673,7 @@ export async function generateCAD(
     totalLanes, hasTWLTL, isDivided, isMultiLane,
     aadt, truckPct, crashCount, bridges, duration,
     operationTypes: operationTypes.length > 0 ? operationTypes : [operationType],
+    geoPlanSheets,
   };
 
   return new Promise((resolve, reject) => {
@@ -2606,6 +2769,24 @@ export async function generateCAD(
 
       // Special Considerations
       drawSpecialConsiderationsSheet(doc, sheetNum++, totalSheets, ctx);
+
+      // Geometry Plan Sheets (true road shape from GPS polyline)
+      if (routePolyline) {
+        try {
+          const gpsPoints = decodeGooglePolyline(routePolyline);
+          if (gpsPoints.length >= 2) {
+            const alignment = new ProjectAlignment(gpsPoints);
+            const viewports = generateViewports(alignment);
+            for (let vi = 0; vi < viewports.length; vi++) {
+              const vp = viewports[vi]!;
+              drawGeometryPlanSheet(doc, sheetNum++, totalSheets, ctx, alignment, vi + 1, viewports.length, vp.startStation, vp.endStation);
+            }
+            console.log(`[cadGenerator] Geometry plan: ${viewports.length} sheet(s) from ${gpsPoints.length}-point polyline (${Math.round(alignment.totalLengthFt)} ft, UTM Zone ${alignment.utmZoneNumber}N)`);
+          }
+        } catch (geoErr) {
+          console.warn('[cadGenerator] Geometry plan generation failed:', geoErr);
+        }
+      }
 
       // Last Sheet: Sign Schedule
       drawSignScheduleSheet(doc, sheetNum++, totalSheets, ctx);

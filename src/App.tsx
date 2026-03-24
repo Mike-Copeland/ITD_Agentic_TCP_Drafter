@@ -382,7 +382,8 @@ export default function App() {
           itdTruckPct: contextData?.itdTruckPct || 0,
           itdCrashCount: contextData?.itdCrashCount || 0,
           itdBridges: contextData?.itdBridges || [],
-          maxGradePercent: contextData?.maxGradePercent || 0
+          maxGradePercent: contextData?.maxGradePercent || 0,
+          routePolyline: contextData?.routePolyline || ''
         }),
       });
 

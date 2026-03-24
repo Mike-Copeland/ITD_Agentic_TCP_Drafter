@@ -828,6 +828,7 @@ Output ONLY a JSON array matching the cross-street order: [{"name":"...","type":
       routeHasRoundabouts: intersectionData?.routeHasRoundabouts || false,
       roundaboutCount: intersectionData?.roundaboutCount || 0,
       visionRoadType: visionRoadType || null,
+      routePolyline: routePolyline || '',
     });
   } catch (e) {
     console.error('[site-context] Error:', e);
@@ -960,7 +961,7 @@ app.post('/api/rag', async (req, res) => {
 // ---------------------------------------------------------------------------
 app.post('/api/generate-plan', async (req, res) => {
   try {
-    const { blueprint, startCoords, endCoords, staticMapBase64, normalSpeed, workZoneSpeed, laneWidth, operationType, operationTypes: rawOpTypes, duration, routeDistanceFt: rawRouteDist, roadName: rawRoadName, positionedCrossStreets: rawCrossStreets, itdTerrain: rawTerrain, itdFuncClass: rawFuncClass, itdTotalLanes: rawTotalLanes, itdAADT: rawAADT, itdTruckPct: rawTruckPct, itdCrashCount: rawCrashCount, itdBridges: rawBridges, maxGradePercent: rawGrade } = req.body;
+    const { blueprint, startCoords, endCoords, staticMapBase64, normalSpeed, workZoneSpeed, laneWidth, operationType, operationTypes: rawOpTypes, duration, routeDistanceFt: rawRouteDist, roadName: rawRoadName, positionedCrossStreets: rawCrossStreets, itdTerrain: rawTerrain, itdFuncClass: rawFuncClass, itdTotalLanes: rawTotalLanes, itdAADT: rawAADT, itdTruckPct: rawTruckPct, itdCrashCount: rawCrashCount, itdBridges: rawBridges, maxGradePercent: rawGrade, routePolyline: rawPolyline } = req.body;
     // Support multi-phase: operationTypes[] or fallback to single operationType
     const operationTypes: string[] = Array.isArray(rawOpTypes) && rawOpTypes.length > 0 ? rawOpTypes : [operationType || 'Single Lane Closure'];
     const speedMph: number = normalSpeed || 65;
@@ -1017,6 +1018,7 @@ app.post('/api/generate-plan', async (req, res) => {
       duration || 'Short-term (<= 3 days)',
       parseFloat(rawGrade) || 0,
       operationTypes,
+      rawPolyline || '',
     );
 
     // Verify the generated files
