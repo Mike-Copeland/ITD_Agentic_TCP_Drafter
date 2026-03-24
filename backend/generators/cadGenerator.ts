@@ -1990,10 +1990,8 @@ function drawGeometryPlanSheet(
   doc.lineCap('round');
 
   // =========================================================
-  // Z-INDEX LAYER 1: ALL EDGES AND CURBS (drawn first)
+  // Z-INDEX LAYER 1: BASEMAP EDGES (drawn first, will be partially masked)
   // =========================================================
-
-  // 1A. Basemap road curbs (dark gray casing, slightly wider than road)
   doc.strokeColor('#AAAAAA');
   for (const seg of itdSegments) {
     if (seg.nodes.length < 2) continue;
@@ -2006,17 +2004,10 @@ function drawGeometryPlanSheet(
     drawUtmPolyline(road.nodes.map(n => alignment.projectGps(n)));
   }
 
-  // 1B. Primary road outer edges (black)
-  doc.lineWidth(PLOT.PRIMARY_EDGE.lineWidth).strokeColor(PLOT.PRIMARY_EDGE.color);
-  drawUtmPolyline(leftEdge);
-  drawUtmPolyline(rightEdge);
-
   // =========================================================
-  // Z-INDEX LAYER 2: ALL PAVEMENT FILLS (drawn second — masks inner edge lines)
+  // Z-INDEX LAYER 2: PAVEMENT FILLS (masks basemap interior edges at intersections)
   // =========================================================
   doc.strokeColor('#f0f0f0');
-
-  // 2A. Basemap pavement fill
   for (const seg of itdSegments) {
     if (seg.nodes.length < 2) continue;
     doc.lineWidth(Math.max(1, getWidthFt(seg, true) / scaleFtPerPt));
@@ -2028,7 +2019,7 @@ function drawGeometryPlanSheet(
     drawUtmPolyline(road.nodes.map(n => alignment.projectGps(n)));
   }
 
-  // 2B. Primary road pavement fill
+  // Primary road pavement fill
   if (rightEdge.length > 1 && leftEdge.length > 1) {
     const rPage = rightEdge.map(p => toPage(p.x, p.y));
     const lPage = leftEdge.map(p => toPage(p.x, p.y));
@@ -2041,14 +2032,18 @@ function drawGeometryPlanSheet(
   }
 
   // =========================================================
-  // Z-INDEX LAYER 3: CENTERLINES (drawn on top of fills)
+  // Z-INDEX LAYER 3: PRIMARY EDGES + CENTERLINE (drawn LAST — always visible)
   // =========================================================
+  doc.lineWidth(PLOT.PRIMARY_EDGE.lineWidth).strokeColor(PLOT.PRIMARY_EDGE.color);
+  drawUtmPolyline(leftEdge);
+  drawUtmPolyline(rightEdge);
+
   doc.lineWidth(PLOT.PRIMARY_CENTER.lineWidth).strokeColor(PLOT.PRIMARY_CENTER.color);
   doc.dash(PLOT.PRIMARY_CENTER.dash![0]!, { space: PLOT.PRIMARY_CENTER.dash![1] });
   drawUtmPolyline(centerline);
   doc.undash();
 
-  // Restore CAD line join/cap for remaining elements
+  // Restore CAD line join/cap
   doc.lineJoin('miter');
   doc.lineCap('butt');
 
@@ -2158,9 +2153,10 @@ function drawGeometryPlanSheet(
       const cx = tlPg.px + tw / 2;
       const cy = tlPg.py + th / 2;
       // White mask + sheet number
-      doc.rect(cx - 20, cy - 6, 40, 10).fill('white');
-      doc.font('Helvetica-Bold').fontSize(7).fillColor('#0066cc');
-      doc.text(`SHEET ${vp.sheetNumber}`, cx - 20, cy - 4, { width: 40, align: 'center', lineBreak: false });
+      doc.rect(cx - 22, cy - 7, 44, 12).fill('white');
+      doc.lineWidth(0.5).rect(cx - 22, cy - 7, 44, 12).stroke();
+      doc.font('Helvetica-Bold').fontSize(6).fillColor('#0066cc');
+      doc.text(`PAGE ${vp.sheetNumber}`, cx - 20, cy - 4, { width: 40, align: 'center', lineBreak: false });
       doc.font('Helvetica');
     }
     // Legend
@@ -3119,8 +3115,18 @@ export async function generateCAD(
           if (gpsPoints.length >= 2) {
             const alignment = new ProjectAlignment(gpsPoints);
             const viewports = generateViewports(alignment);
+
+            // Calculate the actual document page number for each viewport
+            // so the index sheet grid labels point to the correct pages
+            const geoBasePageNum = sheetNum; // First geometry sheet starts here
+            for (let vi = 0; vi < viewports.length; vi++) {
+              viewports[vi]!.sheetNumber = geoBasePageNum + vi; // Actual document page
+            }
+
             for (let vi = 0; vi < viewports.length; vi++) {
               const vp = viewports[vi]!;
+              // Skip degenerate viewports with no coverage
+              if (!vp.isIndexSheet && vp.startStation === vp.endStation) continue;
               drawGeometryPlanSheet(doc, sheetNum++, totalSheets, ctx, alignment, vi + 1, viewports.length, vp.startStation, vp.endStation, geoBasemapRoads, itdRoadSegments, vp.isIndexSheet || false, viewports);
             }
             console.log(`[cadGenerator] Geometry plan: ${viewports.length} sheet(s), ${gpsPoints.length}-point polyline (${Math.round(alignment.totalLengthFt)} ft, UTM Zone ${alignment.utmZoneNumber}N), ${itdRoadSegments.length} ITD + ${geoBasemapRoads.length} OSM roads`);
