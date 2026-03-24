@@ -70,6 +70,52 @@ export interface GenerationResult {
 // ===================================================================
 // MATH UTILITIES
 // ===================================================================
+// ===================================================================
+// PROFESSIONAL CAD PLOT STYLES
+// ===================================================================
+const PLOT = {
+  EXISTING_EDGE:    { lineWidth: 0.5,  color: '#666666', dash: null as number[] | null },
+  EXISTING_CENTER:  { lineWidth: 0.5,  color: '#CC9900', dash: [4, 4] },
+  TTC_DEVICE:       { lineWidth: 1.5,  color: '#FF8C00', dash: null as number[] | null },
+  TTC_WORK_AREA:    { lineWidth: 0.25, color: '#FF0000', dash: null as number[] | null },
+  TTC_SIGN_LEADER:  { lineWidth: 0.4,  color: '#333333', dash: null as number[] | null },
+  BASEMAP_MAJOR:    { lineWidth: 1.5,  color: '#BBBBBB', dash: null as number[] | null },
+  BASEMAP_MINOR:    { lineWidth: 0.6,  color: '#DDDDDD', dash: null as number[] | null },
+  PRIMARY_EDGE:     { lineWidth: 2.0,  color: '#000000', dash: null as number[] | null },
+  PRIMARY_CENTER:   { lineWidth: 1.0,  color: '#CC9900', dash: [8, 6] },
+  STATION_TICK:     { lineWidth: 0.4,  color: '#888888', dash: null as number[] | null },
+};
+
+/**
+ * Draw a sign with a leader line extending into white space.
+ * Point marker at exact location, leader line to sign graphic in margin.
+ */
+function drawSignWithLeader(
+  doc: Doc, x: number, y: number, signCode: string, _label: string,
+  side: 'left' | 'right', leaderLen = 40,
+) {
+  // Point marker at exact position
+  doc.circle(x, y, 1.5).fillAndStroke('#FF8C00', 'black');
+
+  // Leader line direction
+  const dir = side === 'right' ? 1 : -1;
+  const endX = x + dir * leaderLen;
+  const endY = y - 15; // Angle upward slightly
+
+  // Leader line
+  doc.lineWidth(PLOT.TTC_SIGN_LEADER.lineWidth).strokeColor(PLOT.TTC_SIGN_LEADER.color);
+  doc.moveTo(x, y).lineTo(endX, endY).stroke();
+
+  // Sign diamond at end of leader (small, 8px)
+  doc.save().translate(endX, endY).rotate(45);
+  doc.rect(-5, -5, 10, 10).fillAndStroke('#FF8C00', 'black');
+  doc.restore();
+
+  // Sign code text
+  doc.fontSize(4.5).fillColor('black');
+  doc.text(signCode, endX - 15, endY + 8, { width: 30, align: 'center', lineBreak: false });
+}
+
 function gpsToWebMercatorFt(lat: number, lng: number): { x: number; y: number } {
   const xMeters = (lng * 20037508.34) / 180;
   const latRad = (lat * Math.PI) / 180;
@@ -1924,13 +1970,13 @@ function drawGeometryPlanSheet(
     }
   }
 
-  // === PRIMARY ROAD: Surface fill + edges ===
+  // === PRIMARY ROAD: Surface fill + edges (Professional CAD standards) ===
   const halfW = (ctx.totalLanes || 2) * ctx.laneWidthFt / 2;
   const leftEdge = alignment.getOffsetPolyline(-halfW);
   const rightEdge = alignment.getOffsetPolyline(halfW);
   const centerline = alignment.getUtmPoints();
 
-  // Road surface fill
+  // Road surface fill (light)
   if (rightEdge.length > 1 && leftEdge.length > 1) {
     const rPage = rightEdge.map(p => toPage(p.x, p.y));
     const lPage = leftEdge.map(p => toPage(p.x, p.y));
@@ -1938,17 +1984,18 @@ function drawGeometryPlanSheet(
     doc.moveTo(rPage[0]!.px, rPage[0]!.py);
     rPage.forEach(p => doc.lineTo(p.px, p.py));
     [...lPage].reverse().forEach(p => doc.lineTo(p.px, p.py));
-    doc.closePath().fill('#e8e8e8');
+    doc.closePath().fill('#f0f0f0');
     doc.restore();
   }
 
-  // Road edges (solid black, thicker)
-  doc.lineWidth(2).strokeColor('black');
+  // Road edges (PRIMARY_EDGE plot style)
+  doc.lineWidth(PLOT.PRIMARY_EDGE.lineWidth).strokeColor(PLOT.PRIMARY_EDGE.color);
   drawUtmPolyline(leftEdge);
   drawUtmPolyline(rightEdge);
 
-  // Centerline (dashed yellow)
-  doc.lineWidth(1).dash(8, { space: 6 }).strokeColor('#CC9900');
+  // Centerline (PRIMARY_CENTER plot style — dashed)
+  doc.lineWidth(PLOT.PRIMARY_CENTER.lineWidth).strokeColor(PLOT.PRIMARY_CENTER.color);
+  doc.dash(PLOT.PRIMARY_CENTER.dash![0]!, { space: PLOT.PRIMARY_CENTER.dash![1] });
   drawUtmPolyline(centerline);
   doc.undash();
 
@@ -1978,27 +2025,23 @@ function drawGeometryPlanSheet(
     }
   }
 
-  // Primary approach signs (right shoulder)
-  const signOffsetFt = halfW + 12; // 12ft from road edge
+  // === TCP DEVICES WITH LEADER LINES (Professional CAD standard) ===
+  const signOffsetFt = halfW + 6;
+  const leaderLenPx = 45;
+
+  // Primary approach signs (right shoulder, leader to right)
   for (const sign of ctx.blueprint.primary_approach) {
-    // Signs are at distance_ft from taper start (upstream)
     const signSta = Math.max(0, ctx.taperLengthFt - sign.distance_ft);
     if (signSta < viewportStartSta || signSta > viewportEndSta) continue;
     const pt = alignment.getCoordinatesAtStation(signSta);
-    // Offset to right shoulder
     const perpRad = (pt.heading + 90) * Math.PI / 180;
     const sx = pt.x + signOffsetFt * Math.sin(perpRad);
     const sy = pt.y + signOffsetFt * Math.cos(perpRad);
     const pg = toPage(sx, sy);
-    // Draw sign diamond
-    doc.save().translate(pg.px, pg.py).rotate(45);
-    doc.rect(-5, -5, 10, 10).fillAndStroke('#FF8C00', 'black');
-    doc.restore();
-    doc.fontSize(4).fillColor('black');
-    doc.text(sign.sign_code, pg.px - 12, pg.py + 8, { width: 24, align: 'center', lineBreak: false });
+    drawSignWithLeader(doc, pg.px, pg.py, sign.sign_code, sign.label, 'right', leaderLenPx);
   }
 
-  // Opposing approach signs (left shoulder for opposing traffic)
+  // Opposing approach signs (left shoulder, leader to left)
   for (const sign of ctx.blueprint.opposing_approach) {
     const signSta = Math.min(alignment.totalLengthFt, alignment.totalLengthFt - ctx.blueprint.downstream_taper.length_ft + sign.distance_ft);
     if (signSta < viewportStartSta || signSta > viewportEndSta) continue;
@@ -2007,52 +2050,59 @@ function drawGeometryPlanSheet(
     const sx = pt.x + signOffsetFt * Math.sin(perpRad);
     const sy = pt.y + signOffsetFt * Math.cos(perpRad);
     const pg = toPage(sx, sy);
-    doc.save().translate(pg.px, pg.py).rotate(45);
-    doc.rect(-5, -5, 10, 10).fillAndStroke('#FF8C00', 'black');
-    doc.restore();
-    doc.fontSize(4).fillColor('black');
-    doc.text(sign.sign_code, pg.px - 12, pg.py + 8, { width: 24, align: 'center', lineBreak: false });
+    drawSignWithLeader(doc, pg.px, pg.py, sign.sign_code, sign.label, 'left', leaderLenPx);
   }
 
-  // Flagger positions (TA-10)
+  // Flagger positions (TA-10) — circle + leader
   if (['TA-10', 'TA-11'].includes(ctx.taCode)) {
-    // Upstream flagger at taper start
-    const fPt1 = alignment.getCoordinatesAtStation(ctx.taperLengthFt);
+    const fSta1 = ctx.taperLengthFt;
+    const fPt1 = alignment.getCoordinatesAtStation(fSta1);
     const fPerp1 = (fPt1.heading + 90) * Math.PI / 180;
     const f1x = fPt1.x + (halfW + 8) * Math.sin(fPerp1);
     const f1y = fPt1.y + (halfW + 8) * Math.cos(fPerp1);
     const fg1 = toPage(f1x, f1y);
-    doc.circle(fg1.px, fg1.py, 4).fillAndStroke('#cc0000', 'black');
-    doc.fontSize(4).fillColor('#cc0000').text('FLAGGER', fg1.px - 12, fg1.py + 6, { width: 24, align: 'center', lineBreak: false });
+    doc.lineWidth(PLOT.TTC_DEVICE.lineWidth).strokeColor('#cc0000');
+    doc.circle(fg1.px, fg1.py, 3).fillAndStroke('#cc0000', '#660000');
+    doc.lineWidth(0.4).strokeColor('#333');
+    doc.moveTo(fg1.px, fg1.py).lineTo(fg1.px + 30, fg1.py - 12).stroke();
+    doc.fontSize(4).fillColor('#cc0000').text('FLAGGER', fg1.px + 15, fg1.py - 20, { lineBreak: false });
 
-    // Downstream flagger
     const dnSta = alignment.totalLengthFt - ctx.blueprint.downstream_taper.length_ft;
     const fPt2 = alignment.getCoordinatesAtStation(dnSta);
     const fPerp2 = (fPt2.heading - 90) * Math.PI / 180;
     const f2x = fPt2.x + (halfW + 8) * Math.sin(fPerp2);
     const f2y = fPt2.y + (halfW + 8) * Math.cos(fPerp2);
     const fg2 = toPage(f2x, f2y);
-    doc.circle(fg2.px, fg2.py, 4).fillAndStroke('#cc0000', 'black');
-    doc.fontSize(4).fillColor('#cc0000').text('FLAGGER', fg2.px - 12, fg2.py + 6, { width: 24, align: 'center', lineBreak: false });
+    doc.lineWidth(PLOT.TTC_DEVICE.lineWidth).strokeColor('#cc0000');
+    doc.circle(fg2.px, fg2.py, 3).fillAndStroke('#cc0000', '#660000');
+    doc.lineWidth(0.4).strokeColor('#333');
+    doc.moveTo(fg2.px, fg2.py).lineTo(fg2.px - 30, fg2.py - 12).stroke();
+    doc.fontSize(4).fillColor('#cc0000').text('FLAGGER', fg2.px - 45, fg2.py - 20, { lineBreak: false });
   }
 
   // === END CLIPPING ===
   doc.restore();
 
-  // Station tick marks (outside clip to ensure text is visible)
-  doc.lineWidth(0.5).strokeColor('#999');
-  doc.fontSize(5).fillColor('#666');
+  // Station tick marks (Professional CAD — perpendicular to tangent, STATION_TICK style)
+  doc.lineWidth(PLOT.STATION_TICK.lineWidth).strokeColor(PLOT.STATION_TICK.color);
   for (let sta = Math.ceil(viewportStartSta / 100) * 100; sta <= viewportEndSta; sta += 100) {
     const pt = alignment.getCoordinatesAtStation(sta);
     const pg = toPage(pt.x, pt.y);
-    if (pg.px < pageLeft || pg.px > pageRight) continue;
+    if (pg.px < pageLeft - 10 || pg.px > pageRight + 10) continue;
     const perpRad = (pt.heading + 90) * Math.PI / 180;
-    const tickLen = sta % 500 === 0 ? 12 : 6;
-    const tx = Math.sin(perpRad) / scaleFtPerPt * tickLen;
-    const ty = -Math.cos(perpRad) / scaleFtPerPt * tickLen;
+    const isMajor = sta % 500 === 0;
+    const tickScaledFt = isMajor ? 15 : 8; // Physical feet
+    const tx = Math.sin(perpRad) / scaleFtPerPt * tickScaledFt;
+    const ty = -Math.cos(perpRad) / scaleFtPerPt * tickScaledFt;
     doc.moveTo(pg.px - tx, pg.py - ty).lineTo(pg.px + tx, pg.py + ty).stroke();
-    if (sta % 500 === 0) {
-      doc.text(ProjectAlignment.formatStation(sta), pg.px - 18, pg.py + Math.abs(ty) + 4, { width: 36, align: 'center', lineBreak: false });
+    if (isMajor) {
+      // Station label offset from centerline, rotated to match bearing
+      doc.save();
+      doc.translate(pg.px + tx * 1.5, pg.py + ty * 1.5);
+      doc.rotate(-(pt.heading - 90)); // Rotate text to follow road
+      doc.fontSize(4.5).fillColor('#555');
+      doc.text(ProjectAlignment.formatStation(sta), -18, -3, { width: 36, align: 'center', lineBreak: false });
+      doc.restore();
     }
   }
 
