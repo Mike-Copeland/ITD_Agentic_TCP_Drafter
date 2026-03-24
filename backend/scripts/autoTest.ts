@@ -141,6 +141,12 @@ async function runTest(test: TestCase): Promise<TestResult> {
     const blob = await genRes.arrayBuffer();
     const zipBuf = Buffer.from(blob);
 
+    // Save ZIP to Downloads for human review
+    const dlDir = 'C:\\Users\\mcopelan\\Downloads\\AutoTest_Plans';
+    if (!fs.existsSync(dlDir)) fs.mkdirSync(dlDir, { recursive: true });
+    const safeName = test.name.replace(/[^a-zA-Z0-9-]/g, '_');
+    fs.writeFileSync(path.join(dlDir, `${test.id.toString().padStart(2, '0')}_${safeName}.zip`), zipBuf);
+
     // Extract audit log from ZIP — find the text content between known markers
     const raw = zipBuf.toString('latin1'); // Use latin1 to avoid UTF-8 mangling of binary
     const auditStart = raw.indexOf('Engineering Generation Log');
