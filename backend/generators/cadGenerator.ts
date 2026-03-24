@@ -2658,10 +2658,21 @@ export async function generateCAD(
   const hasTWLTL = totalLanes === 3 || totalLanes === 5;
   const isMultiLane = totalLanes >= 4 || (totalLanes === 3 && !hasTWLTL);
 
-  const taSelection = MUTCD.selectTA(operationType, totalLanes, fcCode, isDivided, aadt, terrain);
+  let taSelection = MUTCD.selectTA(operationType, totalLanes, fcCode, isDivided, aadt, terrain);
+
+  // === ROUNDABOUT TA OVERRIDE ===
+  // If any cross-street within the work zone is a roundabout, override to roundabout-specific TA
+  const hasRoundabout = crossStreets.some(cs => cs.geometry?.type === 'roundabout' || cs.geometry?.intersectionType?.includes('roundabout'));
+  if (hasRoundabout) {
+    const circulatoryLanes = crossStreets.find(cs => cs.geometry?.type === 'roundabout')?.geometry?.circulatoryLanes || 1;
+    const workDuration = MUTCD.parseDuration(duration);
+    taSelection = MUTCD.selectRoundaboutTA(circulatoryLanes, workDuration, true);
+    console.log(`[cadGenerator] ROUNDABOUT OVERRIDE: ${taSelection.code} (${taSelection.title})`);
+  }
+
   const taCode = taSelection.code;
   const taDescription = taSelection.title;
-  console.log(`[cadGenerator] TA Selection: ${taCode} (${taDescription}) | Lanes: ${totalLanes} | FC: ${fcCode} | Op: ${operationType}`);
+  console.log(`[cadGenerator] TA Selection: ${taCode} (${taDescription}) | Lanes: ${totalLanes} | FC: ${fcCode} | Op: ${operationType}${hasRoundabout ? ' | ROUNDABOUT' : ''}`);
 
   // === CAPTURE PE ORIGINALS FOR CORRECTION TRACKING ===
   const peOriginalTaper = blueprint.taper.length_ft;
@@ -2680,7 +2691,14 @@ export async function generateCAD(
   // === MUTCD-AUTHORITATIVE SIGN ENFORCEMENT ===
   // Use MUTCD module as the source of truth for sign codes.
   // PE Agent provides distances; we enforce correct sign codes per TA.
-  const requiredSigns = MUTCD.getRequiredSigns(taCode);
+  // Get required signs — use roundabout-specific signs if applicable
+  let requiredSigns: ReturnType<typeof MUTCD.getRequiredSigns>;
+  if (MUTCD.isRoundaboutTA(taCode) || hasRoundabout) {
+    const rbSigns = MUTCD.getRoundaboutSigns(taCode);
+    requiredSigns = { primary: rbSigns.approach, opposing: rbSigns.approach }; // All approaches get same signs
+  } else {
+    requiredSigns = MUTCD.getRequiredSigns(taCode);
+  }
   const spacing = MUTCD.getSignSpacing(speedMph, fcCode, terrain, maxGradePercent, aadt, crossStreets?.length || 0);
 
   // Build authoritative primary sign sequence using MUTCD-required codes.
