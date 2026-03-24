@@ -688,7 +688,34 @@ Output ONLY a JSON array matching the cross-street order: [{"name":"...","type":
     }
 
     // ------------------------------------------------------------------
-    // 5b. INTERSECTION GEOMETRY CLASSIFICATION (OSM Overpass API)
+    // 5b. GEMINI VISION ROAD TYPE DETECTION (satellite image analysis)
+    // ------------------------------------------------------------------
+    let visionRoadType: string | null = null;
+    if (staticMapB64 && process.env.GEMINI_API_KEY) {
+      try {
+        const { GoogleGenAI } = await import('@google/genai');
+        const roadTypeAi = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        const rtTimeout = new Promise<any>((_, rej) => setTimeout(() => rej(new Error('Road type vision timeout')), 20000));
+        const rtRes = await Promise.race([roadTypeAi.models.generateContent({
+          model: 'gemini-3-flash-preview',
+          contents: { parts: [
+            { inlineData: { data: staticMapB64, mimeType: 'image/jpeg' } },
+            { text: 'Look at this satellite map image with two pins marking a road segment. What kind of road or intersection geometry exists between and around these pins? Classify as ONE of: straight_road, curved_road, roundabout, peanut_roundabout, dogbone_interchange, diamond_interchange, cloverleaf_interchange, signalized_intersection, T_intersection, Y_intersection, or other. Also note the number of lanes if visible. Respond with ONLY a JSON object: {"road_type": "...", "lanes_visible": 2, "notes": "brief description"}' },
+          ]},
+        }), rtTimeout]);
+        const rtText = rtRes?.text || '';
+        const rtMatch = rtText.match(/\{[\s\S]*\}/);
+        if (rtMatch) {
+          const rtData = JSON.parse(rtMatch[0]);
+          visionRoadType = rtData.road_type || null;
+          console.log(`[site-context] Vision road type: ${rtData.road_type} | ${rtData.notes || ''}`);
+        }
+      } catch (err) {
+        console.warn('[site-context] Vision road type detection failed:', err);
+      }
+    }
+
+    // 5c. INTERSECTION GEOMETRY CLASSIFICATION (OSM Overpass API + Vision)
     // ------------------------------------------------------------------
     let intersectionData: any = null;
     try {
@@ -696,8 +723,29 @@ Output ONLY a JSON array matching the cross-street order: [{"name":"...","type":
         startCoords, endCoords,
         positionedCrossStreets.map((cs: any) => ({ name: cs.name, position: cs.position }))
       );
+      // Vision override: if Gemini detected roundabout but OSM didn't, trust vision
+      if (!intersectionData.routeHasRoundabouts && visionRoadType && /roundabout|peanut|dogbone/i.test(visionRoadType)) {
+        console.log(`[site-context] VISION ROUNDABOUT OVERRIDE: Gemini detected "${visionRoadType}" but OSM found none`);
+        intersectionData.routeHasRoundabouts = true;
+        intersectionData.roundaboutCount = 1;
+        // Add a synthetic roundabout intersection at midpoint
+        const midLat = (startCoords.lat + endCoords.lat) / 2;
+        const midLng = (startCoords.lng + endCoords.lng) / 2;
+        const isDogbone = /peanut|dogbone/i.test(visionRoadType);
+        intersectionData.intersections.push({
+          name: isDogbone ? 'Dog-Bone / Peanut Roundabout (Vision detected)' : 'Roundabout (Vision detected)',
+          position: 0.5,
+          classification: {
+            type: isDogbone ? 'interchange_dogbone' : 'roundabout_single',
+            legs: 4, hasSignal: false, nearbyRoundaboutCount: 1,
+            circulatoryLanes: 1, hasSplitterIslands: true,
+          },
+          lat: midLat, lng: midLng,
+        });
+      }
+
       if (intersectionData.routeHasRoundabouts) {
-        console.log(`[site-context] ROUNDABOUT DETECTED: ${intersectionData.roundaboutCount} roundabout(s) found via OSM`);
+        console.log(`[site-context] ROUNDABOUT DETECTED: ${intersectionData.roundaboutCount} roundabout(s) found via OSM/Vision`);
         // Update cross-street geometry with roundabout classification
         for (const intx of intersectionData.intersections) {
           if (intx.classification.type.includes('roundabout') || intx.classification.type.includes('interchange')) {
@@ -761,6 +809,7 @@ Output ONLY a JSON array matching the cross-street order: [{"name":"...","type":
       positionedCrossStreets: positionedCrossStreets || [],
       routeHasRoundabouts: intersectionData?.routeHasRoundabouts || false,
       roundaboutCount: intersectionData?.roundaboutCount || 0,
+      visionRoadType: visionRoadType || null,
     });
   } catch (e) {
     console.error('[site-context] Error:', e);
