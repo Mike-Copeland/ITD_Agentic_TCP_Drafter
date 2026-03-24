@@ -440,9 +440,9 @@ export default function App() {
       <div className="absolute inset-0 z-0">
         <Map startCoords={startCoords} endCoords={endCoords} onPinDrop={handlePinDrop} captureRef={mapCaptureRef} />
       </div>
-      {/* Vignette overlay */}
-      <div className="absolute inset-0 z-10 bg-gradient-to-br from-zinc-950/80 via-transparent to-zinc-950/80 pointer-events-none" />
-      <div className="absolute inset-0 z-10 bg-gradient-to-t from-zinc-950/60 via-transparent to-zinc-950/40 pointer-events-none" />
+      {/* Vignette overlay — subtle, doesn't obscure map */}
+      <div className="absolute inset-0 z-10 bg-gradient-to-br from-zinc-950/50 via-transparent to-zinc-950/50 pointer-events-none" />
+      <div className="absolute inset-0 z-10 bg-gradient-to-t from-zinc-950/30 via-transparent to-zinc-950/20 pointer-events-none" />
 
       {/* === TOP BAR (minimal, floating) === */}
       <div className="absolute top-0 left-0 right-0 z-40 flex items-center justify-between px-6 py-4">
@@ -471,12 +471,12 @@ export default function App() {
         initial={{ opacity: 0, x: -40 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-        className="absolute top-16 left-6 bottom-6 w-[400px] bg-zinc-950/60 backdrop-blur-2xl border border-white/5 rounded-3xl z-40 flex flex-col shadow-2xl overflow-hidden"
+        className="absolute top-16 left-6 bottom-6 w-[400px] bg-zinc-900/70 backdrop-blur-2xl border border-white/10 rounded-3xl z-40 flex flex-col shadow-2xl overflow-hidden"
       >
         <div className="flex-1 overflow-y-auto p-7 space-y-6" style={{ scrollbarWidth: 'none' }}>
           {/* Operation Phases */}
           <div>
-            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-500 mb-3">Operation Phases</p>
+            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-400 mb-3">Operation Phases</p>
             <div className="grid grid-cols-2 gap-2">
               {allOps.map(op => (
                 <motion.button
@@ -502,7 +502,7 @@ export default function App() {
 
           {/* Duration */}
           <div>
-            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-500 mb-2">Duration</p>
+            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-400 mb-2">Duration</p>
             <div className="flex gap-2">
               {['Short-term (<= 3 days)', 'Long-term (> 3 days)'].map(d => (
                 <button key={d} onClick={() => setDuration(d)}
@@ -516,19 +516,19 @@ export default function App() {
           {/* Speed & Width — HUD Style */}
           <div className="grid grid-cols-3 gap-4">
             <div className="border-b border-white/10 pb-2">
-              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-zinc-600">Speed</p>
+              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-zinc-400">Speed</p>
               <input type="number" value={normalSpeed} onChange={(e) => setNormalSpeed(Number(e.target.value))}
                 className="w-full bg-transparent border-none outline-none font-mono text-lg text-emerald-400 p-0 mt-1" />
               <p className="text-[9px] font-mono text-zinc-600">MPH</p>
             </div>
             <div className="border-b border-white/10 pb-2">
-              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-zinc-600">WZ Speed</p>
+              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-zinc-400">WZ Speed</p>
               <input type="number" value={workZoneSpeed} onChange={(e) => setWorkZoneSpeed(Number(e.target.value))}
                 className="w-full bg-transparent border-none outline-none font-mono text-lg text-emerald-400 p-0 mt-1" />
               <p className="text-[9px] font-mono text-zinc-600">MPH</p>
             </div>
             <div className="border-b border-white/10 pb-2">
-              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-zinc-600">Width</p>
+              <p className="text-[9px] font-mono uppercase tracking-[0.2em] text-zinc-400">Width</p>
               <input type="number" value={laneWidth} onChange={(e) => setLaneWidth(Number(e.target.value))}
                 className="w-full bg-transparent border-none outline-none font-mono text-lg text-emerald-400 p-0 mt-1" />
               <p className="text-[9px] font-mono text-zinc-600">FT</p>
@@ -537,14 +537,14 @@ export default function App() {
 
           {/* Coordinates */}
           <div className="space-y-2">
-            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-500">Coordinates</p>
+            <p className="text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-400">Coordinates</p>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-emerald-500" />
-              <span className="font-mono text-[12px] text-zinc-400">{startCoords ? `${startCoords.lat.toFixed(5)}, ${startCoords.lng.toFixed(5)}` : '— awaiting pin —'}</span>
+              <span className="font-mono text-[12px] text-zinc-300">{startCoords ? `${startCoords.lat.toFixed(5)}, ${startCoords.lng.toFixed(5)}` : '— awaiting pin —'}</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-red-500" />
-              <span className="font-mono text-[12px] text-zinc-400">{endCoords ? `${endCoords.lat.toFixed(5)}, ${endCoords.lng.toFixed(5)}` : '— awaiting pin —'}</span>
+              <span className="font-mono text-[12px] text-zinc-300">{endCoords ? `${endCoords.lat.toFixed(5)}, ${endCoords.lng.toFixed(5)}` : '— awaiting pin —'}</span>
             </div>
           </div>
 
@@ -558,7 +558,7 @@ export default function App() {
             {areaAnalysis && (
               <div className="bg-zinc-950/80 border border-white/5 rounded-xl p-3 max-h-[120px] overflow-y-auto" style={{ scrollbarWidth: 'none' }}>
                 <textarea value={areaAnalysis} onChange={(e) => setAreaAnalysis(e.target.value)}
-                  className="w-full bg-transparent border-none outline-none resize-none text-[11px] font-mono text-zinc-500 leading-relaxed min-h-[60px]" />
+                  className="w-full bg-transparent border-none outline-none resize-none text-[11px] font-mono text-zinc-400 leading-relaxed min-h-[60px]" />
               </div>
             )}
           </div>
