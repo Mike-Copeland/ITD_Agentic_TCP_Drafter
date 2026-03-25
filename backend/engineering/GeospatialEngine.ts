@@ -468,6 +468,42 @@ export function generateViewports(
   // Sort detail sheets by startStation so sheet numbers follow the route sequentially
   const indexSheet = viewports[0]!;
   const detailSheets = viewports.slice(1).sort((a, b) => a.startStation - b.startStation);
+
+  // Fix 5: Eliminate overlaps and gaps between adjacent tiles
+  // Adjust tile boundaries so each tile connects seamlessly to its neighbors
+  for (let i = 0; i < detailSheets.length - 1; i++) {
+    const curr = detailSheets[i]!;
+    const next = detailSheets[i + 1]!;
+    // If there's overlap or gap, split the difference at the midpoint
+    if (curr.endStation !== next.startStation) {
+      const midSta = (curr.endStation + next.startStation) / 2;
+      curr.endStation = midSta;
+      next.startStation = midSta;
+      // Also adjust the spatial tile boundaries to match
+      // Determine which axis the tiles are stacked along
+      if (curr.tileMaxX !== undefined && next.tileMinX !== undefined) {
+        // Horizontal adjacency: adjust X boundary
+        if (Math.abs((curr.tileMaxX + curr.tileMinX!) / 2 - (next.tileMaxX! + next.tileMinX!) / 2) >
+            Math.abs((curr.tileMaxY! + curr.tileMinY!) / 2 - (next.tileMaxY! + next.tileMinY!) / 2)) {
+          // Tiles differ more in X — adjust X boundaries
+          const midX = (curr.tileMaxX + next.tileMinX!) / 2;
+          curr.tileMaxX = midX;
+          next.tileMinX = midX;
+        } else {
+          // Tiles differ more in Y — adjust Y boundaries
+          const midY = (curr.tileMaxY! + next.tileMinY!) / 2;
+          curr.tileMaxY = midY;
+          next.tileMinY = midY;
+        }
+      }
+    }
+  }
+  // Ensure first tile starts at station 0 and last tile ends at totalLen
+  if (detailSheets.length > 0) {
+    detailSheets[0]!.startStation = 0;
+    detailSheets[detailSheets.length - 1]!.endStation = totalLen;
+  }
+
   // Re-number after sorting
   for (let i = 0; i < detailSheets.length; i++) {
     detailSheets[i]!.sheetNumber = i + 2;

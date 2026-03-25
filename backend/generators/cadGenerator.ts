@@ -93,32 +93,47 @@ const PLOT = {
 
 /**
  * Draw a sign with a leader line extending into white space.
- * Point marker at exact location, leader line to sign graphic in margin.
+ * Arrowhead at road edge, leader line to sign graphic in margin.
+ * Sign graphic is large enough to read with code + label text.
  */
 function drawSignWithLeader(
-  doc: Doc, x: number, y: number, signCode: string, _label: string,
+  doc: Doc, x: number, y: number, signCode: string, label: string,
   side: 'left' | 'right', leaderLen = 40,
 ) {
-  // Point marker at exact position
-  doc.circle(x, y, 1.5).fillAndStroke('#FF8C00', 'black');
-
   // Leader line direction
   const dir = side === 'right' ? 1 : -1;
   const endX = x + dir * leaderLen;
-  const endY = y - 15; // Angle upward slightly
+  const endY = y - 20; // Angle upward
 
-  // Leader line
-  doc.lineWidth(PLOT.TTC_SIGN_LEADER.lineWidth).strokeColor(PLOT.TTC_SIGN_LEADER.color);
+  // Leader line (from road edge to sign graphic)
+  doc.lineWidth(0.6).strokeColor('#333');
   doc.moveTo(x, y).lineTo(endX, endY).stroke();
 
-  // Sign diamond at end of leader (small, 8px)
+  // Arrowhead at road-edge end (pointing at placement location)
+  const arrowLen = 5;
+  const arrowAngle = Math.atan2(endY - y, endX - x);
+  doc.moveTo(x, y)
+    .lineTo(x + arrowLen * Math.cos(arrowAngle + 0.4), y + arrowLen * Math.sin(arrowAngle + 0.4))
+    .lineTo(x + arrowLen * Math.cos(arrowAngle - 0.4), y + arrowLen * Math.sin(arrowAngle - 0.4))
+    .closePath().fill('#333');
+
+  // Sign diamond at end of leader (18px — large enough to see)
   doc.save().translate(endX, endY).rotate(45);
-  doc.rect(-5, -5, 10, 10).fillAndStroke('#FF8C00', 'black');
+  doc.rect(-9, -9, 18, 18).fillAndStroke('#FF8C00', '#000');
   doc.restore();
 
-  // Sign code text
-  doc.fontSize(4.5).fillColor('black');
-  doc.text(signCode, endX - 15, endY + 8, { width: 30, align: 'center', lineBreak: false });
+  // Sign code text (bold, 7pt) — inside diamond area
+  doc.font('Helvetica-Bold').fontSize(5).fillColor('white');
+  doc.text(signCode, endX - 12, endY - 3, { width: 24, align: 'center', lineBreak: false });
+  doc.font('Helvetica');
+
+  // Sign label text below diamond (readable description)
+  const shortLabel = label.length > 28 ? label.substring(0, 26) + '...' : label;
+  const labelW = 70;
+  // White background for legibility
+  doc.rect(endX - labelW / 2, endY + 11, labelW, 8).fill('white');
+  doc.fontSize(5).fillColor('#333');
+  doc.text(shortLabel, endX - labelW / 2, endY + 12, { width: labelW, align: 'center', lineBreak: false });
 }
 
 function gpsToWebMercatorFt(lat: number, lng: number): { x: number; y: number } {
@@ -511,6 +526,9 @@ function drawCoverSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: Dr
   doc.fontSize(20).fillColor('black').text("TEMPORARY TRAFFIC CONTROL PLAN", 0, 40, { align: 'center' });
   doc.fontSize(14).text(ctx.roadName ? ctx.roadName.toUpperCase() : 'IDAHO HIGHWAY', 0, 68, { align: 'center' });
   doc.fontSize(12).text(ctx.operationType.toUpperCase(), 0, 88, { align: 'center' });
+  // N.T.S. on cover sheet
+  doc.fontSize(8).fillColor('#cc0000').text('ALL SCHEMATICS N.T.S.', 1000, 40, { lineBreak: false });
+  doc.fillColor('black');
 
   // Project Info Box
   const bx = 50, by = 130, bw = 500, lh = 16;
@@ -704,11 +722,14 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
   const spacing = getABCSpacing(ctx.speedMph, ctx.terrain, ctx.funcClass, 0, 0, 0, ctx.roadName);
   const bufferFt = getBufferSpaceFt(ctx.speedMph);
   const taTitle = `${ctx.taCode}: ${ctx.taDescription.toUpperCase()}`;
-  doc.fontSize(14).fillColor('black').text(`TYPICAL APPLICATION — ${taTitle}`, 0, 25, { align: 'center' });
-  doc.fontSize(8).text(`MUTCD 11th Edition | ${spacing.classification} | A=${spacing.a}' B=${spacing.b}' C=${spacing.c}' | Buffer: ${bufferFt}' min (Table 6C-2)`, 0, 44, { align: 'center' });
+  doc.fontSize(14).fillColor('black').text(`TYPICAL APPLICATION — ${taTitle}`, 0, 20, { align: 'center' });
+  doc.fontSize(8).text(`MUTCD 11th Edition | ${spacing.classification} | A=${spacing.a}' B=${spacing.b}' C=${spacing.c}' | Buffer: ${bufferFt}' min (Table 6B-2)`, 0, 38, { align: 'center' });
   if (ctx.totalLanes > 0) {
-    doc.fontSize(7).text(`${ctx.totalLanes}-lane road${ctx.hasTWLTL ? ' with center turn lane' : ''}${ctx.isDivided ? ' (divided)' : ''}`, 0, 56, { align: 'center' });
+    doc.fontSize(7).text(`${ctx.totalLanes}-lane road${ctx.hasTWLTL ? ' with center turn lane' : ''}${ctx.isDivided ? ' (divided)' : ''}`, 0, 50, { align: 'center' });
   }
+  // N.T.S. label — Fix 6
+  doc.fontSize(9).fillColor('#cc0000').text('SCHEMATIC — NOT TO SCALE (N.T.S.)', 900, 20, { lineBreak: false });
+  doc.fillColor('black');
 
   const roadCL = 355;
   const roadL = 30, roadR = 1194;
@@ -723,23 +744,24 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
   // Zone boundaries adapt based on TA type
   // Multi-lane/divided: no opposing warning area (opposing traffic unaffected)
   // Shoulder: shorter taper, no lane closure
+  // Zone boundaries — compressed work area, wider warning/transition/buffer
   const zones = (isTwoWayFlagger || isRoadClosure) ? {
-    priWarningStart: 40, priWarningEnd: 280,
-    transitionStart: 280, transitionEnd: 355,
-    bufferStart: 355, bufferEnd: 420,
-    activityStart: 420, activityEnd: 630,
-    dnBufferStart: 630, dnBufferEnd: 695,
-    dnTransitionStart: 695, dnTransitionEnd: 740,
-    terminationStart: 740, terminationEnd: 780,
-    oppWarningStart: 780, oppWarningEnd: 1180,
+    priWarningStart: 40, priWarningEnd: 300,
+    transitionStart: 300, transitionEnd: 390,
+    bufferStart: 390, bufferEnd: 460,
+    activityStart: 460, activityEnd: 600, // Compressed work area
+    dnBufferStart: 600, dnBufferEnd: 670,
+    dnTransitionStart: 670, dnTransitionEnd: 720,
+    terminationStart: 720, terminationEnd: 760,
+    oppWarningStart: 760, oppWarningEnd: 1180,
   } : {
     // Multi-lane/shoulder: single-direction layout — more room for signs + longer taper
-    priWarningStart: 40, priWarningEnd: 340,
-    transitionStart: 340, transitionEnd: 500,  // Longer merging taper
-    bufferStart: 500, bufferEnd: 560,
-    activityStart: 560, activityEnd: 820,
-    dnBufferStart: 820, dnBufferEnd: 860,
-    dnTransitionStart: 860, dnTransitionEnd: 920, // Downstream taper
+    priWarningStart: 40, priWarningEnd: 360,
+    transitionStart: 360, transitionEnd: 530,  // Longer merging taper
+    bufferStart: 530, bufferEnd: 600,
+    activityStart: 600, activityEnd: 800, // Compressed work area
+    dnBufferStart: 800, dnBufferEnd: 850,
+    dnTransitionStart: 850, dnTransitionEnd: 920, // Downstream taper
     terminationStart: 920, terminationEnd: 980,
     oppWarningStart: 980, oppWarningEnd: 1180, // END ROAD WORK area
   };
@@ -749,9 +771,9 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
   const roadY1 = road.topEdge;
   const roadY2 = road.bottomEdge;
 
-  // Zone labels
+  // Zone labels — positioned ABOVE signs to avoid interference
   doc.fontSize(6).fillColor('#333');
-  const zoneLabelY = roadY1 - 45;
+  const zoneLabelY = roadY1 - 85;
   doc.lineWidth(0.5).strokeColor('#999');
 
   const drawZoneLabel = (x1: number, x2: number, label1: string, label2?: string) => {
@@ -992,12 +1014,28 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
   doc.restore();
   doc.fillColor('black').fontSize(8).text("WORK AREA", waX1, waLabelY, { width: waX2 - waX1, align: 'center', lineBreak: false });
 
-  // END ROAD WORK sign (green guide sign)
+  // Break squiggle in work area — indicates section not fully depicted
+  const breakX = (waX1 + waX2) / 2;
+  const breakY1 = roadY1 + 3;
+  const breakY2 = roadY2 - 3;
+  doc.lineWidth(1.2).strokeColor('#666');
+  const zigW = 4, zigSteps = Math.floor((breakY2 - breakY1) / 6);
+  doc.moveTo(breakX - zigW, breakY1);
+  for (let i = 0; i < zigSteps; i++) {
+    const yy = breakY1 + (i + 0.5) * (breakY2 - breakY1) / zigSteps;
+    doc.lineTo(breakX + (i % 2 === 0 ? zigW : -zigW), yy);
+  }
+  doc.lineTo(breakX - zigW, breakY2).stroke();
+
+  // END ROAD WORK sign — orange warning style
   doc.lineWidth(1).strokeColor('black');
-  doc.rect(zones.terminationEnd - 20, roadY2 + 10, 30, 20).fillAndStroke('#006B3F', 'black');
-  doc.fontSize(4).fillColor('white').text('G20-2', zones.terminationEnd - 18, roadY2 + 13, { lineBreak: false });
-  doc.text('END ROAD', zones.terminationEnd - 18, roadY2 + 19, { lineBreak: false });
-  doc.text('WORK', zones.terminationEnd - 18, roadY2 + 25, { lineBreak: false });
+  doc.save().translate(zones.terminationEnd - 5, roadY2 + 20).rotate(45);
+  doc.rect(-12, -12, 24, 24).fillAndStroke('#FF8C00', 'black');
+  doc.restore();
+  doc.fontSize(3.5).fillColor('black');
+  doc.text('G20-2', zones.terminationEnd - 18, roadY2 + 12, { lineBreak: false });
+  doc.text('END ROAD', zones.terminationEnd - 18, roadY2 + 35, { lineBreak: false });
+  doc.text('WORK', zones.terminationEnd - 12, roadY2 + 41, { lineBreak: false });
   doc.fillColor('black');
 
   // === SHARED: Signs, dimensions, notes ===
@@ -1019,7 +1057,11 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
   // Opposing/downstream signs
   if (isTwoWayFlagger) {
     // Two-way: opposing approach signs above the road
-    const oppSigns = ctx.blueprint.opposing_approach;
+    // Include W3-5 speed reduction on opposing approach too (must match primary)
+    const oppSigns = [...ctx.blueprint.opposing_approach];
+    if (ctx.speedMph !== ctx.wzSpeedMph && !oppSigns.some(s => s.sign_code === 'W3-5')) {
+      oppSigns.push({ sign_code: 'W3-5', distance_ft: 500, label: `REDUCED SPEED ${ctx.wzSpeedMph} MPH AHEAD` });
+    }
     const oppCount = oppSigns.length;
     const oppStep = oppCount > 1 ? (zones.oppWarningEnd - zones.oppWarningStart - 40) / (oppCount - 1) : 0;
     oppSigns.forEach((sign, i) => {
@@ -2053,11 +2095,85 @@ function drawGeometryPlanSheet(
   doc.lineCap('butt');
 
   // =========================================================
+  // FIX E: DRAW CROSS-STREETS ON GEOMETRY PLAN
+  // Short perpendicular road stubs at each intersection
+  // =========================================================
+  for (const cs of ctx.crossStreets) {
+    const sta = cs.position * alignment.totalLengthFt;
+    if (sta < viewportStartSta - 50 || sta > viewportEndSta + 50) continue;
+    const pt = alignment.getCoordinatesAtStation(sta);
+    const pg = toPage(pt.x, pt.y);
+    if (pg.px < pageLeft - 10 || pg.px > pageRight + 10) continue;
+
+    // Determine cross-street direction from geometry type
+    const geo = cs.geometry;
+    const perpRad = (pt.heading + 90) * Math.PI / 180;
+
+    // Cross-street road stub length (in real-world feet, scaled to page)
+    const stubLenFt = Math.max(200, halfW * 6); // At least 200 ft visible
+    const stubWidthFt = 24; // Typical 2-lane cross-street width
+
+    // Draw cross-street on both sides unless T-intersection
+    const drawNorth = !geo || geo.type === '4-way' || geo.type === 'T-north' || geo.type === 'T-east';
+    const drawSouth = !geo || geo.type === '4-way' || geo.type === 'T-south' || geo.type === 'T-west';
+
+    // Cross-street edge lines (grey, thinner than main road)
+    doc.lineWidth(0.8).strokeColor('#888888');
+    const crossHalfW = stubWidthFt / 2;
+
+    if (drawNorth) {
+      // North/East leg — perpendicular from main road edge outward
+      const startR = halfW + 2; // Start just outside main road edge
+      const endR = halfW + stubLenFt;
+      // Left edge of cross-street
+      const s1 = toPage(pt.x + startR * Math.sin(perpRad) - crossHalfW * Math.cos(perpRad),
+                         pt.y + startR * Math.cos(perpRad) + crossHalfW * Math.sin(perpRad));
+      const e1 = toPage(pt.x + endR * Math.sin(perpRad) - crossHalfW * Math.cos(perpRad),
+                         pt.y + endR * Math.cos(perpRad) + crossHalfW * Math.sin(perpRad));
+      // Right edge
+      const s2 = toPage(pt.x + startR * Math.sin(perpRad) + crossHalfW * Math.cos(perpRad),
+                         pt.y + startR * Math.cos(perpRad) - crossHalfW * Math.sin(perpRad));
+      const e2 = toPage(pt.x + endR * Math.sin(perpRad) + crossHalfW * Math.cos(perpRad),
+                         pt.y + endR * Math.cos(perpRad) - crossHalfW * Math.sin(perpRad));
+      doc.moveTo(s1.px, s1.py).lineTo(e1.px, e1.py).stroke();
+      doc.moveTo(s2.px, s2.py).lineTo(e2.px, e2.py).stroke();
+      // Centerline (dashed)
+      doc.lineWidth(0.4).strokeColor('#CC9900').dash(3, { space: 3 });
+      const sc = toPage(pt.x + startR * Math.sin(perpRad), pt.y + startR * Math.cos(perpRad));
+      const ec = toPage(pt.x + endR * Math.sin(perpRad), pt.y + endR * Math.cos(perpRad));
+      doc.moveTo(sc.px, sc.py).lineTo(ec.px, ec.py).stroke();
+      doc.undash();
+    }
+
+    if (drawSouth) {
+      // South/West leg — opposite direction
+      const startR = halfW + 2;
+      const endR = halfW + stubLenFt;
+      const s1 = toPage(pt.x - startR * Math.sin(perpRad) - crossHalfW * Math.cos(perpRad),
+                         pt.y - startR * Math.cos(perpRad) + crossHalfW * Math.sin(perpRad));
+      const e1 = toPage(pt.x - endR * Math.sin(perpRad) - crossHalfW * Math.cos(perpRad),
+                         pt.y - endR * Math.cos(perpRad) + crossHalfW * Math.sin(perpRad));
+      const s2 = toPage(pt.x - startR * Math.sin(perpRad) + crossHalfW * Math.cos(perpRad),
+                         pt.y - startR * Math.cos(perpRad) - crossHalfW * Math.sin(perpRad));
+      const e2 = toPage(pt.x - endR * Math.sin(perpRad) + crossHalfW * Math.cos(perpRad),
+                         pt.y - endR * Math.cos(perpRad) - crossHalfW * Math.sin(perpRad));
+      doc.lineWidth(0.8).strokeColor('#888888');
+      doc.moveTo(s1.px, s1.py).lineTo(e1.px, e1.py).stroke();
+      doc.moveTo(s2.px, s2.py).lineTo(e2.px, e2.py).stroke();
+      doc.lineWidth(0.4).strokeColor('#CC9900').dash(3, { space: 3 });
+      const sc = toPage(pt.x - startR * Math.sin(perpRad), pt.y - startR * Math.cos(perpRad));
+      const ec = toPage(pt.x - endR * Math.sin(perpRad), pt.y - endR * Math.cos(perpRad));
+      doc.moveTo(sc.px, sc.py).lineTo(ec.px, ec.py).stroke();
+      doc.undash();
+    }
+  }
+
+  // =========================================================
   // PLOT TCP DEVICES (signs, work zone, flaggers)
   // =========================================================
 
   // ---------------------------------------------------------
-  // THE RED HATCH MARKS: ACTIVE WORK AREA
+  // WORK ZONE: Contrasting shading with distinct boundary
   // The physical space where construction/maintenance occurs.
   // Sits inside the closed lane(s), starting AFTER the upstream
   // buffer space and ending BEFORE the downstream buffer/taper.
@@ -2069,28 +2185,44 @@ function drawGeometryPlanSheet(
     const wzPoly = alignment.getWorkZonePolygon(wzStartSta, wzEndSta, -halfW, 0);
     if (wzPoly.length > 2) {
       const wzPage = wzPoly.map(p => toPage(p.x, p.y));
+
+      // Contrasting orange fill (clearly distinct from grey road)
       doc.save();
       doc.moveTo(wzPage[0]!.px, wzPage[0]!.py);
       wzPage.forEach(p => doc.lineTo(p.px, p.py));
       doc.closePath();
-      doc.fillOpacity(0.15).fill('#cc0000');
+      doc.fillOpacity(0.25).fill('#FF6600');
       doc.restore();
-      // Hatch lines
-      doc.lineWidth(0.3).strokeColor('#cc0000');
-      const hatchStep = 15;
-      for (let i = 0; i < wzPage.length - 1; i += Math.max(1, Math.floor(wzPage.length / 20))) {
-        const p = wzPage[i]!;
-        doc.moveTo(p.px - hatchStep, p.py - hatchStep).lineTo(p.px + hatchStep, p.py + hatchStep).stroke();
-      }
+
+      // Bold boundary outline around work zone
+      doc.save();
+      doc.lineWidth(1.5).strokeColor('#cc0000');
+      doc.moveTo(wzPage[0]!.px, wzPage[0]!.py);
+      wzPage.forEach(p => doc.lineTo(p.px, p.py));
+      doc.closePath().stroke();
+      doc.restore();
+
+      // "WORK AREA" label centered in the zone
+      const wzMidSta = (wzStartSta + wzEndSta) / 2;
+      const wzMidPt = alignment.getCoordinatesAtStation(wzMidSta);
+      const wzMidPg = toPage(wzMidPt.x, wzMidPt.y);
+      doc.save();
+      doc.translate(wzMidPg.px, wzMidPg.py);
+      doc.rotate(-(wzMidPt.heading - 90)); // Rotate to follow road
+      doc.rect(-28, -5, 56, 10).fill('white');
+      doc.font('Helvetica-Bold').fontSize(6).fillColor('#cc0000');
+      doc.text('WORK AREA', -26, -3, { width: 52, align: 'center', lineBreak: false });
+      doc.font('Helvetica');
+      doc.restore();
     }
   }
 
   // === TCP DEVICES WITH LEADER LINES (Professional CAD standard) ===
-  const signOffsetFt = halfW + 6;
-  const leaderLenPx = 45;
+  // Fix A+C: Signs placed at road EDGE with leaders extending into margin
+  const leaderLenPx = 60;
 
   // Primary approach signs (right shoulder, leader to right)
-  // Stagger leader lengths to prevent label overlap on closely-spaced signs
+  // Stagger vertically to prevent label overlap on closely-spaced signs
   const visiblePrimary = ctx.blueprint.primary_approach
     .map(sign => ({ ...sign, sta: Math.max(0, ctx.taperLengthFt - sign.distance_ft) }))
     .filter(s => s.sta >= viewportStartSta && s.sta <= viewportEndSta)
@@ -2098,13 +2230,14 @@ function drawGeometryPlanSheet(
   for (let si = 0; si < visiblePrimary.length; si++) {
     const sign = visiblePrimary[si]!;
     const pt = alignment.getCoordinatesAtStation(sign.sta);
-    const perpRad = (pt.heading + 90) * Math.PI / 180;
-    const sx = pt.x + signOffsetFt * Math.sin(perpRad);
-    const sy = pt.y + signOffsetFt * Math.cos(perpRad);
-    const pg = toPage(sx, sy);
-    // Alternate leader length to stagger labels
-    const stagger = (si % 2 === 0) ? 0 : 20;
-    drawSignWithLeader(doc, pg.px, pg.py, sign.sign_code, sign.label, 'right', leaderLenPx + stagger);
+    // Fix C: Place point marker at road EDGE, not center
+    const edgePerpRad = (pt.heading + 90) * Math.PI / 180;
+    const edgeX = pt.x + halfW * Math.sin(edgePerpRad);
+    const edgeY = pt.y + halfW * Math.cos(edgePerpRad);
+    const edgePg = toPage(edgeX, edgeY);
+    // Stagger leader lengths to spread labels vertically
+    const stagger = si * 25;
+    drawSignWithLeader(doc, edgePg.px, edgePg.py, sign.sign_code, sign.label, 'right', leaderLenPx + stagger);
   }
 
   // Opposing approach signs (left shoulder, leader to left)
@@ -2115,39 +2248,44 @@ function drawGeometryPlanSheet(
   for (let si = 0; si < visibleOpposing.length; si++) {
     const sign = visibleOpposing[si]!;
     const pt = alignment.getCoordinatesAtStation(sign.sta);
-    const perpRad = (pt.heading - 90) * Math.PI / 180;
-    const sx = pt.x + signOffsetFt * Math.sin(perpRad);
-    const sy = pt.y + signOffsetFt * Math.cos(perpRad);
-    const pg = toPage(sx, sy);
-    const stagger = (si % 2 === 0) ? 0 : 20;
-    drawSignWithLeader(doc, pg.px, pg.py, sign.sign_code, sign.label, 'left', leaderLenPx + stagger);
+    // Fix C: Place point marker at road EDGE (left side)
+    const edgePerpRad = (pt.heading - 90) * Math.PI / 180;
+    const edgeX = pt.x + halfW * Math.sin(edgePerpRad);
+    const edgeY = pt.y + halfW * Math.cos(edgePerpRad);
+    const edgePg = toPage(edgeX, edgeY);
+    const stagger = si * 25;
+    drawSignWithLeader(doc, edgePg.px, edgePg.py, sign.sign_code, sign.label, 'left', leaderLenPx + stagger);
   }
 
-  // Flagger positions (TA-10) — circle + leader
+  // Flagger positions (TA-10) — only draw if station falls within this viewport
   if (['TA-10', 'TA-11'].includes(ctx.taCode)) {
     const fSta1 = ctx.taperLengthFt;
-    const fPt1 = alignment.getCoordinatesAtStation(fSta1);
-    const fPerp1 = (fPt1.heading + 90) * Math.PI / 180;
-    const f1x = fPt1.x + (halfW + 8) * Math.sin(fPerp1);
-    const f1y = fPt1.y + (halfW + 8) * Math.cos(fPerp1);
-    const fg1 = toPage(f1x, f1y);
-    doc.lineWidth(PLOT.TTC_DEVICE.lineWidth).strokeColor('#cc0000');
-    doc.circle(fg1.px, fg1.py, 3).fillAndStroke('#cc0000', '#660000');
-    doc.lineWidth(0.4).strokeColor('#333');
-    doc.moveTo(fg1.px, fg1.py).lineTo(fg1.px + 30, fg1.py - 12).stroke();
-    doc.fontSize(4).fillColor('#cc0000').text('FLAGGER', fg1.px + 15, fg1.py - 20, { lineBreak: false });
+    if (fSta1 >= viewportStartSta && fSta1 <= viewportEndSta) {
+      const fPt1 = alignment.getCoordinatesAtStation(fSta1);
+      const fPerp1 = (fPt1.heading + 90) * Math.PI / 180;
+      const f1x = fPt1.x + (halfW + 8) * Math.sin(fPerp1);
+      const f1y = fPt1.y + (halfW + 8) * Math.cos(fPerp1);
+      const fg1 = toPage(f1x, f1y);
+      doc.lineWidth(PLOT.TTC_DEVICE.lineWidth).strokeColor('#cc0000');
+      doc.circle(fg1.px, fg1.py, 3).fillAndStroke('#cc0000', '#660000');
+      doc.lineWidth(0.4).strokeColor('#333');
+      doc.moveTo(fg1.px, fg1.py).lineTo(fg1.px + 30, fg1.py - 12).stroke();
+      doc.fontSize(4).fillColor('#cc0000').text('FLAGGER', fg1.px + 15, fg1.py - 20, { lineBreak: false });
+    }
 
     const dnSta = alignment.totalLengthFt - ctx.blueprint.downstream_taper.length_ft;
-    const fPt2 = alignment.getCoordinatesAtStation(dnSta);
-    const fPerp2 = (fPt2.heading - 90) * Math.PI / 180;
-    const f2x = fPt2.x + (halfW + 8) * Math.sin(fPerp2);
-    const f2y = fPt2.y + (halfW + 8) * Math.cos(fPerp2);
-    const fg2 = toPage(f2x, f2y);
-    doc.lineWidth(PLOT.TTC_DEVICE.lineWidth).strokeColor('#cc0000');
-    doc.circle(fg2.px, fg2.py, 3).fillAndStroke('#cc0000', '#660000');
-    doc.lineWidth(0.4).strokeColor('#333');
-    doc.moveTo(fg2.px, fg2.py).lineTo(fg2.px - 30, fg2.py - 12).stroke();
-    doc.fontSize(4).fillColor('#cc0000').text('FLAGGER', fg2.px - 45, fg2.py - 20, { lineBreak: false });
+    if (dnSta >= viewportStartSta && dnSta <= viewportEndSta) {
+      const fPt2 = alignment.getCoordinatesAtStation(dnSta);
+      const fPerp2 = (fPt2.heading - 90) * Math.PI / 180;
+      const f2x = fPt2.x + (halfW + 8) * Math.sin(fPerp2);
+      const f2y = fPt2.y + (halfW + 8) * Math.cos(fPerp2);
+      const fg2 = toPage(f2x, f2y);
+      doc.lineWidth(PLOT.TTC_DEVICE.lineWidth).strokeColor('#cc0000');
+      doc.circle(fg2.px, fg2.py, 3).fillAndStroke('#cc0000', '#660000');
+      doc.lineWidth(0.4).strokeColor('#333');
+      doc.moveTo(fg2.px, fg2.py).lineTo(fg2.px - 30, fg2.py - 12).stroke();
+      doc.fontSize(4).fillColor('#cc0000').text('FLAGGER', fg2.px - 45, fg2.py - 20, { lineBreak: false });
+    }
   }
 
   // === END CLIPPING ===
