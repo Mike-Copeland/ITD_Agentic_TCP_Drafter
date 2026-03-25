@@ -76,6 +76,7 @@ interface TestResult {
   complianceFailures?: string[];
   corrections?: string[];
   sheets?: number; pdfKB?: number;
+  taperLengthFt?: number; roadClassification?: string; signSpacingA?: number;
   error?: string;
 }
 
@@ -163,6 +164,9 @@ async function runTest(test: TestCase): Promise<TestResult> {
     while ((m = corrRx.exec(auditSection)) !== null) corrLines.push(`${m[1]}: ${m[2]} → ${m[3]}`);
     const taMatch = auditSection.match(/Typical Application: (TA-\d+) . ([^\n\r]+)/);
     const sheetsMatch = auditSection.match(/Total Sheets: (\d+)/);
+    const taperMatch = auditSection.match(/Taper Length: (\d+) ft/);
+    const classMatch = auditSection.match(/Classification: ([^\n\r]+)/);
+    const spacingMatch = auditSection.match(/Sign Spacing.*?A=(\d+)/i);
 
     return {
       id: test.id, name: test.name, category: test.category, operationType: test.operationType,
@@ -179,6 +183,9 @@ async function runTest(test: TestCase): Promise<TestResult> {
       complianceFailures: failures, corrections: corrLines,
       sheets: sheetsMatch ? parseInt(sheetsMatch[1]!) : undefined,
       pdfKB: Math.round(blob.byteLength / 1024),
+      taperLengthFt: taperMatch ? parseInt(taperMatch[1]!) : undefined,
+      roadClassification: classMatch?.[1]?.trim(),
+      signSpacingA: spacingMatch ? parseInt(spacingMatch[1]!) : undefined,
     };
   } catch (err: any) {
     return {
@@ -216,6 +223,9 @@ async function main() {
         r.lanes ? `${r.lanes}ln` : '',
         r.terrain || '',
         r.taCode || '?',
+        r.taperLengthFt ? `Taper:${r.taperLengthFt}ft` : '',
+        r.roadClassification ? `Class:${r.roadClassification}` : '',
+        r.signSpacingA ? `SpacingA:${r.signSpacingA}ft` : '',
       ].filter(Boolean).join(' | ');
       console.log(`  [${icon}] #${r.id} ${r.name} | ${comp} | ${(r.timeMs / 1000).toFixed(0)}s | ${details}`);
       if (r.complianceFailures?.length) r.complianceFailures.forEach(f => console.log(`        FAIL: ${f}`));

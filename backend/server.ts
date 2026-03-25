@@ -997,7 +997,9 @@ app.post('/api/generate-plan', async (req, res) => {
     // ------------------------------------------------------------------
     // Deterministic generation — cadGenerator.ts has ALL the engineering fixes
     // ------------------------------------------------------------------
-    console.log(`[generate-plan] Session ${sessionId} | speed=${speedMph} | op=${opType} | route=${routeDistanceFt}ft`);
+    const effectiveLanes = parseInt(rawTotalLanes) || 0;
+
+    console.log(`[generate-plan] Session ${sessionId} | speed=${speedMph} | op=${opType} | route=${routeDistanceFt}ft | lanes=${effectiveLanes}`);
     console.log(`[generate-plan] staticMapBase64 length: ${(staticMapBase64 || '').length}`);
 
     const genResult = await generateCAD(
@@ -1010,7 +1012,7 @@ app.post('/api/generate-plan', async (req, res) => {
       rawCrossStreets || [],
       rawTerrain || '',
       rawFuncClass || '',
-      parseInt(rawTotalLanes) || 0,
+      effectiveLanes,
       parseInt(rawAADT) || 0,
       parseFloat(rawTruckPct) || 0,
       parseInt(rawCrashCount) || 0,
@@ -1064,10 +1066,12 @@ app.post('/api/generate-plan', async (req, res) => {
       `  Typical Application: ${genResult.taCode} — ${genResult.taDescription}`,
       `  Taper Length: ${genResult.taperLengthFt} ft`,
       `  Buffer Space: ${genResult.bufferFt} ft`,
+      `  Road Classification: ${genResult.roadClassification || 'N/A'}`,
+      `  Sign Spacing: A=${genResult.signSpacingA || '?'} B=${genResult.signSpacingB || '?'} C=${genResult.signSpacingC || '?'} ft`,
       `  Device Type: ${genResult.deviceType}`,
       `  Duration: ${duration || 'Short-term'}`,
-      `  Primary Signs: ${genResult.primarySigns.map(s => s.sign_code).join(', ') || 'None'}`,
-      `  Opposing Signs: ${genResult.opposingSigns.map(s => s.sign_code).join(', ') || 'None (divided/one-way)'}`,
+      `  Primary Signs: ${genResult.primarySigns.map(s => `${s.sign_code}@${s.distance_ft}ft`).join(', ') || 'None'}`,
+      `  Opposing Signs: ${genResult.opposingSigns.map(s => `${s.sign_code}@${s.distance_ft}ft`).join(', ') || 'None (divided/one-way)'}`,
       `  Total Sheets: ${genResult.totalSheets}`,
       ``,
       ...(genResult.dataWarnings?.length > 0 ? [

@@ -465,8 +465,16 @@ export function generateViewports(
     }
   }
 
-  console.log(`[SheetLayout] ${extentX.toFixed(0)}x${extentY.toFixed(0)} ft extent → ${cols}x${rows} grid → ${viewports.length - 1} detail sheets + 1 index`);
-  return viewports;
+  // Sort detail sheets by startStation so sheet numbers follow the route sequentially
+  const indexSheet = viewports[0]!;
+  const detailSheets = viewports.slice(1).sort((a, b) => a.startStation - b.startStation);
+  // Re-number after sorting
+  for (let i = 0; i < detailSheets.length; i++) {
+    detailSheets[i]!.sheetNumber = i + 2;
+  }
+
+  console.log(`[SheetLayout] ${extentX.toFixed(0)}x${extentY.toFixed(0)} ft extent → ${cols}x${rows} grid → ${detailSheets.length} detail sheets + 1 index`);
+  return [indexSheet, ...detailSheets];
 }
 
 /**

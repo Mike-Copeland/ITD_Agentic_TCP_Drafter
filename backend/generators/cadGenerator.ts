@@ -66,6 +66,10 @@ export interface GenerationResult {
   compliance: ComplianceCheck[];
   corrections: CorrectionEntry[];
   dataWarnings: string[];
+  roadClassification: string;
+  signSpacingA: number;
+  signSpacingB: number;
+  signSpacingC: number;
 }
 
 // ===================================================================
@@ -135,9 +139,9 @@ function haversineDistanceFt(a: { lat: number; lng: number }, b: { lat: number; 
 }
 
 // Delegates to MUTCD module — single source of truth
-function getABCSpacing(speedMph: number, terrain?: string, funcClass?: string, gradePercent = 0, aadt = 0, crossStreetCount = 0): { a: number; b: number; c: number; classification: string } {
+function getABCSpacing(speedMph: number, terrain?: string, funcClass?: string, gradePercent = 0, aadt = 0, crossStreetCount = 0, roadName = ''): { a: number; b: number; c: number; classification: string } {
   const fcCode = funcClass ? parseInt(funcClass) || 99 : 99;
-  return MUTCD.getSignSpacing(speedMph, fcCode, terrain, gradePercent, aadt, crossStreetCount);
+  return MUTCD.getSignSpacing(speedMph, fcCode, terrain, gradePercent, aadt, crossStreetCount, roadName);
 }
 
 // Delegates to MUTCD module — single source of truth
@@ -156,7 +160,7 @@ function getDeviceSpacing(speedMph: number, taCode = 'TA-10'): { taperSpacingFt:
 // Delegates to MUTCD module with ITD override — single source of truth
 // Uses MUTCD Table 6H-1 categories: Conventional Road / Freeway or Expressway / Minimum
 function getSignSize(speedMph: number, roadName: string, funcClassCode = 99, aadt = 0): string {
-  const roadClass: MUTCD.RoadClass = funcClassCode <= 2 ? 'expressway' : speedMph >= 65 ? 'rural' : 'urban_high';
+  const roadClass = MUTCD.classifyRoad(speedMph, funcClassCode, undefined, aadt, 0, roadName);
   return MUTCD.getITDSignSize(speedMph, roadName, roadClass, funcClassCode, aadt).label;
 }
 
@@ -577,16 +581,17 @@ function drawCoverSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: Dr
     '5. Channelizing devices shall be 28-inch minimum height traffic cones for short-term operations, or 42-inch drums for long-term operations.',
     '6. Flagger certification required per ITD TCOC standards. Flaggers shall wear high-visibility safety apparel (ANSI/ISEA 107 Class 3).',
     '7. At night, flagger stations shall be illuminated. Retroreflective devices shall be used on all channelizing devices.',
-    '8. Buffer spaces shall be maintained clear of all equipment, workers, and materials.',
-    '9. All advance warning signs shall be removed or covered when the work zone is not active.',
-    '10. The Contractor shall maintain access to all intersecting roads, driveways, and properties at all times unless otherwise approved.',
-    `11. Posted Speed Limit: ${ctx.speedMph} MPH. Work Zone Speed: ${ctx.wzSpeedMph} MPH.`,
-    `12. Taper Length: ${ctx.taperLengthFt} ft (${ctx.blueprint.taper.device_type}). Downstream Taper: ${ctx.blueprint.downstream_taper.length_ft} ft.`,
-    `13. Minimum longitudinal buffer space: ${getBufferSpaceFt(ctx.speedMph)} ft (per MUTCD 11th Ed. Table 6C-2 for ${ctx.speedMph} MPH).`,
-    `14. SINGLE PHASE OPERATION. All work shall be completed within a single traffic control setup.`,
+    '8. All channelizing devices shall be crashworthy per MUTCD Section 6K.01 and NCHRP 350/MASH standards.',
+    '9. Buffer spaces shall be maintained clear of all equipment, workers, and materials.',
+    '10. All advance warning signs shall be removed or covered when the work zone is not active.',
+    '11. The Contractor shall maintain access to all intersecting roads, driveways, and properties at all times unless otherwise approved.',
+    `12. Posted Speed Limit: ${ctx.speedMph} MPH. Work Zone Speed: ${ctx.wzSpeedMph} MPH.`,
+    `13. Taper Length: ${ctx.taperLengthFt} ft (${ctx.blueprint.taper.device_type}). Downstream Taper: ${ctx.blueprint.downstream_taper.length_ft} ft.`,
+    `14. Minimum longitudinal buffer space: ${getBufferSpaceFt(ctx.speedMph)} ft (per MUTCD 11th Ed. Table 6B-2 for ${ctx.speedMph} MPH).`,
+    `15. SINGLE PHASE OPERATION. All work shall be completed within a single traffic control setup.`,
   ];
   // Conditional notes with dynamic numbering
-  let noteNum = 15;
+  let noteNum = 16;
   if (/mountainous|rolling/i.test(ctx.terrain)) {
     notes.push(`${noteNum++}. MOUNTAINOUS/ROLLING TERRAIN: Reduced sight distance conditions may exist. Additional advance warning signs or PCMS may be required. Verify flagger sight distance meets Table 6B-2 minimum (${getBufferSpaceFt(ctx.speedMph)} ft for ${ctx.speedMph} MPH).`);
   }
@@ -696,7 +701,7 @@ function drawCoverSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: Dr
 function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawContext) {
   doc.addPage({ size: 'tabloid', layout: 'landscape', margin: 0 });
 
-  const spacing = getABCSpacing(ctx.speedMph, ctx.terrain, ctx.funcClass);
+  const spacing = getABCSpacing(ctx.speedMph, ctx.terrain, ctx.funcClass, 0, 0, 0, ctx.roadName);
   const bufferFt = getBufferSpaceFt(ctx.speedMph);
   const taTitle = `${ctx.taCode}: ${ctx.taDescription.toUpperCase()}`;
   doc.fontSize(14).fillColor('black').text(`TYPICAL APPLICATION — ${taTitle}`, 0, 25, { align: 'center' });
@@ -2085,27 +2090,37 @@ function drawGeometryPlanSheet(
   const leaderLenPx = 45;
 
   // Primary approach signs (right shoulder, leader to right)
-  for (const sign of ctx.blueprint.primary_approach) {
-    const signSta = Math.max(0, ctx.taperLengthFt - sign.distance_ft);
-    if (signSta < viewportStartSta || signSta > viewportEndSta) continue;
-    const pt = alignment.getCoordinatesAtStation(signSta);
+  // Stagger leader lengths to prevent label overlap on closely-spaced signs
+  const visiblePrimary = ctx.blueprint.primary_approach
+    .map(sign => ({ ...sign, sta: Math.max(0, ctx.taperLengthFt - sign.distance_ft) }))
+    .filter(s => s.sta >= viewportStartSta && s.sta <= viewportEndSta)
+    .sort((a, b) => a.sta - b.sta);
+  for (let si = 0; si < visiblePrimary.length; si++) {
+    const sign = visiblePrimary[si]!;
+    const pt = alignment.getCoordinatesAtStation(sign.sta);
     const perpRad = (pt.heading + 90) * Math.PI / 180;
     const sx = pt.x + signOffsetFt * Math.sin(perpRad);
     const sy = pt.y + signOffsetFt * Math.cos(perpRad);
     const pg = toPage(sx, sy);
-    drawSignWithLeader(doc, pg.px, pg.py, sign.sign_code, sign.label, 'right', leaderLenPx);
+    // Alternate leader length to stagger labels
+    const stagger = (si % 2 === 0) ? 0 : 20;
+    drawSignWithLeader(doc, pg.px, pg.py, sign.sign_code, sign.label, 'right', leaderLenPx + stagger);
   }
 
   // Opposing approach signs (left shoulder, leader to left)
-  for (const sign of ctx.blueprint.opposing_approach) {
-    const signSta = Math.min(alignment.totalLengthFt, alignment.totalLengthFt - ctx.blueprint.downstream_taper.length_ft + sign.distance_ft);
-    if (signSta < viewportStartSta || signSta > viewportEndSta) continue;
-    const pt = alignment.getCoordinatesAtStation(signSta);
+  const visibleOpposing = ctx.blueprint.opposing_approach
+    .map(sign => ({ ...sign, sta: Math.min(alignment.totalLengthFt, alignment.totalLengthFt - ctx.blueprint.downstream_taper.length_ft + sign.distance_ft) }))
+    .filter(s => s.sta >= viewportStartSta && s.sta <= viewportEndSta)
+    .sort((a, b) => a.sta - b.sta);
+  for (let si = 0; si < visibleOpposing.length; si++) {
+    const sign = visibleOpposing[si]!;
+    const pt = alignment.getCoordinatesAtStation(sign.sta);
     const perpRad = (pt.heading - 90) * Math.PI / 180;
     const sx = pt.x + signOffsetFt * Math.sin(perpRad);
     const sy = pt.y + signOffsetFt * Math.cos(perpRad);
     const pg = toPage(sx, sy);
-    drawSignWithLeader(doc, pg.px, pg.py, sign.sign_code, sign.label, 'left', leaderLenPx);
+    const stagger = (si % 2 === 0) ? 0 : 20;
+    drawSignWithLeader(doc, pg.px, pg.py, sign.sign_code, sign.label, 'left', leaderLenPx + stagger);
   }
 
   // Flagger positions (TA-10) — circle + leader
@@ -2140,9 +2155,11 @@ function drawGeometryPlanSheet(
 
   // === INDEX SHEET: Draw numbered grid overlay ===
   if (isIndexSheet && allViewports.length > 1) {
-    doc.lineWidth(0.8).strokeColor('#0066cc');
+    doc.lineWidth(0.6).strokeColor('#0066cc');
     for (const vp of allViewports) {
       if (vp.isIndexSheet || !vp.tileMinX) continue;
+      // Only label tiles that have enough road coverage to generate a sheet
+      if ((vp.endStation - vp.startStation) < 500) continue;
       // Draw tile rectangle
       const tlPg = toPage(vp.tileMinX, vp.tileMaxY!); // top-left
       const brPg = toPage(vp.tileMaxX!, vp.tileMinY!); // bottom-right
@@ -2263,18 +2280,35 @@ function drawGeometryPlanSheet(
     }
   }
 
-  // Start/End pin markers
-  if (ctx.startCoords) {
-    const sp = alignment.projectGps(ctx.startCoords);
-    const spg = toPage(sp.x, sp.y);
-    doc.circle(spg.px, spg.py, 5).fillAndStroke('#22c55e', '#166534');
-    drawMaskedText('START', spg.px - 15, spg.py - 15, 30, 4, '#166534', true);
-  }
-  if (ctx.endCoords) {
-    const ep = alignment.projectGps(ctx.endCoords);
-    const epg = toPage(ep.x, ep.y);
-    doc.circle(epg.px, epg.py, 5).fillAndStroke('#ef4444', '#991b1b');
-    drawMaskedText('END', epg.px - 12, epg.py - 15, 24, 4, '#991b1b', true);
+  // Start/End pin markers — only on index sheet, or detail sheets at the actual start/end of the route
+  if (isIndexSheet) {
+    // Index: always show both pins
+    if (ctx.startCoords) {
+      const sp = alignment.projectGps(ctx.startCoords);
+      const spg = toPage(sp.x, sp.y);
+      doc.circle(spg.px, spg.py, 5).fillAndStroke('#22c55e', '#166534');
+      drawMaskedText('START', spg.px - 15, spg.py - 15, 30, 4, '#166534', true);
+    }
+    if (ctx.endCoords) {
+      const ep = alignment.projectGps(ctx.endCoords);
+      const epg = toPage(ep.x, ep.y);
+      doc.circle(epg.px, epg.py, 5).fillAndStroke('#ef4444', '#991b1b');
+      drawMaskedText('END', epg.px - 12, epg.py - 15, 24, 4, '#991b1b', true);
+    }
+  } else {
+    // Detail sheets: only show START on sheet containing station 0, END on sheet containing last station
+    if (viewportStartSta <= 50) {
+      const sp = alignment.getCoordinatesAtStation(0);
+      const spg = toPage(sp.x, sp.y);
+      doc.circle(spg.px, spg.py, 5).fillAndStroke('#22c55e', '#166534');
+      drawMaskedText('START', spg.px - 15, spg.py - 15, 30, 4, '#166534', true);
+    }
+    if (viewportEndSta >= alignment.totalLengthFt - 50) {
+      const ep = alignment.getCoordinatesAtStation(alignment.totalLengthFt);
+      const epg = toPage(ep.x, ep.y);
+      doc.circle(epg.px, epg.py, 5).fillAndStroke('#ef4444', '#991b1b');
+      drawMaskedText('END', epg.px - 12, epg.py - 15, 24, 4, '#991b1b', true);
+    }
   }
 
   // Scale bar
@@ -2477,7 +2511,7 @@ export function generateDXF(
   // Zone layout (linear schematic in real-world feet)
   const bufferFt = getBufferSpaceFt(speedMph);
   const dnTaperFt = blueprint.downstream_taper.length_ft || 50;
-  const spacing = getABCSpacing(speedMph, terrain, funcClass);
+  const spacing = getABCSpacing(speedMph, terrain, funcClass, 0, 0, 0, roadName);
   const deviceSpacing = getDeviceSpacing(speedMph, taCode);
   const workZoneFt = routeDistanceFt > 0 ? Math.min(routeDistanceFt, 10000) : 400;
 
@@ -2847,7 +2881,7 @@ export async function generateCAD(
   } else {
     requiredSigns = MUTCD.getRequiredSigns(taCode);
   }
-  const spacing = MUTCD.getSignSpacing(speedMph, fcCode, terrain, maxGradePercent, aadt, crossStreets?.length || 0);
+  const spacing = MUTCD.getSignSpacing(speedMph, fcCode, terrain, maxGradePercent, aadt, crossStreets?.length || 0, roadName);
 
   // Build authoritative primary sign sequence using MUTCD-required codes.
   // Use PE distances if they meet MUTCD minimums, otherwise recalculate from Table 6B-1.
@@ -3026,7 +3060,8 @@ export async function generateCAD(
 
           // === MUTCD COMPLIANCE CHECKS (via authoritative reference module) ===
           const fcCode = funcClass ? parseInt(funcClass) || 99 : 99;
-          const roadClass = MUTCD.classifyRoad(speedMph, fcCode, terrain, aadt, filteredCrossStreets.length);
+          const roadClass = MUTCD.classifyRoad(speedMph, fcCode, terrain, aadt, filteredCrossStreets.length, roadName);
+          const signSpacing = MUTCD.getSignSpacing(speedMph, fcCode, terrain, maxGradePercent, aadt, filteredCrossStreets.length, roadName);
           const bufferFt = MUTCD.getBufferSpace(speedMph);
           const workDuration = MUTCD.parseDuration(duration);
 
@@ -3057,6 +3092,10 @@ export async function generateCAD(
             compliance: compliance.map(c => ({ rule: c.rule, requirement: c.requirement, actual: c.actual, pass: c.pass })),
             corrections,
             dataWarnings: validation.warnings,
+            roadClassification: signSpacing.classification,
+            signSpacingA: signSpacing.a,
+            signSpacingB: signSpacing.b,
+            signSpacingC: signSpacing.c,
           });
         } catch (dxfErr) {
           reject(new Error(`DXF write failed: ${dxfErr}`));
@@ -3125,8 +3164,8 @@ export async function generateCAD(
 
             for (let vi = 0; vi < viewports.length; vi++) {
               const vp = viewports[vi]!;
-              // Skip degenerate viewports with minimal coverage (< 100ft of road)
-              if (!vp.isIndexSheet && (vp.endStation - vp.startStation) < 100) continue;
+              // Skip degenerate viewports with minimal coverage (< 500ft of road)
+              if (!vp.isIndexSheet && (vp.endStation - vp.startStation) < 500) continue;
               drawGeometryPlanSheet(doc, sheetNum++, totalSheets, ctx, alignment, vi + 1, viewports.length, vp.startStation, vp.endStation, geoBasemapRoads, itdRoadSegments, vp.isIndexSheet || false, viewports);
             }
             console.log(`[cadGenerator] Geometry plan: ${viewports.length} sheet(s), ${gpsPoints.length}-point polyline (${Math.round(alignment.totalLengthFt)} ft, UTM Zone ${alignment.utmZoneNumber}N), ${itdRoadSegments.length} ITD + ${geoBasemapRoads.length} OSM roads`);

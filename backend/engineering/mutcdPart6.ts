@@ -51,7 +51,14 @@ export function validateInputData(
     result.warnings.push('AADT unavailable. Queue analysis and classification rely on heuristics.');
   }
   if (totalLanes === 0) {
-    result.warnings.push('Lane count unavailable. TA selection defaults to 2-lane configuration.');
+    if (funcClassCode >= 1 && funcClassCode <= 4) {
+      // FC 1-4: lane count critical for correct TA (6N.09 two-lane vs 6N.11 multi-lane)
+      result.errors.push(`Lane count required for FC ${funcClassCode} to select correct Typical Application. 2-lane vs multi-lane TAs have fundamentally different device requirements (Section 6N.09 vs 6N.11).`);
+      result.valid = false;
+    } else {
+      // FC 5-7: 2-lane default is safe for collectors/local roads
+      result.warnings.push('Lane count unavailable. TA selection defaults to 2-lane configuration.');
+    }
   }
 
   // Speed sanity
@@ -92,17 +99,23 @@ const SIGN_SPACING: Record<RoadClass, SignSpacing> = {
  * - Urban requires convergence of multiple indicators
  * - Missing data defaults to rural (safer) per MUTCD 6D.03
  */
-export function classifyRoad(speedMph: number, funcClassCode: number, terrain?: string, aadt = 0, crossStreetCount = 0): RoadClass {
+export function classifyRoad(speedMph: number, funcClassCode: number, terrain?: string, aadt = 0, crossStreetCount = 0, roadName = ''): RoadClass {
+  // === INTERSTATE by name — only force expressway when FC confirms (FC 0-2) ===
+  // If FC is 3+, the work road may be a cross-street near an Interstate, not the Interstate itself
+  if (/\b(I-\d+|Interstate)\b/i.test(roadName) && funcClassCode <= 2) return 'expressway';
+
   // === EXPRESSWAY: FC 1-2 always, OR FC 3 at 65+ MPH (high-speed limited-access) ===
   if (funcClassCode <= 2) return 'expressway';
-  if (speedMph >= 65 && funcClassCode <= 3) return 'expressway';
-  // 65+ on FC 4+ is a high-speed rural road, NOT expressway
+  // FC 3 at 65+: only expressway if no at-grade intersections (true limited-access)
+  if (speedMph >= 65 && funcClassCode === 3 && crossStreetCount === 0) return 'expressway';
+  // 65+ on FC 3+ with cross-streets = high-speed rural, NOT expressway
   if (speedMph >= 65) return 'rural';
 
   // === TERRAIN-BASED RURAL (strong indicator, takes precedence) ===
+  // MUTCD Table 6B-1: "Rural" row has NO speed qualifier — environment-based
   const isRuralTerrain = terrain && /mountainous|rolling/i.test(terrain);
   if (isRuralTerrain && aadt < 10000) {
-    return speedMph >= 45 ? 'rural' : 'urban_low';
+    return 'rural'; // Rural terrain = rural spacing regardless of speed
   }
 
   // === MULTI-FACTOR URBAN/RURAL DETERMINATION ===
@@ -118,18 +131,33 @@ export function classifyRoad(speedMph: number, funcClassCode: number, terrain?: 
     (hasModerateVolume && hasLowSpeed && crossStreetCount >= 6) ||
     (isLocalRoad && hasLowSpeed);
 
-  // When AADT is unknown (0): default to rural for safety (longer spacing)
+  // When AADT is unknown (0): use speed-based default per Section 6B.04 P06-07
   if (aadt === 0 && !isRuralTerrain) {
-    if (funcClassCode <= 3 && speedMph >= 45) return 'rural';
-    if (isLocalRoad && speedMph <= 35) return 'urban_low';
-    // Uncertain — default to rural (longer spacing = safer) per MUTCD 6D.03
-    return speedMph >= 45 ? 'rural' : 'urban_low';
+    if (isLocalRoad && speedMph <= 35) return 'urban_low'; // Local roads in built-up areas
+    // State highways through small towns: 25-35 mph = urban_low
+    if (speedMph <= 35 && /\b(SH|SR|State|Hwy|US)\b/i.test(roadName)) return 'urban_low';
+    // 45+ MPH unknown: rural (500 ft) — conservative per Section 6B.04 P06
+    if (speedMph >= 45) return 'rural';
+    // Low-speed unknown: urban_high (350 ft)
+    return 'urban_high';
   }
 
-  // Low volume with arterial/collector FC = rural per Table 6B-1
-  // MUTCD Table 6B-1: "Rural" row has NO speed qualifier — it is environment-based
+  // Urban street name heuristic — low-volume downtown streets shouldn't get rural 500 ft spacing
+  // Section 6B.04 P08: "decreasing spacing might be justified" near intersections/driveways
+  const isUrbanByName = /\b(Main|Broadway|Center|Central|Market|1st|2nd|3rd|\d+th)\b/i.test(roadName)
+    || /\b(St|Ave|Blvd|Dr|Cir|Ct|Pl)\s*$/i.test(roadName);
+  if (isUrbanByName && speedMph <= 45 && aadt > 0 && aadt < 5000) {
+    return speedMph > 40 ? 'urban_high' : 'urban_low';
+  }
+
+  // Low volume roads — use speed + intersection density to determine urban vs rural
+  // per Section 6A.01 P13: urban = low speed, frequent intersections, driveways
   if (aadt > 0 && aadt < 5000 && funcClassCode <= 5) {
-    return 'rural'; // Rural spacing (500 ft) regardless of speed
+    // Low speed with frequent intersections = urban per 6A.01 P13
+    if (speedMph <= 35 && crossStreetCount >= 4) return 'urban_low';
+    if (speedMph <= 45 && crossStreetCount >= 4) return 'urban_high';
+    // High speed, few intersections = rural
+    return 'rural';
   }
 
   // Non-urban default: rural for arterials/collectors, urban_low only for local roads
@@ -137,12 +165,18 @@ export function classifyRoad(speedMph: number, funcClassCode: number, terrain?: 
     if (funcClassCode <= 5) return 'rural'; // Arterials/collectors default rural
     return 'urban_low'; // Local roads (FC 6+) default urban_low
   }
+  // Speed-based floor per Table 6B-1 footnote: "Speed category to be determined
+  // by the highway agency or owner of site roadways open to public travel."
+  // At 50+ MPH, Section 6B.04 P04 says 4-8x speed limit for urban streets.
+  // 8 × 50 = 400 ft exceeds urban_high (350 ft), so upgrade to rural (500 ft).
+  if (speedMph >= 50) return 'rural';
+  // Urban roads: Table 6B-1 "Urban (high speed)" vs "Urban (low speed)"
   if (speedMph > 40) return 'urban_high';
   return 'urban_low';
 }
 
-export function getSignSpacing(speedMph: number, funcClassCode: number, terrain?: string, gradePercent = 0, aadt = 0, crossStreetCount = 0): SignSpacing {
-  const base = SIGN_SPACING[classifyRoad(speedMph, funcClassCode, terrain, aadt, crossStreetCount)];
+export function getSignSpacing(speedMph: number, funcClassCode: number, terrain?: string, gradePercent = 0, aadt = 0, crossStreetCount = 0, roadName = ''): SignSpacing {
+  const base = SIGN_SPACING[classifyRoad(speedMph, funcClassCode, terrain, aadt, crossStreetCount, roadName)];
   // ITD-SPECIFIC POLICY: Grade-based spacing multipliers per Section 6B.04 Paragraph 07
   // engineering judgment. These are agency heuristics, not MUTCD-prescribed values.
   if (gradePercent > 5) {
@@ -173,13 +207,25 @@ const BUFFER_TABLE: [number, number][] = [
  */
 export function getBufferSpace(speedMph: number): number {
   if (speedMph > 75) {
-    // AASHTO extrapolation — flag in validation/audit
     return 910;
   }
   for (const [s, b] of BUFFER_TABLE) {
     if (speedMph <= s) return b;
   }
   return 820;
+}
+
+/** Get buffer space with source annotation for audit trail */
+export function getBufferSpaceAnnotated(speedMph: number): { distance_ft: number; source: string; warning?: string } {
+  const distance_ft = getBufferSpace(speedMph);
+  if (speedMph > 75) {
+    return {
+      distance_ft,
+      source: 'AASHTO_EXTRAPOLATION',
+      warning: `Buffer ${distance_ft} ft for ${speedMph} MPH is AASHTO-based extrapolation. MUTCD Table 6B-2 max is 75 MPH / 820 ft. PE review required per Section 6B.06.`,
+    };
+  }
+  return { distance_ft, source: 'MUTCD_TABLE_6B-2' };
 }
 
 // ===================================================================
@@ -189,13 +235,13 @@ export function getBufferSpace(speedMph: number): number {
 /**
  * Merging taper per Table 6B-4 (Section 6B.08):
  * - 40 mph or less: L = WS²/60
+ * - 41-44 mph (gap): use L = WS (conservative — produces longer taper)
  * - 45 mph or more: L = WS
- * For 41-44 mph (gap in table): use quadratic formula with exact speed
- * since MUTCD says linear applies at "45 mph or more".
  * Uses exact speed — NO rounding. MUTCD does not authorize speed snapping.
  */
 export function mergingTaper(laneWidthFt: number, speedMph: number): number {
-  return speedMph >= 45
+  // For 41+ mph, L=WS always produces a longer (safer) taper than WS²/60
+  return speedMph >= 41
     ? laneWidthFt * speedMph
     : (laneWidthFt * speedMph * speedMph) / 60;
 }
@@ -210,9 +256,16 @@ export function shoulderTaper(laneWidthFt: number, speedMph: number): number {
   return Math.round(mergingTaper(laneWidthFt, speedMph) / 3);
 }
 
-/** Downstream taper: 50-100 ft per MUTCD */
+/** Downstream taper: 50-100 ft per MUTCD Table 6B-3 */
 export function downstreamTaper(): { min: number; max: number } {
   return { min: 50, max: 100 };
+}
+
+/** Validate downstream taper against Table 6B-3 limits (50-100 ft) */
+export function validateDownstreamTaper(lengthFt: number): { valid: boolean; corrected: number } {
+  if (lengthFt < 50) return { valid: false, corrected: 50 };
+  if (lengthFt > 100) return { valid: false, corrected: 100 };
+  return { valid: true, corrected: lengthFt };
 }
 
 /** One-lane two-way traffic taper (TA-10 flagger): 50-100 ft */
