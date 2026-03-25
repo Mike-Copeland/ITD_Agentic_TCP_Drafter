@@ -207,7 +207,7 @@ function drawTitleBlock(doc: Doc, sheetNum: number, totalSheets: number, operati
   doc.text('PE', 45, peY + peH / 2 - 5, { lineBreak: false });
   doc.text('SEAL', 43, peY + peH / 2 + 1, { lineBreak: false });
   // Signature fields
-  doc.fontSize(7).fillColor('#666');
+  doc.fontSize(8).fillColor('#666');
   doc.text('LICENSED PROFESSIONAL ENGINEER:', 75, peY + 5, { lineBreak: false });
   doc.moveTo(260, peY + 14).lineTo(430, peY + 14).stroke(); // signature line
   doc.text('PE NO.:', 440, peY + 5, { lineBreak: false });
@@ -216,7 +216,7 @@ function drawTitleBlock(doc: Doc, sheetNum: number, totalSheets: number, operati
   doc.moveTo(600, peY + 14).lineTo(700, peY + 14).stroke();
   doc.text('EXP:', 710, peY + 5, { lineBreak: false });
   doc.moveTo(735, peY + 14).lineTo(810, peY + 14).stroke();
-  doc.fontSize(6).fillColor('#999');
+  doc.fontSize(7).fillColor('#999');
   doc.text('I hereby certify that this plan was prepared by me or under my direct supervision.', 75, peY + 18, { lineBreak: false });
 
   // Main title block (bottom row)
@@ -244,11 +244,11 @@ function drawTitleBlock(doc: Doc, sheetNum: number, totalSheets: number, operati
   doc.text("DETAILED:", 205, tbY + 22, { width: 140, lineBreak: false });
   doc.text("CHECKED:", 205, tbY + 39, { width: 140, lineBreak: false });
 
-  doc.font('Helvetica-Bold').fontSize(9);
-  doc.text("IDAHO TRANSPORTATION DEPARTMENT", 355, tbY + 8, { width: 240, align: 'center', lineBreak: false });
-  doc.font('Helvetica').fontSize(7);
+  doc.font('Helvetica-Bold').fontSize(11);
+  doc.text("IDAHO TRANSPORTATION DEPARTMENT", 355, tbY + 6, { width: 240, align: 'center', lineBreak: false });
+  doc.font('Helvetica').fontSize(8);
   if (roadName) doc.text(roadName.toUpperCase(), 355, tbY + 22, { width: 240, align: 'center', lineBreak: false });
-  doc.fontSize(6).fillColor('#666').text('TEMPORARY TRAFFIC CONTROL', 355, tbY + 35, { width: 240, align: 'center', lineBreak: false });
+  doc.fontSize(7).fillColor('#666').text('TEMPORARY TRAFFIC CONTROL', 355, tbY + 35, { width: 240, align: 'center', lineBreak: false });
 
   doc.fillColor('black').fontSize(7);
   doc.text("OPERATION:", 605, tbY + 4, { lineBreak: false });
@@ -262,7 +262,7 @@ function drawTitleBlock(doc: Doc, sheetNum: number, totalSheets: number, operati
   doc.fillColor('black').fontSize(8);
   doc.text("ENGLISH", 1055, tbY + 4, { width: 140, lineBreak: false });
   doc.fontSize(7).text("STATE OF IDAHO", 1055, tbY + 22, { width: 140, lineBreak: false });
-  doc.font('Helvetica-Bold').text(`SHEET ${sheetNum} OF ${totalSheets}`, 1055, tbY + 39, { width: 140, lineBreak: false });
+  doc.font('Helvetica-Bold').fontSize(8).text(`SHEET ${sheetNum} OF ${totalSheets}`, 1055, tbY + 39, { width: 140, lineBreak: false });
   doc.font('Helvetica');
 }
 
@@ -272,7 +272,7 @@ function drawDimLine(doc: Doc, x1: number, x2: number, y: number, text: string) 
   // Main line (gap in center for text)
   const tw = doc.fontSize(7).widthOfString(text);
   const mid = x1 + (x2 - x1) / 2;
-  const gap = tw / 2 + 4;
+  const gap = tw / 2 + 6;
   doc.moveTo(x1, y).lineTo(mid - gap, y).stroke();
   doc.moveTo(mid + gap, y).lineTo(x2, y).stroke();
   // Left arrowhead (filled triangle pointing right)
@@ -346,8 +346,9 @@ interface RoadGeometry {
 
 function drawRoadway(doc: Doc, x1: number, x2: number, centerY: number, ctx: DrawContext): RoadGeometry {
   const lanes = ctx.totalLanes || 2;
-  // Scale lane widths: for tabloid landscape, ~20px per lane looks good
-  const lanePixelW = lanes <= 3 ? 25 : lanes <= 5 ? 18 : 14;
+  // Dynamic lane width capped at 160px total road height to prevent overflow
+  const maxRoadHeight = 160;
+  const lanePixelW = Math.min(35, maxRoadHeight / lanes);
   const totalPixelH = lanes * lanePixelW;
   const topEdge = centerY - totalPixelH / 2;
   const bottomEdge = centerY + totalPixelH / 2;
@@ -526,14 +527,16 @@ function drawCoverSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: Dr
   doc.fontSize(20).fillColor('black').text("TEMPORARY TRAFFIC CONTROL PLAN", 0, 40, { align: 'center' });
   doc.fontSize(14).text(ctx.roadName ? ctx.roadName.toUpperCase() : 'IDAHO HIGHWAY', 0, 68, { align: 'center' });
   doc.fontSize(12).text(ctx.operationType.toUpperCase(), 0, 88, { align: 'center' });
-  // N.T.S. on cover sheet
-  doc.fontSize(8).fillColor('#cc0000').text('ALL SCHEMATICS N.T.S.', 1000, 40, { lineBreak: false });
+  // N.T.S. on cover sheet — right-aligned
+  const ntsText = 'ALL SCHEMATICS N.T.S.';
+  doc.fontSize(9).fillColor('#cc0000');
+  doc.text(ntsText, 1164 - doc.widthOfString(ntsText) - 30, 40, { lineBreak: false });
   doc.fillColor('black');
 
   // Project Info Box
-  const bx = 50, by = 130, bw = 500, lh = 16;
-  doc.lineWidth(1).strokeColor('black').rect(bx, by, bw, 200).stroke();
-  doc.fontSize(10).text("PROJECT INFORMATION", bx + 10, by + 8, { underline: true });
+  const bx = 50, by = 130, bw = 500, lh = 20;
+  doc.lineWidth(1).strokeColor('black').rect(bx, by, bw, 240).stroke();
+  doc.fontSize(12).text("PROJECT INFORMATION", bx + 10, by + 8, { underline: true });
   let row = by + 30;
   const info = [
     ['Road:', ctx.roadName || 'Not identified'],
@@ -550,18 +553,18 @@ function drawCoverSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: Dr
     ['AADT:', ctx.aadt > 0 ? `${ctx.aadt.toLocaleString()} vpd${ctx.truckPct > 0 ? ` (${ctx.truckPct.toFixed(1)}% trucks)` : ''}` : 'Not available'],
     ['Cross-Streets:', ctx.crossStreets.length > 0 ? ctx.crossStreets.map(c => c.name).join(', ') : 'None detected'],
   ];
-  doc.fontSize(8);
+  doc.fontSize(9);
   for (const [label, value] of info) {
-    doc.font('Helvetica-Bold').text(label!, bx + 10, row, { continued: true, lineBreak: false });
-    doc.font('Helvetica').text(` ${value}`, { lineBreak: false });
+    doc.font('Helvetica-Bold').text(label!, bx + 10, row, { lineBreak: false });
+    doc.font('Helvetica').text(String(value), bx + 130, row, { width: bw - 140, lineBreak: false });
     row += lh;
   }
 
   // Sheet Index
   const ix = 600, iy = 130;
-  doc.lineWidth(1).rect(ix, iy, 400, 200).stroke();
-  doc.font('Helvetica-Bold').fontSize(10).text("SHEET INDEX", ix + 10, iy + 8, { underline: true });
-  doc.font('Helvetica').fontSize(8);
+  doc.lineWidth(1).rect(ix, iy, 400, 240).stroke();
+  doc.font('Helvetica-Bold').fontSize(12).text("SHEET INDEX", ix + 10, iy + 8, { underline: true });
+  doc.font('Helvetica').fontSize(9);
   // Filter operations compatible with road geometry (same logic as sheet generation)
   const compatOps = ctx.operationTypes.filter((op: string) => {
     if (op === 'Median Crossover' && ctx.hasTWLTL) return false;
@@ -583,14 +586,14 @@ function drawCoverSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: Dr
     'Sign Schedule & Quantities',
   ];
   sheetNames.forEach((name, i) => {
-    doc.text(`Sheet ${i + 1}: ${name}`, ix + 10, iy + 30 + i * 14, { lineBreak: false });
+    doc.text(`Sheet ${i + 1}: ${name}`, ix + 10, iy + 32 + i * 16, { lineBreak: false });
   });
 
   // General Notes (left column)
-  const ny = 360;
-  doc.lineWidth(1).rect(50, ny, 780, 330).stroke();
-  doc.font('Helvetica-Bold').fontSize(10).fillColor('black').text("GENERAL NOTES", 60, ny + 8, { underline: true });
-  doc.font('Helvetica').fontSize(7);
+  const ny = 375;
+  doc.lineWidth(1).rect(50, ny, 780, 320).stroke();
+  doc.font('Helvetica-Bold').fontSize(12).fillColor('black').text("GENERAL NOTES", 60, ny + 8, { underline: true });
+  doc.font('Helvetica').fontSize(9);
   const notes = [
     '1. All temporary traffic control shall conform to the MUTCD 11th Edition (Dec 2023) and Idaho Supplementary provisions.',
     '2. All work shall comply with ITD Standard Specifications Section 626 — Temporary Traffic Control.',
@@ -619,54 +622,54 @@ function drawCoverSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: Dr
   if (ctx.crashCount >= 10) {
     notes.push(`${noteNum++}. HIGH CRASH LOCATION (${ctx.crashCount} crashes): ENHANCED MEASURES REQUIRED — Deploy PCMS, speed feedback signs, and/or law enforcement presence. Document enhanced measures in field TCP log.`);
   }
-  let noteY = ny + 28;
+  let noteY = ny + 30;
   for (const note of notes) {
     doc.text(note, 60, noteY, { width: 760 });
-    noteY += note.length > 90 ? 18 : 11;
-    if (noteY > ny + 320) break;
+    noteY += note.length > 90 ? 24 : 15;
+    if (noteY > ny + 310) break;
   }
 
   // Symbology Legend (right column)
   const lx = 850, ly = ny;
-  doc.lineWidth(1).rect(lx, ly, 324, 330).stroke();
-  doc.font('Helvetica-Bold').fontSize(10).fillColor('black').text("LEGEND", lx + 10, ly + 8, { underline: true });
+  doc.lineWidth(1).rect(lx, ly, 324, 320).stroke();
+  doc.font('Helvetica-Bold').fontSize(12).fillColor('black').text("LEGEND", lx + 10, ly + 8, { underline: true });
   doc.font('Helvetica');
-  let legendY = ly + 32;
-  const legendStep = 28;
+  let legendY = ly + 34;
+  const legendStep = 35;
 
   // Warning sign (orange diamond)
   doc.save().translate(lx + 22, legendY + 6).rotate(45);
   doc.rect(-7, -7, 14, 14).fillAndStroke('#FF8C00', 'black');
   doc.restore();
-  doc.fontSize(7).fillColor('black').text('WARNING SIGN (W-Series)', lx + 45, legendY + 2, { lineBreak: false });
-  doc.fontSize(5.5).fillColor('#666').text('Orange diamond — Advance warning', lx + 45, legendY + 12, { lineBreak: false });
+  doc.fontSize(9).fillColor('black').text('WARNING SIGN (W-Series)', lx + 55, legendY + 2, { lineBreak: false });
+  doc.fontSize(7).fillColor('#666').text('Orange diamond — Advance warning', lx + 55, legendY + 12, { lineBreak: false });
   legendY += legendStep;
 
   // Regulatory sign (white rectangle)
   doc.lineWidth(1).rect(lx + 15, legendY, 14, 16).fillAndStroke('#ffffff', 'black');
-  doc.fontSize(7).fillColor('black').text('REGULATORY SIGN (R-Series)', lx + 45, legendY + 2, { lineBreak: false });
-  doc.fontSize(5.5).fillColor('#666').text('White rectangle — Speed limit, etc.', lx + 45, legendY + 12, { lineBreak: false });
+  doc.fontSize(9).fillColor('black').text('REGULATORY SIGN (R-Series)', lx + 55, legendY + 2, { lineBreak: false });
+  doc.fontSize(7).fillColor('#666').text('White rectangle — Speed limit, etc.', lx + 55, legendY + 12, { lineBreak: false });
   legendY += legendStep;
 
   // Guide sign (green rectangle)
   doc.rect(lx + 15, legendY, 14, 12).fillAndStroke('#006B3F', 'black');
-  doc.fontSize(7).fillColor('black').text('GUIDE SIGN (G-Series)', lx + 45, legendY + 2, { lineBreak: false });
-  doc.fontSize(5.5).fillColor('#666').text('Green rectangle — END ROAD WORK', lx + 45, legendY + 12, { lineBreak: false });
+  doc.fontSize(9).fillColor('black').text('GUIDE SIGN (G-Series)', lx + 55, legendY + 2, { lineBreak: false });
+  doc.fontSize(7).fillColor('#666').text('Green rectangle — END ROAD WORK', lx + 55, legendY + 12, { lineBreak: false });
   legendY += legendStep;
 
   // Channelizing devices (cone + drum)
   drawCone(doc, lx + 18, legendY + 6, 5);
   drawDrum(doc, lx + 30, legendY + 6, 4);
-  doc.fontSize(7).fillColor('black').text('CHANNELIZING DEVICE', lx + 45, legendY + 2, { lineBreak: false });
-  doc.fontSize(5.5).fillColor('#666').text('Cone (28") short-term | Drum (42") long-term', lx + 45, legendY + 12, { lineBreak: false });
+  doc.fontSize(9).fillColor('black').text('CHANNELIZING DEVICE', lx + 55, legendY + 2, { lineBreak: false });
+  doc.fontSize(7).fillColor('#666').text('Cone (28") short-term | Drum (42") long-term', lx + 55, legendY + 12, { lineBreak: false });
   legendY += legendStep;
 
   // Flagger
   doc.circle(lx + 22, legendY + 2, 4).fillAndStroke('#cc0000', 'black');
   doc.moveTo(lx + 22, legendY + 6).lineTo(lx + 22, legendY + 14).stroke();
   doc.moveTo(lx + 18, legendY + 9).lineTo(lx + 26, legendY + 9).stroke();
-  doc.fontSize(7).fillColor('black').text('FLAGGER STATION', lx + 45, legendY + 2, { lineBreak: false });
-  doc.fontSize(5.5).fillColor('#666').text('TCOC certified, Class 3 apparel', lx + 45, legendY + 12, { lineBreak: false });
+  doc.fontSize(9).fillColor('black').text('FLAGGER STATION', lx + 55, legendY + 2, { lineBreak: false });
+  doc.fontSize(7).fillColor('#666').text('TCOC certified, Class 3 apparel', lx + 55, legendY + 12, { lineBreak: false });
   legendY += legendStep;
 
   // Work area (crosshatch)
@@ -675,16 +678,16 @@ function drawCoverSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: Dr
   for (let hx = 0; hx < 16; hx += 5) {
     doc.moveTo(lx + 14 + hx, legendY + 12).lineTo(lx + 14 + hx + 12, legendY).stroke();
   }
-  doc.fontSize(7).fillColor('black').text('WORK AREA', lx + 45, legendY + 2, { lineBreak: false });
-  doc.fontSize(5.5).fillColor('#666').text('Crosshatched zone — No traffic', lx + 45, legendY + 12, { lineBreak: false });
+  doc.fontSize(9).fillColor('black').text('WORK AREA', lx + 55, legendY + 2, { lineBreak: false });
+  doc.fontSize(7).fillColor('#666').text('Crosshatched zone — No traffic', lx + 55, legendY + 12, { lineBreak: false });
   legendY += legendStep;
 
   // Arrow board
   doc.lineWidth(1).strokeColor('black');
   doc.rect(lx + 12, legendY + 1, 20, 10).fillAndStroke('#333', 'black');
   doc.fontSize(4).fillColor('#FFAA00').text('>>>>', lx + 14, legendY + 3, { lineBreak: false });
-  doc.fontSize(7).fillColor('black').text('ARROW BOARD (Type A)', lx + 45, legendY + 2, { lineBreak: false });
-  doc.fontSize(5.5).fillColor('#666').text('Required for multi-lane closures', lx + 45, legendY + 12, { lineBreak: false });
+  doc.fontSize(9).fillColor('black').text('ARROW BOARD (Type A)', lx + 55, legendY + 2, { lineBreak: false });
+  doc.fontSize(7).fillColor('#666').text('Required for multi-lane closures', lx + 55, legendY + 12, { lineBreak: false });
   legendY += legendStep;
 
   // Dimension line
@@ -696,8 +699,8 @@ function drawCoverSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: Dr
   doc.save();
   doc.moveTo(lx + 34, legendY + 6).lineTo(lx + 30, legendY + 4).lineTo(lx + 30, legendY + 8).closePath().fill('black');
   doc.restore();
-  doc.fontSize(7).fillColor('black').text('DIMENSION LINE', lx + 45, legendY + 2, { lineBreak: false });
-  doc.fontSize(5.5).fillColor('#666').text('Distances in feet', lx + 45, legendY + 12, { lineBreak: false });
+  doc.fontSize(9).fillColor('black').text('DIMENSION LINE', lx + 55, legendY + 2, { lineBreak: false });
+  doc.fontSize(7).fillColor('#666').text('Distances in feet', lx + 55, legendY + 12, { lineBreak: false });
   legendY += legendStep;
 
   // Edge line / centerline
@@ -706,8 +709,8 @@ function drawCoverSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: Dr
   doc.lineWidth(1).dash(4, { space: 4 }).strokeColor('#CC9900');
   doc.moveTo(lx + 12, legendY + 12).lineTo(lx + 34, legendY + 12).stroke();
   doc.undash();
-  doc.fontSize(7).fillColor('black').text('EDGE LINE / CENTERLINE', lx + 45, legendY + 2, { lineBreak: false });
-  doc.fontSize(5.5).fillColor('#666').text('Solid = edge, Dashed = center', lx + 45, legendY + 12, { lineBreak: false });
+  doc.fontSize(9).fillColor('black').text('EDGE LINE / CENTERLINE', lx + 55, legendY + 2, { lineBreak: false });
+  doc.fontSize(7).fillColor('#666').text('Solid = edge, Dashed = center', lx + 55, legendY + 12, { lineBreak: false });
 
   drawWatermark(doc);
   drawTitleBlock(doc, sheetNum, totalSheets, ctx.operationType, ctx.roadName);
@@ -772,17 +775,17 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
   const roadY2 = road.bottomEdge;
 
   // Zone labels — positioned ABOVE signs to avoid interference
-  doc.fontSize(6).fillColor('#333');
-  const zoneLabelY = roadY1 - 85;
+  doc.fontSize(8).fillColor('#333');
+  const zoneLabelY = roadY1 - 65;
   doc.lineWidth(0.5).strokeColor('#999');
 
   const drawZoneLabel = (x1: number, x2: number, label1: string, label2?: string) => {
-    doc.rect(x1, zoneLabelY, x2 - x1, 35).stroke();
+    doc.rect(x1, zoneLabelY, x2 - x1, 25).stroke();
     if (label2) {
-      doc.text(label1, x1 + 2, zoneLabelY + 3, { width: x2 - x1 - 4, align: 'center', lineBreak: false });
+      doc.text(label1, x1 + 2, zoneLabelY + 2, { width: x2 - x1 - 4, align: 'center', lineBreak: false });
       doc.text(label2, x1 + 2, zoneLabelY + 12, { width: x2 - x1 - 4, align: 'center', lineBreak: false });
     } else {
-      doc.text(label1, x1 + 2, zoneLabelY + 8, { width: x2 - x1 - 4, align: 'center', lineBreak: false });
+      doc.text(label1, x1 + 2, zoneLabelY + 4, { width: x2 - x1 - 4, align: 'center', lineBreak: false });
     }
   };
 
@@ -1066,10 +1069,10 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
     const oppStep = oppCount > 1 ? (zones.oppWarningEnd - zones.oppWarningStart - 40) / (oppCount - 1) : 0;
     oppSigns.forEach((sign, i) => {
       const x = zones.oppWarningStart + 20 + i * oppStep;
-      drawSignDiamond(doc, x, roadY1 - 110, sign.sign_code, sign.label);
+      drawSignDiamond(doc, x, roadY1 - 145, sign.sign_code, sign.label);
       if (i < oppCount - 1) {
         const interDist = sign.distance_ft - oppSigns[i + 1]!.distance_ft;
-        drawDimLine(doc, x, zones.oppWarningStart + 20 + (i + 1) * oppStep, roadY1 - 80, `${Math.abs(interDist)} FT`);
+        drawDimLine(doc, x, zones.oppWarningStart + 20 + (i + 1) * oppStep, roadY1 - 115, `${Math.abs(interDist)} FT`);
       }
     });
   }
@@ -1096,8 +1099,8 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
     doc.font('Helvetica');
   }
 
-  // Dimension lines
-  const dimY = roadY2 + 145;
+  // Dimension lines — capped at 545 to stay above notes box at 585
+  const dimY = Math.min(roadY2 + 100, 545);
   const taperLabel = isTwoWayFlagger ? `FLAGGER TAPER: ${ctx.taperLengthFt} FT` : `MERGING TAPER: ${ctx.taperLengthFt} FT`;
   drawDimLine(doc, zones.transitionStart, zones.transitionEnd, dimY, taperLabel);
   drawDimLine(doc, zones.bufferStart, zones.bufferEnd, dimY, `BUFFER: ${bufferFt} FT`);
@@ -1111,40 +1114,41 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
   doc.fillColor('#444').fontSize(7);
   doc.text("PRIMARY APPROACH >>>", 40, dimY + 8, { lineBreak: false });
   if (isTwoWayFlagger) {
-    doc.text("<<< OPPOSING APPROACH", 1040, roadY1 - 100, { lineBreak: false });
+    doc.text("<<< OPPOSING APPROACH", 1040, roadY1 - 155, { lineBreak: false });
   } else {
     doc.text("TRAFFIC FLOW >>>", roadL + 5, roadY1 + 3, { lineBreak: false });
   }
 
   // Cross-streets
   if (ctx.crossStreets.length > 0) {
-    doc.fillColor('black').fontSize(7);
-    doc.text(`INTERSECTIONS WITHIN WORK ZONE: ${ctx.crossStreets.map(c => c.name).join(', ')}`, 40, dimY + 22, { width: 1140, lineBreak: false });
-    doc.fontSize(6).text('See intersection detail sheets for cross-street signage requirements.', 40, dimY + 34, { lineBreak: false });
+    doc.fillColor('black').fontSize(8);
+    doc.text(`INTERSECTIONS WITHIN WORK ZONE: ${ctx.crossStreets.map(c => c.name).join(', ')}`, 40, dimY + 18, { width: 1140, lineBreak: false });
+    doc.fontSize(7).text('See intersection detail sheets for cross-street signage requirements.', 40, dimY + 30, { lineBreak: false });
   }
 
-  // Notes box
-  doc.lineWidth(0.5).rect(40, 610, 400, 90).stroke();
-  doc.fontSize(7).fillColor('black');
-  doc.font('Helvetica-Bold').text('NOTES:', 45, 615);
-  doc.font('Helvetica').fontSize(6);
-  doc.text(`Speed: ${ctx.speedMph} MPH | WZ Speed: ${ctx.wzSpeedMph} MPH | Lanes: ${ctx.totalLanes || '2'} | Width: ${ctx.laneWidthFt} ft`, 45, 628, { width: 390 });
-  doc.text(`Taper: ${ctx.taperLengthFt} ft ${isTwoWayFlagger ? '(flagger)' : '(merging)'} | DN Taper: ${ctx.blueprint.downstream_taper.length_ft} ft | ${ctx.blueprint.taper.device_type}`, 45, 640, { width: 390 });
-  doc.text(`Route: ${ctx.routeDistanceFt > 0 ? ctx.routeDistanceFt.toLocaleString() + ' ft' : 'N/A'} | Spacing: A=${spacing.a}' B=${spacing.b}' C=${spacing.c}' | Buffer: ${bufferFt}' (6C-2)`, 45, 652, { width: 390 });
-  if (isMultiLaneClosure) doc.text('Arrow board (Type A) required at merging taper approach.', 45, 664, { width: 390 });
+  // Notes box — locked at Y=585 to stay above title block at Y=700
+  const notesBoxY = 585;
+  doc.lineWidth(0.5).rect(40, notesBoxY, 400, 90).stroke();
+  doc.fontSize(9).fillColor('black');
+  doc.font('Helvetica-Bold').text('NOTES:', 45, notesBoxY + 5);
+  doc.font('Helvetica').fontSize(8);
+  doc.text(`Speed: ${ctx.speedMph} MPH | WZ Speed: ${ctx.wzSpeedMph} MPH | Lanes: ${ctx.totalLanes || '2'} | Width: ${ctx.laneWidthFt} ft`, 45, notesBoxY + 18, { width: 390 });
+  doc.text(`Taper: ${ctx.taperLengthFt} ft ${isTwoWayFlagger ? '(flagger)' : '(merging)'} | DN Taper: ${ctx.blueprint.downstream_taper.length_ft} ft | ${ctx.blueprint.taper.device_type}`, 45, notesBoxY + 30, { width: 390 });
+  doc.text(`Route: ${ctx.routeDistanceFt > 0 ? ctx.routeDistanceFt.toLocaleString() + ' ft' : 'N/A'} | Spacing: A=${spacing.a}' B=${spacing.b}' C=${spacing.c}' | Buffer: ${bufferFt}' (6B-2)`, 45, notesBoxY + 42, { width: 390 });
+  if (isMultiLaneClosure) doc.text('Arrow board (Type A) required at merging taper approach.', 45, notesBoxY + 54, { width: 390 });
   if (/mountainous|rolling/i.test(ctx.terrain)) {
     doc.font('Helvetica-Bold').fillColor('#cc0000');
-    doc.text(`TERRAIN: ${ctx.terrain.toUpperCase()} — Verify flagger sight distance >= ${getBufferSpaceFt(ctx.speedMph)} ft. Consider PCMS for restricted-sight locations.`, 45, 676, { width: 390 });
+    doc.text(`TERRAIN: ${ctx.terrain.toUpperCase()} — Verify flagger sight distance >= ${getBufferSpaceFt(ctx.speedMph)} ft.`, 45, notesBoxY + 54, { width: 390 });
     doc.font('Helvetica').fillColor('black');
   }
   if (ctx.routeDistanceFt > 5280) {
     doc.fillColor('#CC6600');
-    doc.text(`LONG ZONE: ${(ctx.routeDistanceFt / 5280).toFixed(1)} mi — Place W20-1 repeaters at 1-mi intervals within activity area.`, 45, 688, { width: 390 });
+    doc.text(`LONG ZONE: ${(ctx.routeDistanceFt / 5280).toFixed(1)} mi — Place W20-1 repeaters at 1-mi intervals.`, 45, notesBoxY + 66, { width: 390 });
     doc.fillColor('black');
   }
   if (ctx.bridges && ctx.bridges.length > 0) {
-    doc.fillColor('#cc0000').fontSize(5);
-    doc.text(`BRIDGE(S): ${ctx.bridges.length} structure(s) within limits. NO DEVICES ON BRIDGE DECK WITHOUT ENGINEER APPROVAL.`, 460, 688, { width: 390 });
+    doc.fillColor('#cc0000').fontSize(7);
+    doc.text(`BRIDGE(S): ${ctx.bridges.length} structure(s) within limits. NO DEVICES ON BRIDGE DECK WITHOUT APPROVAL.`, 460, notesBoxY + 66, { width: 390 });
     doc.fillColor('black');
   }
 
@@ -1177,8 +1181,8 @@ function drawSiteLayoutSheet(doc: Doc, sheetNum: number, totalSheets: number, ct
 
   // Coordinate legend
   if (ctx.startCoords && ctx.endCoords) {
-    doc.fillColor('black').fontSize(7);
-    const ly = imgY + imgH + 8;
+    doc.fillColor('black').fontSize(8);
+    const ly = imgY + imgH + 10;
     doc.text(`START (S): ${ctx.startCoords.lat.toFixed(5)}, ${ctx.startCoords.lng.toFixed(5)}`, imgX, ly, { width: imgW / 2, align: 'left' });
     doc.text(`END (E): ${ctx.endCoords.lat.toFixed(5)}, ${ctx.endCoords.lng.toFixed(5)}`, imgX + imgW / 2, ly, { width: imgW / 2, align: 'right' });
     if (ctx.routeDistanceFt > 0) {
@@ -1186,37 +1190,39 @@ function drawSiteLayoutSheet(doc: Doc, sheetNum: number, totalSheets: number, ct
     }
   }
 
-  // Cross-street list
+  // Cross-street list (with bounding box)
   if (ctx.crossStreets.length > 0) {
-    doc.fontSize(8).fillColor('black');
-    const csY = imgY + imgH + 40;
-    doc.font('Helvetica-Bold').text('INTERSECTIONS WITHIN WORK ZONE:', imgX, csY);
-    doc.font('Helvetica').fontSize(7);
+    const csY = imgY + imgH + 45;
+    const boxHeight = 25 + ctx.crossStreets.length * 15;
+    doc.lineWidth(0.5).strokeColor('#999').rect(imgX, csY - 10, imgW, boxHeight).stroke();
+    doc.fontSize(9).fillColor('black').font('Helvetica-Bold');
+    doc.text('INTERSECTIONS WITHIN WORK ZONE:', imgX + 10, csY);
+    doc.font('Helvetica').fontSize(8);
     ctx.crossStreets.forEach((cs, i) => {
-      doc.text(`${i + 1}. ${cs.name} — See Sheet ${4 + i} for detail`, imgX + 10, csY + 14 + i * 11, { lineBreak: false });
+      doc.text(`${i + 1}. ${cs.name} — See Sheet ${4 + i} for detail`, imgX + 20, csY + 16 + i * 14, { lineBreak: false });
     });
   }
 
-  doc.fillColor('#666').fontSize(6);
-  doc.text("Route polyline and markers provided by Google Maps Platform. Verify on-site before construction.", imgX, imgY + imgH + 95, { width: imgW, align: 'center' });
+  doc.fillColor('#666').fontSize(7);
+  doc.text("Route polyline and markers provided by Google Maps Platform. Verify on-site before construction.", imgX, imgY + imgH + 125, { width: imgW, align: 'center' });
 
-  // North Arrow (upper-left of map area)
-  const naX = imgX - 60, naY = imgY + 20;
+  // North Arrow (inside map, upper-left with white BG mask)
+  const naX = imgX + 20, naY = imgY + 20;
+  doc.save();
+  doc.fillOpacity(0.8).fillColor('white').rect(naX - 10, naY - 5, 25, 65).fill();
+  doc.restore();
   doc.lineWidth(1.5).strokeColor('black');
-  // Arrow shaft
   doc.moveTo(naX, naY + 40).lineTo(naX, naY).stroke();
-  // Arrowhead (filled triangle)
   doc.save();
   doc.moveTo(naX, naY).lineTo(naX - 6, naY + 12).lineTo(naX + 6, naY + 12).closePath().fill('black');
   doc.restore();
-  // "N" label
   doc.font('Helvetica-Bold').fontSize(12).fillColor('black');
   doc.text('N', naX - 5, naY + 44, { lineBreak: false });
   doc.font('Helvetica');
 
-  // Scale Bar (below map, left side)
+  // Scale Bar (inside map, lower-left with white BG mask)
   if (ctx.routeDistanceFt > 0) {
-    const sbX = imgX - 80, sbY = imgY + imgH - 40;
+    const sbX = imgX + 20, sbY = imgY + imgH - 30;
     // Calculate scale: imgW pixels represents routeDistanceFt
     const ftPerPx = ctx.routeDistanceFt / imgW;
     // Choose a round scale increment
@@ -1225,8 +1231,11 @@ function drawSiteLayoutSheet(doc: Doc, sheetNum: number, totalSheets: number, ct
     const barFt = scaleIncrements.find(s => s >= rawBarFt * 0.8) || rawBarFt;
     const barPx = barFt / ftPerPx;
 
+    doc.save();
+    doc.fillOpacity(0.8).fillColor('white').rect(sbX - 5, sbY - 5, barPx + 40, 30).fill();
+    doc.restore();
+
     doc.lineWidth(1).strokeColor('black');
-    // Main bar
     doc.moveTo(sbX, sbY).lineTo(sbX + barPx, sbY).stroke();
     // End ticks
     doc.moveTo(sbX, sbY - 5).lineTo(sbX, sbY + 5).stroke();
@@ -1241,12 +1250,12 @@ function drawSiteLayoutSheet(doc: Doc, sheetNum: number, totalSheets: number, ct
     doc.text(`SCALE: 1" ≈ ${Math.round(ftPerPx * 72)} FT`, sbX, sbY + 18, { lineBreak: false });
   }
 
-  // Project info sidebar (left of map)
+  // Project info sidebar (aligned to map top)
   const siX = 30, siY = imgY;
-  doc.lineWidth(0.5).strokeColor('#999').rect(siX, siY, 260, 180).stroke();
-  doc.font('Helvetica-Bold').fontSize(8).fillColor('black');
-  doc.text('SITE INFORMATION', siX + 8, siY + 6);
-  doc.font('Helvetica').fontSize(6.5);
+  doc.lineWidth(0.5).strokeColor('#999').rect(siX, siY, 260, 200).stroke();
+  doc.font('Helvetica-Bold').fontSize(10).fillColor('black');
+  doc.text('SITE INFORMATION', siX + 10, siY + 10);
+  doc.font('Helvetica').fontSize(8);
   const siteInfo = [
     `Road: ${ctx.roadName || 'Not identified'}`,
     `TA: ${ctx.taCode} — ${ctx.taDescription}`,
@@ -1259,7 +1268,7 @@ function drawSiteLayoutSheet(doc: Doc, sheetNum: number, totalSheets: number, ct
     `Sign Size: ${getSignSize(ctx.speedMph, ctx.roadName)}`,
   ];
   siteInfo.forEach((line, i) => {
-    doc.text(line, siX + 8, siY + 22 + i * 12, { width: 244, lineBreak: false });
+    doc.text(line, siX + 10, siY + 30 + i * 16, { width: 240, lineBreak: false });
   });
 
   drawWatermark(doc);
@@ -1311,14 +1320,14 @@ function drawRoundabout(doc: Doc, cx: number, cy: number, radius: number, legs: 
 
     // Road edges (two lines for each leg)
     const perpRad = rad + Math.PI / 2;
-    const halfW = 15; // half road width in pixels
+    const halfW = radius * 0.18; // Scales with radius: 80r=14px, 120r=21px
     doc.moveTo(outerX + halfW * Math.cos(perpRad), outerY + halfW * Math.sin(perpRad))
        .lineTo(farX + halfW * Math.cos(perpRad), farY + halfW * Math.sin(perpRad)).stroke();
     doc.moveTo(outerX - halfW * Math.cos(perpRad), outerY - halfW * Math.sin(perpRad))
        .lineTo(farX - halfW * Math.cos(perpRad), farY - halfW * Math.sin(perpRad)).stroke();
 
     // Splitter island (triangle at entry)
-    const splitterLen = 20;
+    const splitterLen = radius * 0.25; // Scales with radius
     const splitterBase = cx + (radius + splitterLen) * Math.cos(rad);
     const splitterBaseY = cy + (radius + splitterLen) * Math.sin(rad);
     doc.lineWidth(1).strokeColor('#666');
@@ -1326,13 +1335,15 @@ function drawRoundabout(doc: Doc, cx: number, cy: number, radius: number, legs: 
        .lineTo(splitterBase, splitterBaseY)
        .lineTo(outerX - halfW * 0.3 * Math.cos(perpRad), outerY - halfW * 0.3 * Math.sin(perpRad)).stroke();
 
-    // Yield triangle at entry
-    doc.lineWidth(0.5).strokeColor('#cc0000');
+    // Yield triangle at entry (scaled with radius)
+    const yieldHW = radius * 0.05;
+    const yieldLen = radius * 0.06;
+    doc.lineWidth(0.8).strokeColor('#cc0000');
     const yieldX = outerX + 3 * Math.cos(rad);
     const yieldY = outerY + 3 * Math.sin(rad);
-    doc.moveTo(yieldX - 4 * Math.cos(perpRad), yieldY - 4 * Math.sin(perpRad))
-       .lineTo(yieldX + 4 * Math.cos(perpRad), yieldY + 4 * Math.sin(perpRad))
-       .lineTo(yieldX + 6 * Math.cos(rad), yieldY + 6 * Math.sin(rad))
+    doc.moveTo(yieldX - yieldHW * Math.cos(perpRad), yieldY - yieldHW * Math.sin(perpRad))
+       .lineTo(yieldX + yieldHW * Math.cos(perpRad), yieldY + yieldHW * Math.sin(perpRad))
+       .lineTo(yieldX + yieldLen * Math.cos(rad), yieldY + yieldLen * Math.sin(rad))
        .closePath().stroke();
   }
 
@@ -1389,7 +1400,7 @@ function drawIntersectionSheet(doc: Doc, sheetNum: number, totalSheets: number, 
 
   // === ROUNDABOUT: Use circular template ===
   if (geo.type === 'roundabout') {
-    const roundaboutR = 80;
+    const roundaboutR = 120; // Scaled up proportionally with intersection sizing
     drawRoundabout(doc, cx, cy, roundaboutR, geo.legs || 4, ctx);
 
     // Title and classification
@@ -1415,7 +1426,7 @@ function drawIntersectionSheet(doc: Doc, sheetNum: number, totalSheets: number, 
     const legAngles = geo.legs === 3 ? [0, 120, 240] : [0, 90, 180, 270];
     legAngles.forEach((angle) => {
       const rad = (angle - 90) * Math.PI / 180;
-      const signDist = roundaboutR * 2.2;
+      const signDist = roundaboutR * 1.7; // Tightened to stay above notes box at Y=550
       const sx = cx + signDist * Math.cos(rad);
       const sy = cy + signDist * Math.sin(rad);
       drawSignDiamond(doc, sx, sy, 'W20-1', 'ROAD WORK\nAHEAD');
@@ -1425,22 +1436,22 @@ function drawIntersectionSheet(doc: Doc, sheetNum: number, totalSheets: number, 
       drawSignDiamond(doc, w26x, w26y, 'W2-6', 'ROUNDABOUT\nAHEAD');
     });
 
-    // Notes
-    const noteX = 50, noteY = 530;
+    // Notes — positioned below scaled roundabout
+    const noteX = 50, noteY = 550;
     doc.lineWidth(0.5).rect(noteX, noteY, 1120, 130).stroke();
-    doc.font('Helvetica-Bold').fontSize(8).fillColor('black').text('ROUNDABOUT TRAFFIC CONTROL NOTES:', noteX + 10, noteY + 8);
-    doc.font('Helvetica').fontSize(6.5);
+    doc.font('Helvetica-Bold').fontSize(10).fillColor('black').text('ROUNDABOUT TRAFFIC CONTROL NOTES:', noteX + 10, noteY + 6);
+    doc.font('Helvetica').fontSize(9);
     const rbNotes = [
-      `1. This is a CIRCULAR INTERSECTION (roundabout). Standard linear TAs do not apply. Use TA-52/53/54 per MUTCD Chapter 6P.`,
-      `2. Place W2-6 "ROUNDABOUT AHEAD" signs on ALL approach legs at minimum ${getABCSpacing(ctx.speedMph, ctx.terrain, ctx.funcClass).a} ft from the circulatory roadway.`,
-      `3. Channelizing device spacing in the circulatory roadway shall be ${Math.round(ctx.speedMph / 2)} ft maximum (1/2 × S per TA-53 Note 8).`,
-      `4. Maintain YIELD (R1-2) signs at all roundabout entries. Cover or remove signs that become inapplicable during construction.`,
-      `5. Flaggers controlling roundabout entries must coordinate to prevent conflicting movements in the circulatory roadway.`,
-      `6. Ensure adequate truck turning radius is maintained through the work zone. WB-67 swept path analysis recommended.`,
-      `7. Cover permanent WRONG WAY and DO NOT ENTER signs that become inapplicable per TA-52 Standard Note 5.`,
-      `8. ${ctx.crashCount >= 10 ? 'HIGH CRASH LOCATION (' + ctx.crashCount + ' crashes): Deploy PCMS on all approaches. Consider law enforcement during peak hours.' : 'Monitor approach speeds. Deploy speed feedback signs if warranted.'}`,
+      `1. CIRCULAR INTERSECTION — Use TA-52/53/54 per MUTCD Chapter 6P, not linear TAs.`,
+      `2. Place W2-6 "ROUNDABOUT AHEAD" on ALL approach legs at min ${getABCSpacing(ctx.speedMph, ctx.terrain, ctx.funcClass).a} ft.`,
+      `3. Device spacing in circulatory roadway: ${Math.round(ctx.speedMph / 2)} ft max (1/2 × S per TA-53 Note 8).`,
+      `4. Maintain YIELD (R1-2) at all entries. Cover inapplicable signs during construction.`,
+      `5. Flaggers at entries must coordinate to prevent conflicting movements.`,
+      `6. Maintain truck turning radius through work zone. WB-67 swept path recommended.`,
+      `7. Cover WRONG WAY / DO NOT ENTER signs that become inapplicable per TA-52 Note 5.`,
+      `8. ${ctx.crashCount >= 10 ? 'HIGH CRASH (' + ctx.crashCount + '): Deploy PCMS + law enforcement.' : 'Monitor speeds. Deploy speed feedback signs if warranted.'}`,
     ];
-    rbNotes.forEach((n, i) => doc.text(n, noteX + 10, noteY + 22 + i * 13, { width: 1100 }));
+    rbNotes.forEach((n, i) => doc.text(n, noteX + 10, noteY + 20 + i * 13, { width: 1100 }));
 
     drawWatermark(doc);
     drawTitleBlock(doc, sheetNum, totalSheets, ctx.operationType, ctx.roadName);
@@ -1449,8 +1460,8 @@ function drawIntersectionSheet(doc: Doc, sheetNum: number, totalSheets: number, 
 
   // === DOG-BONE INTERCHANGE: Two roundabouts + bridge ===
   if (geo.intersectionType === 'interchange_dogbone') {
-    const r1x = cx - 120, r2x = cx + 120;
-    const rR = 55;
+    const r1x = cx - 150, r2x = cx + 150;
+    const rR = 80; // Scaled proportionally with standard intersection sizing
     doc.fontSize(14).fillColor('black').text('DOG-BONE INTERCHANGE', 0, 25, { align: 'center' });
     doc.fontSize(8).fillColor('#666').text('Two roundabouts connected by bridge overpass', 0, 60, { align: 'center' });
 
@@ -1458,10 +1469,10 @@ function drawIntersectionSheet(doc: Doc, sheetNum: number, totalSheets: number, 
     drawRoundabout(doc, r1x, cy, rR, geo.legs || 4, ctx);
     drawRoundabout(doc, r2x, cy, rR, geo.legs || 4, ctx);
 
-    // Bridge connecting segment
-    doc.lineWidth(2).strokeColor('black');
-    doc.rect(r1x + rR, cy - 12, r2x - r1x - 2 * rR, 24).stroke();
-    doc.lineWidth(0.5).strokeColor('#999');
+    // Bridge connecting segment (1.5× scaled)
+    doc.lineWidth(3).strokeColor('black');
+    doc.rect(r1x + rR, cy - 18, r2x - r1x - 2 * rR, 36).stroke();
+    doc.lineWidth(1).strokeColor('#999');
     doc.moveTo(r1x + rR, cy).lineTo(r2x - rR, cy).dash(4, { space: 4 }).stroke();
     doc.undash();
     doc.fontSize(5).fillColor('#666').text('BRIDGE / OVERPASS', cx - 30, cy - 3, { lineBreak: false });
@@ -1474,21 +1485,21 @@ function drawIntersectionSheet(doc: Doc, sheetNum: number, totalSheets: number, 
     doc.text(ctx.roadName || 'MAIN ROAD', cx + 200, cy - 5, { lineBreak: false });
 
     // Notes
-    const noteX = 50, noteY = 530;
+    const noteX = 50, noteY = 550;
     doc.lineWidth(0.5).rect(noteX, noteY, 1120, 130).stroke();
-    doc.font('Helvetica-Bold').fontSize(8).fillColor('black').text('DOG-BONE INTERCHANGE TRAFFIC CONTROL NOTES:', noteX + 10, noteY + 8);
-    doc.font('Helvetica').fontSize(6.5);
+    doc.font('Helvetica-Bold').fontSize(10).fillColor('black').text('DOG-BONE INTERCHANGE TRAFFIC CONTROL NOTES:', noteX + 10, noteY + 6);
+    doc.font('Helvetica').fontSize(9);
     const dbNotes = [
       '1. DOG-BONE INTERCHANGE requires INDEPENDENT traffic control at EACH roundabout.',
-      '2. Decompose work zone into sub-segments: Approach legs, Roundabout 1, Bridge, Roundabout 2.',
-      '3. Flaggers at each roundabout entry MUST coordinate — only one direction released at a time.',
-      '4. Bridge segment requires positive protection per MUTCD 6M.02 (temporary traffic barriers).',
-      '5. Use TA-52/53/54 for circulatory roadway work, NOT standard linear TAs.',
-      '6. Cover permanent WRONG WAY, DO NOT ENTER signs that become inapplicable during each phase.',
-      '7. Multi-phase staging required — cannot close entire corridor simultaneously without full detour.',
-      '8. Maintain pedestrian crossings at each leg or provide ADA-compliant alternate routes.',
+      '2. Decompose work zone: Approach legs, Roundabout 1, Bridge, Roundabout 2.',
+      '3. Flaggers at each entry MUST coordinate — one direction released at a time.',
+      '4. Bridge requires positive protection per MUTCD 6M.02 (temporary barriers).',
+      '5. Use TA-52/53/54 for circulatory work, NOT standard linear TAs.',
+      '6. Cover WRONG WAY / DO NOT ENTER signs that become inapplicable each phase.',
+      '7. Multi-phase staging required — cannot close entire corridor without detour.',
+      '8. Maintain pedestrian crossings or provide ADA-compliant alternate routes.',
     ];
-    dbNotes.forEach((n, i) => doc.text(n, noteX + 10, noteY + 22 + i * 13, { width: 1100 }));
+    dbNotes.forEach((n, i) => doc.text(n, noteX + 10, noteY + 20 + i * 13, { width: 1100 }));
 
     drawWatermark(doc);
     drawTitleBlock(doc, sheetNum, totalSheets, ctx.operationType, ctx.roadName);
@@ -1498,11 +1509,11 @@ function drawIntersectionSheet(doc: Doc, sheetNum: number, totalSheets: number, 
   // Main road (horizontal)
   const intRoad = drawRoadway(doc, cx - mainLen / 2, cx + mainLen / 2, cy, ctx);
   const mainHW = intRoad.totalPixelH / 2;
-  const crossHW = geo.turnLanes ? 30 : 20; // Wider cross street if turn lanes exist
-  const R = isHighway(cs.name) ? 35 : 20; // Corner radius (larger for state routes)
+  const crossHW = Math.round((geo.turnLanes ? 30 : 20) * 1.5); // 1.5× scale for visual weight
+  const R = Math.round((isHighway(cs.name) ? 35 : 20) * 1.5); // Corner radius scaled
 
   // 1. MASKING: Erase the mainline edge lines where the cross streets enter
-  doc.lineWidth(4).strokeColor('#ffffff');
+  doc.lineWidth(6).strokeColor('#ffffff'); // 6px to safely overlap 4px curb returns
   if (hasNorth) doc.moveTo(cx - crossHW - R, cy - mainHW).lineTo(cx + crossHW + R, cy - mainHW).stroke();
   if (hasSouth) doc.moveTo(cx - crossHW - R, cy + mainHW).lineTo(cx + crossHW + R, cy + mainHW).stroke();
 
@@ -1511,8 +1522,8 @@ function drawIntersectionSheet(doc: Doc, sheetNum: number, totalSheets: number, 
     doc.rect(cx - crossHW - 2, cy - mainHW + 2, (crossHW * 2) + 4, (mainHW * 2) - 4).fill('#ffffff');
   }
 
-  // 2. DRAW CURB RETURNS & CROSS STREET EDGES
-  doc.lineWidth(2).strokeColor('black');
+  // 2. DRAW CURB RETURNS & CROSS STREET EDGES (heavy CAD weight)
+  doc.lineWidth(4).strokeColor('black');
   if (hasNorth) {
     // Left North curb
     doc.moveTo(cx - crossHW, cy - crossLen)
@@ -1534,8 +1545,8 @@ function drawIntersectionSheet(doc: Doc, sheetNum: number, totalSheets: number, 
        .quadraticCurveTo(cx + crossHW, cy + mainHW, cx + crossHW + R, cy + mainHW).stroke();
   }
 
-  // 3. DRAW CROSS STREET CENTERLINES
-  doc.lineWidth(1).strokeColor('#CC9900');
+  // 3. DRAW CROSS STREET CENTERLINES (scaled weight)
+  doc.lineWidth(1.5).strokeColor('#CC9900');
   if (hasNorth) {
     doc.moveTo(cx - 1.5, cy - crossLen).lineTo(cx - 1.5, cy - mainHW).stroke();
     doc.moveTo(cx + 1.5, cy - crossLen).lineTo(cx + 1.5, cy - mainHW).stroke();
@@ -1547,11 +1558,11 @@ function drawIntersectionSheet(doc: Doc, sheetNum: number, totalSheets: number, 
 
   // 4. STOP BARS & CROSSWALKS
   if (geo.hasSignal || isHighway(cs.name)) {
-    doc.lineWidth(3).strokeColor('black');
+    doc.lineWidth(5).strokeColor('black');
     if (hasNorth) doc.moveTo(cx - crossHW, cy - mainHW - R).lineTo(cx, cy - mainHW - R).stroke();
     if (hasSouth) doc.moveTo(cx, cy + mainHW + R).lineTo(cx + crossHW, cy + mainHW + R).stroke();
 
-    doc.lineWidth(1.5).dash(4, { space: 4 }).strokeColor('#666');
+    doc.lineWidth(2).dash(6, { space: 6 }).strokeColor('#666');
     const cwOffset = R + 10;
     if (hasNorth) {
       doc.moveTo(cx - crossHW, cy - mainHW - cwOffset).lineTo(cx + crossHW, cy - mainHW - cwOffset).stroke();
@@ -1618,23 +1629,22 @@ function drawIntersectionSheet(doc: Doc, sheetNum: number, totalSheets: number, 
 
   // 6. ADVANCE WARNING SIGNS (Standard US Right-Hand Shoulder Placement)
   // North Leg (traffic moving down): Right shoulder is on the left (-X)
-  if (hasNorth) drawSignDiamond(doc, cx - crossHW - 35, cy - crossLen + 40, 'W20-1', 'ROAD WORK\nAHEAD');
+  if (hasNorth) drawSignDiamond(doc, cx - crossHW - 60, cy - crossLen + 40, 'W20-1', 'ROAD WORK\nAHEAD');
 
   // South Leg (traffic moving up): Right shoulder is on the right (+X)
-  if (hasSouth) drawSignDiamond(doc, cx + crossHW + 35, cy + crossLen - 40, 'W20-1', 'ROAD WORK\nAHEAD');
+  if (hasSouth) drawSignDiamond(doc, cx + crossHW + 60, cy + crossLen - 40, 'W20-1', 'ROAD WORK\nAHEAD');
 
-  // Determine intersection significance and notes
+  // Determine intersection significance
   const isHwy = isHighway(cs.name);
   const isDriveway = /chevron|gas|station|driveway|parking|lot/i.test(cs.name) && !/state\s*park|national|public|forest|county/i.test(cs.name);
   const intType = isHwy ? 'STATE/US HIGHWAY INTERSECTION' : isDriveway ? 'COMMERCIAL ACCESS POINT' : 'LOCAL ROAD INTERSECTION';
-  doc.fontSize(8).fillColor(isHwy ? '#cc0000' : '#333');
-  doc.text(`Classification: ${intType}`, cx - mainLen / 2, cy + crossLen + 15, { width: mainLen, align: 'center', lineBreak: false });
 
-  // Notes for this intersection
+  // Notes for this intersection — classification as subtitle
   const noteX = 50, noteY = 560;
   doc.lineWidth(0.5).rect(noteX, noteY, 530, 120).stroke();
-  doc.font('Helvetica-Bold').fontSize(8).fillColor('black').text('INTERSECTION TRAFFIC CONTROL NOTES:', noteX + 10, noteY + 8);
-  doc.font('Helvetica').fontSize(6.5);
+  doc.font('Helvetica-Bold').fontSize(10).fillColor(isHwy ? '#cc0000' : 'black');
+  doc.text(`${intType} — TRAFFIC CONTROL NOTES`, noteX + 10, noteY + 6);
+  doc.font('Helvetica').fontSize(9).fillColor('black');
 
   const intNotes = isHwy ?[
     `1. THIS IS A STATE/US HIGHWAY INTERSECTION — requires enhanced traffic control measures.`,
@@ -1652,12 +1662,12 @@ function drawIntersectionSheet(doc: Doc, sheetNum: number, totalSheets: number, 
     `5. Sight distance at this intersection must accommodate ${ctx.speedMph} MPH mainline traffic.`,
     '6. Do not place channelizing devices where they block cross-street sight triangles.',
   ];
-  intNotes.forEach((n, i) => doc.text(n, noteX + 10, noteY + 22 + i * 13, { width: 510 }));
+  intNotes.forEach((n, i) => doc.text(n, noteX + 10, noteY + 22 + i * 16, { width: 510 }));
 
   // Sign detail for this intersection
   doc.lineWidth(0.5).rect(600, noteY, 400, 120).stroke();
-  doc.font('Helvetica-Bold').fontSize(8).text('SIGNS REQUIRED AT THIS INTERSECTION:', 610, noteY + 8);
-  doc.font('Helvetica').fontSize(7);
+  doc.font('Helvetica-Bold').fontSize(10).text('SIGNS REQUIRED AT THIS INTERSECTION:', 610, noteY + 6);
+  doc.font('Helvetica').fontSize(9);
   const signQty = (hasNorth ? 1 : 0) + (hasSouth ? 1 : 0);
   doc.text(`W20-1 "ROAD WORK AHEAD" — Qty: ${signQty} (one per cross-street approach)`, 610, noteY + 28, { width: 380 });
   const intSignSize = getSignSize(ctx.speedMph, ctx.roadName);
@@ -1683,11 +1693,13 @@ function drawQueueAnalysisSheet(doc: Doc, sheetNum: number, totalSheets: number,
   doc.fontSize(14).fillColor('black').text('TRAFFIC DATA & QUEUE ANALYSIS', 0, 25, { align: 'center' });
   doc.fontSize(9).text(`${ctx.roadName || 'Project Road'} — ${ctx.operationType}`, 0, 45, { align: 'center' });
 
+  const topH = 220, botH = 150; // Force identical row heights
+
   // Traffic Data Box
   const tdX = 50, tdY = 80;
-  doc.lineWidth(1).rect(tdX, tdY, 520, 200).stroke();
-  doc.font('Helvetica-Bold').fontSize(10).text('TRAFFIC DATA', tdX + 10, tdY + 8, { underline: true });
-  doc.font('Helvetica').fontSize(8);
+  doc.lineWidth(1).rect(tdX, tdY, 520, topH).stroke();
+  doc.font('Helvetica-Bold').fontSize(12).text('TRAFFIC DATA', tdX + 10, tdY + 10, { underline: true });
+  doc.font('Helvetica').fontSize(9);
 
   const aadtStr = ctx.aadt > 0 ? ctx.aadt.toLocaleString() : 'Not available';
   const truckStr = ctx.truckPct > 0 ? `${ctx.truckPct.toFixed(1)}%` : 'Not available';
@@ -1716,9 +1728,9 @@ function drawQueueAnalysisSheet(doc: Doc, sheetNum: number, totalSheets: number,
 
   // Queue Length Analysis Box
   const qaX = 600, qaY = 80;
-  doc.lineWidth(1).rect(qaX, qaY, 570, 200).stroke();
-  doc.font('Helvetica-Bold').fontSize(10).fillColor('black').text('QUEUE LENGTH ESTIMATE', qaX + 10, qaY + 8, { underline: true });
-  doc.font('Helvetica').fontSize(8);
+  doc.lineWidth(1).rect(qaX, qaY, 570, topH).stroke();
+  doc.font('Helvetica-Bold').fontSize(12).fillColor('black').text('QUEUE LENGTH ESTIMATE', qaX + 10, qaY + 10, { underline: true });
+  doc.font('Helvetica').fontSize(9);
 
   if (ctx.aadt > 0 && peakDirVol > 0) {
     // Simplified HCM queue analysis
@@ -1785,10 +1797,10 @@ function drawQueueAnalysisSheet(doc: Doc, sheetNum: number, totalSheets: number,
   }
 
   // Crash History Box
-  const chX = 50, chY = 300;
-  doc.lineWidth(1).rect(chX, chY, 520, 130).stroke();
-  doc.font('Helvetica-Bold').fontSize(10).fillColor('black').text('CRASH HISTORY', chX + 10, chY + 8, { underline: true });
-  doc.font('Helvetica').fontSize(8);
+  const chX = 50, chY = 320;
+  doc.lineWidth(1).rect(chX, chY, 520, botH).stroke();
+  doc.font('Helvetica-Bold').fontSize(12).fillColor('black').text('CRASH HISTORY', chX + 10, chY + 10, { underline: true });
+  doc.font('Helvetica').fontSize(9);
   if (ctx.crashCount > 0) {
     doc.text(`Crashes within project limits (ITD database): ${ctx.crashCount}`, chX + 10, chY + 30);
     if (ctx.crashCount >= 10) {
@@ -1809,10 +1821,10 @@ function drawQueueAnalysisSheet(doc: Doc, sheetNum: number, totalSheets: number,
   }
 
   // Bridge Data Box
-  const brX = 600, brY = 300;
-  doc.lineWidth(1).rect(brX, brY, 570, 130).stroke();
-  doc.font('Helvetica-Bold').fontSize(10).fillColor('black').text('BRIDGE & STRUCTURE DATA', brX + 10, brY + 8, { underline: true });
-  doc.font('Helvetica').fontSize(8);
+  const brX = 600, brY = 320;
+  doc.lineWidth(1).rect(brX, brY, 570, botH).stroke();
+  doc.font('Helvetica-Bold').fontSize(12).fillColor('black').text('BRIDGE & STRUCTURE DATA', brX + 10, brY + 10, { underline: true });
+  doc.font('Helvetica').fontSize(9);
   if (ctx.bridges && ctx.bridges.length > 0) {
     doc.text(`Bridges/structures within project limits: ${ctx.bridges.length}`, brX + 10, brY + 30);
     let brRow = brY + 48;
@@ -1831,10 +1843,10 @@ function drawQueueAnalysisSheet(doc: Doc, sheetNum: number, totalSheets: number,
   }
 
   // Work Window Recommendations
-  const wwX = 50, wwY = 450;
-  doc.lineWidth(1).rect(wwX, wwY, 1120, 100).stroke();
-  doc.font('Helvetica-Bold').fontSize(10).fillColor('black').text('RECOMMENDED WORK WINDOWS', wwX + 10, wwY + 8, { underline: true });
-  doc.font('Helvetica').fontSize(8);
+  const wwX = 50, wwY = 490;
+  doc.lineWidth(1).rect(wwX, wwY, 1120, 120).stroke();
+  doc.font('Helvetica-Bold').fontSize(12).fillColor('black').text('RECOMMENDED WORK WINDOWS', wwX + 10, wwY + 10, { underline: true });
+  doc.font('Helvetica').fontSize(9);
   if (ctx.aadt > 0) {
     const isHighVol = ctx.aadt > 5000;
     const isMedVol = ctx.aadt > 1500;
@@ -1861,8 +1873,8 @@ function drawQueueAnalysisSheet(doc: Doc, sheetNum: number, totalSheets: number,
   }
 
   // Disclaimer
-  doc.fontSize(6).fillColor('#999');
-  doc.text('Queue estimates are approximate and based on simplified HCM methodology. Actual conditions may vary. Field verification required.', 50, 570, { width: 1120, align: 'center' });
+  doc.fontSize(7).fillColor('#999');
+  doc.text('Queue estimates are approximate and based on simplified HCM methodology. Actual conditions may vary. Field verification required.', 50, 620, { width: 1120, align: 'center' });
 
   drawWatermark(doc);
   drawTitleBlock(doc, sheetNum, totalSheets, ctx.operationType, ctx.roadName);
@@ -1877,82 +1889,65 @@ function drawSpecialConsiderationsSheet(doc: Doc, sheetNum: number, totalSheets:
   doc.fontSize(14).fillColor('black').text('SPECIAL CONSIDERATIONS', 0, 25, { align: 'center' });
   doc.fontSize(9).text(`${ctx.roadName || 'Project Road'} — ${ctx.operationType}`, 0, 45, { align: 'center' });
 
-  let yPos = 80;
-  const boxW = 1120, boxX = 52;
+  const col1X = 50, col2X = 610, colW = 530;
+  let leftY = 80, rightY = 80;
 
-  // 1. NIGHT OPERATIONS
-  const nightH = 90;
-  doc.lineWidth(1).rect(boxX, yPos, boxW, nightH).stroke();
-  doc.font('Helvetica-Bold').fontSize(10).fillColor('black').text('NIGHT OPERATIONS', boxX + 10, yPos + 8, { underline: true });
-  doc.font('Helvetica').fontSize(7);
-  const nightNotes = [
+  // Reusable box drawing function
+  const drawConsBox = (x: number, y: number, title: string, notes: string[]) => {
+    const titleH = 30;
+    const notesH = notes.length * 18 + 15;
+    const totalH = titleH + notesH;
+    doc.lineWidth(1).rect(x, y, colW, totalH).stroke();
+    doc.font('Helvetica-Bold').fontSize(12).fillColor('black').text(title, x + 15, y + 12, { underline: true });
+    doc.font('Helvetica').fontSize(10);
+    notes.forEach((n, i) => doc.text(n, x + 15, y + 35 + i * 18, { width: colW - 30 }));
+    return y + totalH + 20;
+  };
+
+  // LEFT COLUMN
+  leftY = drawConsBox(col1X, leftY, 'NIGHT OPERATIONS', [
     '• All advance warning signs shall be retroreflective or illuminated per MUTCD 6F.02.',
-    '• Flagger stations shall be illuminated with a minimum of 5 foot-candles at ground level (MUTCD 6E.02).',
-    '• Channelizing devices shall have retroreflective sheeting visible from minimum 1,000 ft.',
+    '• Flagger stations shall be illuminated with min 5 foot-candles at ground level.',
+    '• Channelizing devices shall have retroreflective sheeting visible from min 1,000 ft.',
     '• Arrow boards shall operate in flashing mode during nighttime operations.',
-    `• ${ctx.speedMph >= 55 ? 'HIGH-SPEED ROAD: Consider additional flashing beacons on advance warning signs.' : 'Standard nighttime delineation requirements apply.'}`,
-  ];
-  nightNotes.forEach((n, i) => doc.text(n, boxX + 10, yPos + 28 + i * 11, { width: boxW - 20 }));
-  yPos += nightH + 10;
+    `• ${ctx.speedMph >= 55 ? 'HIGH-SPEED ROAD: Consider additional flashing beacons on warning signs.' : 'Standard nighttime delineation requirements apply.'}`,
+  ]);
 
-  // 2. PEDESTRIAN & BICYCLE ACCOMMODATIONS
-  const pedH = 90;
-  doc.lineWidth(1).rect(boxX, yPos, boxW, pedH).stroke();
-  doc.font('Helvetica-Bold').fontSize(10).fillColor('black').text('PEDESTRIAN & BICYCLE ACCOMMODATIONS', boxX + 10, yPos + 8, { underline: true });
-  doc.font('Helvetica').fontSize(7);
   const isUrban = ctx.funcClass ? parseInt(ctx.funcClass) >= 5 : ctx.speedMph <= 35;
-  const pedNotes = isUrban ? [
-    '• Maintain ADA-compliant pedestrian access through or around the work zone at all times (MUTCD 6D.01).',
-    '• Provide temporary pedestrian signs (R9-9 SIDEWALK CLOSED, R9-11 USE OTHER SIDE) if sidewalks are impacted.',
+  leftY = drawConsBox(col1X, leftY, 'PEDESTRIAN & BICYCLE ACCOMMODATIONS', isUrban ? [
+    '• Maintain ADA-compliant pedestrian access through or around the work zone.',
+    '• Provide temporary pedestrian signs (R9-9, R9-11) if sidewalks are impacted.',
     '• Temporary pedestrian pathway shall be minimum 60 inches wide with detectable edges.',
-    '• Curb ramps and level landings required at all pedestrian crossings per ADA Standards.',
-    '• If bicycle lane is impacted, provide SHARE THE ROAD (W11-1) signs and maintain 4-ft minimum bicycle space.',
+    '• Curb ramps and level landings required at all pedestrian crossings per ADA.',
+    '• If bicycle lane is impacted, provide SHARE THE ROAD signs and 4-ft min bicycle space.',
   ] : [
     '• Rural location — pedestrian traffic expected to be minimal.',
-    '• If pedestrians or bicyclists are observed, provide safe passage with flagger assistance.',
+    '• If pedestrians or bicyclists observed, provide safe passage with flagger assistance.',
     '• No sidewalk closures anticipated.',
-    `• ${ctx.speedMph >= 55 ? 'High-speed road — pedestrian/bicycle access not recommended through work zone.' : 'Maintain shoulder access for bicyclists where feasible.'}`,
-  ];
-  pedNotes.forEach((n, i) => doc.text(n, boxX + 10, yPos + 28 + i * 11, { width: boxW - 20 }));
-  yPos += pedH + 10;
+    `• ${ctx.speedMph >= 55 ? 'High-speed road — pedestrian/bicycle access not recommended.' : 'Maintain shoulder access for bicyclists where feasible.'}`,
+  ]);
 
-  // 3. EMERGENCY VEHICLE ACCESS
-  const evaH = 75;
-  doc.lineWidth(1).rect(boxX, yPos, boxW, evaH).stroke();
-  doc.font('Helvetica-Bold').fontSize(10).fillColor('black').text('EMERGENCY VEHICLE ACCESS', boxX + 10, yPos + 8, { underline: true });
-  doc.font('Helvetica').fontSize(7);
-  const evaNotes = [
-    '• Emergency vehicle access shall be maintained at all times per MUTCD 6C.01 and ITD Section 626.',
-    '• Channelizing devices shall be moveable to allow emergency vehicle passage within 3 minutes.',
-    '• Notify local fire, EMS, and law enforcement of work zone location and schedule prior to start of work.',
+  // RIGHT COLUMN
+  rightY = drawConsBox(col2X, rightY, 'EMERGENCY VEHICLE ACCESS', [
+    '• Emergency vehicle access shall be maintained at all times per MUTCD 6C.01.',
+    '• Channelizing devices shall be moveable to allow passage within 3 minutes.',
+    '• Notify local fire, EMS, and law enforcement of schedule prior to start of work.',
     `• ${ctx.crossStreets.length > 0 ? `Maintain access to all ${ctx.crossStreets.length} intersecting roads for emergency vehicles.` : 'No cross-street access restrictions identified.'}`,
-  ];
-  evaNotes.forEach((n, i) => doc.text(n, boxX + 10, yPos + 28 + i * 11, { width: boxW - 20 }));
-  yPos += evaH + 10;
+  ]);
 
-  // 4. ENVIRONMENTAL & SEASONAL CONSIDERATIONS
-  const envH = 75;
-  doc.lineWidth(1).rect(boxX, yPos, boxW, envH).stroke();
-  doc.font('Helvetica-Bold').fontSize(10).fillColor('black').text('ENVIRONMENTAL & SEASONAL CONSIDERATIONS', boxX + 10, yPos + 8, { underline: true });
-  doc.font('Helvetica').fontSize(7);
   const terrainStr = ctx.terrain || 'unknown';
-  const envNotes = [
-    `• Terrain: ${terrainStr.charAt(0).toUpperCase() + terrainStr.slice(1)}${/rolling|mountainous/i.test(terrainStr) ? ' — reduced sight distance may require additional advance warning.' : '.'}`,
-    '• Winter operations: Ensure all temporary signs and devices are visible above snow accumulation.',
-    '• Wet/icy conditions: Increase advance warning distances and reduce work zone speed limit.',
-    '• Wildlife corridor: If wildlife crossing signs exist, maintain visibility and do not remove.',
-  ];
-  envNotes.forEach((n, i) => doc.text(n, boxX + 10, yPos + 28 + i * 11, { width: boxW - 20 }));
-  yPos += envH + 10;
+  rightY = drawConsBox(col2X, rightY, 'ENVIRONMENTAL & SEASONAL', [
+    `• Terrain: ${terrainStr.charAt(0).toUpperCase() + terrainStr.slice(1)}${/rolling|mountainous/i.test(terrainStr) ? ' — reduced sight distance may require advance warning.' : '.'}`,
+    '• Winter ops: Ensure all temporary signs and devices visible above snow.',
+    '• Wet/icy conditions: Increase advance warning distances and reduce WZ speed.',
+    '• Wildlife corridor: If wildlife crossing signs exist, maintain visibility.',
+  ]);
 
-  // 5. UTILITY CONSIDERATIONS
-  const utilH = 60;
-  doc.lineWidth(1).rect(boxX, yPos, boxW, utilH).stroke();
-  doc.font('Helvetica-Bold').fontSize(10).fillColor('black').text('UTILITY COORDINATION', boxX + 10, yPos + 8, { underline: true });
-  doc.font('Helvetica').fontSize(7);
-  doc.text('• Contact Dig Line (811) minimum 2 business days before excavation work begins.', boxX + 10, yPos + 28, { width: boxW - 20 });
-  doc.text('• Verify location of overhead utilities before positioning arrow boards and high-profile equipment.', boxX + 10, yPos + 39, { width: boxW - 20 });
-  doc.text('• Maintain clearance from utility poles — do not attach signs or devices to utility infrastructure.', boxX + 10, yPos + 50, { width: boxW - 20 });
+  rightY = drawConsBox(col2X, rightY, 'UTILITY COORDINATION', [
+    '• Contact Dig Line (811) minimum 2 business days before excavation.',
+    '• Verify location of overhead utilities before positioning high-profile equipment.',
+    '• Maintain clearance from utility poles — do not attach signs to infrastructure.',
+  ]);
 
   drawWatermark(doc);
   drawTitleBlock(doc, sheetNum, totalSheets, ctx.operationType, ctx.roadName);
@@ -2021,48 +2016,38 @@ function drawGeometryPlanSheet(
   const rightEdge = alignment.getOffsetPolyline(halfW);
   const centerline = alignment.getUtmPoints();
 
-  // Dynamic road width calculator (in feet)
-  const getWidthFt = (item: any, isItd: boolean): number => {
-    if (isItd) return 48;
-    const h = (item.highway || '').toLowerCase();
-    if (/motorway|trunk/.test(h)) return 60;
-    if (/primary|secondary/.test(h)) return 48;
-    if (/tertiary/.test(h)) return 36;
-    if (/residential|unclassified/.test(h)) return 24;
-    return 18;
-  };
-
   // Prevent miter spikes on tight roundabout geometry
   doc.lineJoin('round');
   doc.lineCap('round');
 
   // =========================================================
-  // Z-INDEX LAYER 1: BASEMAP EDGES (drawn first, will be partially masked)
+  // Z-INDEX LAYER 1: BASEMAP EDGES (Fixed pixel widths — de-blobbed)
   // =========================================================
-  doc.strokeColor('#AAAAAA');
+  doc.strokeColor('#E0E0E0');
   for (const seg of itdSegments) {
     if (seg.nodes.length < 2) continue;
-    doc.lineWidth(Math.max(1.5, (getWidthFt(seg, true) + 4) / scaleFtPerPt));
+    doc.lineWidth(3); // Fixed — ITD primary roads
     drawUtmPolyline(seg.nodes.map(n => alignment.projectGps(n)));
   }
   for (const road of basemapRoads) {
     if (road.nodes.length < 2) continue;
-    doc.lineWidth(Math.max(1.5, (getWidthFt(road, false) + 4) / scaleFtPerPt));
+    const h = ((road as any).highway || '').toLowerCase();
+    doc.lineWidth(/motorway|trunk|primary|secondary/.test(h) ? 2.5 : 1.5);
     drawUtmPolyline(road.nodes.map(n => alignment.projectGps(n)));
   }
 
   // =========================================================
-  // Z-INDEX LAYER 2: PAVEMENT FILLS (masks basemap interior edges at intersections)
+  // Z-INDEX LAYER 2: PAVEMENT FILLS
   // =========================================================
-  doc.strokeColor('#f0f0f0');
+  doc.strokeColor('#f5f5f5');
   for (const seg of itdSegments) {
     if (seg.nodes.length < 2) continue;
-    doc.lineWidth(Math.max(1, getWidthFt(seg, true) / scaleFtPerPt));
+    doc.lineWidth(2);
     drawUtmPolyline(seg.nodes.map(n => alignment.projectGps(n)));
   }
   for (const road of basemapRoads) {
     if (road.nodes.length < 2) continue;
-    doc.lineWidth(Math.max(1, getWidthFt(road, false) / scaleFtPerPt));
+    doc.lineWidth(1);
     drawUtmPolyline(road.nodes.map(n => alignment.projectGps(n)));
   }
 
@@ -2074,7 +2059,7 @@ function drawGeometryPlanSheet(
     doc.moveTo(rPage[0]!.px, rPage[0]!.py);
     rPage.forEach(p => doc.lineTo(p.px, p.py));
     [...lPage].reverse().forEach(p => doc.lineTo(p.px, p.py));
-    doc.closePath().fill('#f0f0f0');
+    doc.closePath().fill('#f5f5f5');
     doc.restore();
   }
 
@@ -2110,15 +2095,15 @@ function drawGeometryPlanSheet(
     const perpRad = (pt.heading + 90) * Math.PI / 180;
 
     // Cross-street road stub length (in real-world feet, scaled to page)
-    const stubLenFt = Math.max(200, halfW * 6); // At least 200 ft visible
+    const stubLenFt = Math.max(150, halfW * 4);
     const stubWidthFt = 24; // Typical 2-lane cross-street width
 
     // Draw cross-street on both sides unless T-intersection
     const drawNorth = !geo || geo.type === '4-way' || geo.type === 'T-north' || geo.type === 'T-east';
     const drawSouth = !geo || geo.type === '4-way' || geo.type === 'T-south' || geo.type === 'T-west';
 
-    // Cross-street edge lines (grey, thinner than main road)
-    doc.lineWidth(0.8).strokeColor('#888888');
+    // Cross-street edge lines (thicker for visual weight)
+    doc.lineWidth(1.2).strokeColor('#888888');
     const crossHalfW = stubWidthFt / 2;
 
     if (drawNorth) {
@@ -2369,8 +2354,12 @@ function drawGeometryPlanSheet(
              mainEdgePg.py - Math.cos(mainPerpRad) / scaleFtPerPt * halfW)
      .lineTo(mainLx, mainLy).stroke();
 
-  // Cross-street labels with leader lines + signs (pushed into white space)
-  const leaderOffset = 80; // Pixels perpendicular from road center to label
+  // =========================================================
+  // CROSS-STREET LABELS WITH 2D COLLISION AVOIDANCE
+  // =========================================================
+  const csLeaderOffset = 80;
+  const placedLabels: { px: number; py: number }[] = [];
+
   for (let csIdx = 0; csIdx < ctx.crossStreets.length; csIdx++) {
     const cs = ctx.crossStreets[csIdx]!;
     const sta = cs.position * alignment.totalLengthFt;
@@ -2380,42 +2369,58 @@ function drawGeometryPlanSheet(
     if (pg.px < pageLeft - 10 || pg.px > pageRight + 10) continue;
 
     const side = csIdx % 2 === 0 ? 1 : -1;
+    const lx = pg.px + side * csLeaderOffset;
+    let ly = pg.py - side * 20;
 
-    // Label endpoint (far into white space)
-    const lx = pg.px + side * leaderOffset;
-    const ly = pg.py - side * 20 - csIdx * 3; // Stagger vertically to reduce overlap
+    // 2D Collision Resolution — push labels apart until no overlap
+    for (let attempts = 0; attempts < 6; attempts++) {
+      let collided = false;
+      for (const p of placedLabels) {
+        if (Math.abs(lx - p.px) < 90 && Math.abs(ly - p.py) < 40) {
+          ly = p.py + (side === 1 ? -40 : 40);
+          collided = true;
+          break;
+        }
+      }
+      if (!collided) break;
+    }
+    // Bounds check — keep labels on the page
+    ly = Math.max(pageTop + 20, Math.min(pageBot - 20, ly));
+    placedLabels.push({ px: lx, py: ly });
 
-    // Thin gray leader line from intersection point to label
-    doc.lineWidth(0.4).strokeColor('#999');
+    // Thick leader line from intersection point to callout box
+    doc.lineWidth(1.2).strokeColor('#000');
     doc.moveTo(pg.px, pg.py).lineTo(lx, ly).stroke();
-    // Small dot at intersection point
-    doc.circle(pg.px, pg.py, 1.5).fillAndStroke('#0066cc', '#0066cc');
+    doc.circle(pg.px, pg.py, 2).fillAndStroke('#000', '#000');
 
-    // Cross-street name (white mask + bold blue text)
+    // Unified white callout box (name + sign diamond + code)
+    const boxW = 86, boxH = 34;
+    const boxLeft = lx - boxW / 2;
+    const boxTop = ly - boxH / 2;
+    doc.lineWidth(0.8).rect(boxLeft, boxTop, boxW, boxH).fillAndStroke('white', 'black');
+
+    // Street name
     const nameText = cs.name.length > 18 ? cs.name.substring(0, 16).toUpperCase() + '...' : cs.name.toUpperCase();
-    drawMaskedText(nameText, lx - 40, ly - 5, 80, 5, '#0066cc', true);
+    doc.font('Helvetica-Bold').fontSize(6).fillColor('#0066cc');
+    doc.text(nameText, boxLeft + 2, boxTop + 4, { width: boxW - 4, align: 'center', lineBreak: false });
 
-    // Sign group — neatly below the label text, not on the road
+    // Sign diamond + code inside the box
     const isRoundabout = cs.geometry?.type === 'roundabout';
-    const signGroupY = ly + 8;
-
-    // W20-1 or W2-6 sign diamond
     const signCode = isRoundabout ? 'W2-6' : 'W20-1';
-    doc.save().translate(lx - 10, signGroupY + 4).rotate(45);
-    doc.rect(-3.5, -3.5, 7, 7).fillAndStroke('#FF8C00', 'black');
+    doc.save().translate(lx - (isRoundabout ? 15 : 0), boxTop + 18).rotate(45);
+    doc.rect(-5, -5, 10, 10).fillAndStroke('#FF8C00', 'black');
     doc.restore();
-    drawMaskedText(signCode, lx - 22, signGroupY + 10, 24, 3.5, '#333', false);
+    doc.font('Helvetica-Bold').fontSize(5).fillColor('black');
+    doc.text(signCode, boxLeft + 2, boxTop + 25, { width: boxW - 4, align: 'center', lineBreak: false });
 
     if (isRoundabout) {
-      // R1-2 YIELD triangle (next to sign diamond)
-      doc.save().translate(lx + 10, signGroupY + 4);
-      doc.moveTo(0, -4).lineTo(4, 3).lineTo(-4, 3).closePath().fillAndStroke('#ffffff', '#cc0000');
+      doc.save().translate(lx + 10, boxTop + 18);
+      doc.moveTo(0, -5).lineTo(5, 4).lineTo(-5, 4).closePath().fillAndStroke('#ffffff', '#cc0000');
       doc.restore();
-      drawMaskedText('R1-2', lx + 2, signGroupY + 10, 16, 3, '#cc0000', false);
-
-      // ROUNDABOUT type label
-      drawMaskedText('ROUNDABOUT', lx - 25, signGroupY + 17, 50, 3.5, '#666', false);
+      doc.fontSize(4).fillColor('#cc0000');
+      doc.text('R1-2', lx + 6, boxTop + 25, { width: 20, lineBreak: false });
     }
+    doc.font('Helvetica');
   }
 
   // Start/End pin markers — only on index sheet, or detail sheets at the actual start/end of the route
@@ -2525,35 +2530,35 @@ function drawSignScheduleSheet(doc: Doc, sheetNum: number, totalSheets: number, 
   // Draw table
   const tx = 50, ty = 60, colW = [60, 180, 80, 50, 550];
   const headers = ['CODE', 'DESCRIPTION', 'SIZE', 'QTY', 'LOCATION'];
-  const rowH = 20;
+  const rowH = 28;
 
   // Header row
   doc.lineWidth(1).strokeColor('black');
   let hx = tx;
   doc.rect(tx, ty, colW.reduce((a, b) => a + b, 0), rowH).fillAndStroke('#e0e0e0', 'black');
-  doc.fillColor('black').font('Helvetica-Bold').fontSize(8);
+  doc.fillColor('black').font('Helvetica-Bold').fontSize(9);
   headers.forEach((h, i) => {
-    doc.text(h, hx + 4, ty + 6, { width: colW[i]! - 8, lineBreak: false });
+    doc.text(h, hx + 4, ty + 9, { width: colW[i]! - 8, lineBreak: false });
     hx += colW[i]!;
   });
 
   // Data rows
-  doc.font('Helvetica').fontSize(7);
+  doc.font('Helvetica').fontSize(9);
   signList.forEach((sign, rowIdx) => {
     const ry = ty + rowH + rowIdx * rowH;
     let rx = tx;
-    const bgColor = rowIdx % 2 === 0 ? '#f9f9f9' : '#ffffff';
+    const bgColor = rowIdx % 2 === 0 ? '#e8e8e8' : '#ffffff';
     doc.rect(tx, ry, colW.reduce((a, b) => a + b, 0), rowH).fillAndStroke(bgColor, '#ccc');
     doc.fillColor('black');
     const vals = [sign.code, sign.description, sign.size, String(sign.qty), sign.location];
     vals.forEach((v, i) => {
-      doc.text(v, rx + 4, ry + 6, { width: colW[i]! - 8, lineBreak: false });
+      doc.text(v, rx + 4, ry + 10, { width: colW[i]! - 8, lineBreak: false });
       rx += colW[i]!;
     });
   });
 
   // Totals
-  const totalY = ty + rowH + signList.length * rowH + 20;
+  const totalY = ty + rowH + signList.length * rowH + 40;
   doc.font('Helvetica-Bold').fontSize(9).fillColor('black');
   // Channelizing device calculations — MUTCD 1V/2V formula
   const devSpacing = getDeviceSpacing(ctx.speedMph, ctx.taCode);
