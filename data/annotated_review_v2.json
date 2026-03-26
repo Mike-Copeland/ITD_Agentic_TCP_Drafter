@@ -1,0 +1,150 @@
+```json
+[
+  {
+    "page": 1,
+    "annotations": [
+      {
+        "location": "Project Information box (Cross-Streets line)",
+        "problem": "The cross-streets text is truncated/overlapping because the dynamic row height logic maxes out at two lines (`lh * 2`), which isn't enough for long lists.",
+        "affected_function": "drawCoverSheet",
+        "fix": "Change the row increment logic to dynamically calculate the required lines based on text length: `row += (label === 'Cross-Streets:') ? Math.max(1, Math.ceil(valStr.length / 55)) * lh : lh;`"
+      },
+      {
+        "location": "Bottom right (Legend box)",
+        "problem": "The legend items are spilling out of their bounding box and overlapping the title block text below it.",
+        "affected_function": "drawCoverSheet",
+        "fix": "Reduce `const legendStep = 35;` to `const legendStep = 28;` so all legend items fit within the dynamically constrained `notesBoxH` without overflowing."
+      }
+    ]
+  },
+  {
+    "page": 2,
+    "annotations": [
+      {
+        "location": "Right side (Opposing Approach Signs)",
+        "problem": "The W3-5 and W20-7a sign texts are horizontally overlapping because they are clustered tightly together and the vertical stagger isn't large enough to clear the text.",
+        "affected_function": "drawTASheet",
+        "fix": "Increase the vertical stagger for the opposing (and primary) signs. Change `const staggerY = i % 2 === 0 ? 0 : -40;` to `const staggerY = i % 2 === 0 ? 0 : -60;` (and `0 : 60` for primary) so the text blocks don't collide."
+      },
+      {
+        "location": "Bottom center (Dimension Lines)",
+        "problem": "The BUFFER dimension line overlaps entirely with the DN TAPER dimension line and the WORK AREA text.",
+        "affected_function": "drawTASheet",
+        "fix": "Stagger the dimension lines vertically. Draw the Taper, Work Area, and DN Taper at `dimY`, and shift the Buffer spaces down to `dimY + 15`."
+      }
+    ]
+  },
+  {
+    "page": 4,
+    "annotations": [
+      {
+        "location": "North/Top approach leg (Advance Warning Signs)",
+        "problem": "The full series of signs is required, but they are stacked too tightly (only 40px apart), causing the sign diamonds to completely overlap the text of the sign above them.",
+        "affected_function": "drawIntersectionSheet",
+        "fix": "Increase `const crossLen = 200;` to `250` to make room. Then space the signs further apart: change the Y-offsets from `+ 20`, `+ 60`, `+ 100` to `+ 20`, `+ 95`, `+ 170` (and use `- 20`, `- 95`, `- 170` for the South leg)."
+      }
+    ]
+  },
+  {
+    "page": 5,
+    "annotations": [
+      {
+        "location": "North/Top approach leg (Advance Warning Signs)",
+        "problem": "The sign diamonds and text blocks are overlapping and unreadable due to tight vertical spacing.",
+        "affected_function": "drawIntersectionSheet",
+        "fix": "Increase vertical sign spacing by changing the offsets to `+ 20`, `+ 95`, `+ 170` and increasing `crossLen` to 250."
+      }
+    ]
+  },
+  {
+    "page": 6,
+    "annotations": [
+      {
+        "location": "North/Top approach leg (Advance Warning Signs)",
+        "problem": "The sign diamonds and text blocks are overlapping and unreadable due to tight vertical spacing.",
+        "affected_function": "drawIntersectionSheet",
+        "fix": "Increase vertical sign spacing by changing the offsets to `+ 20`, `+ 95`, `+ 170` and increasing `crossLen` to 250."
+      }
+    ]
+  },
+  {
+    "page": 7,
+    "annotations": [
+      {
+        "location": "North/Top approach leg (Advance Warning Signs)",
+        "problem": "The sign diamonds and text blocks are overlapping and unreadable due to tight vertical spacing.",
+        "affected_function": "drawIntersectionSheet",
+        "fix": "Increase vertical sign spacing by changing the offsets to `+ 20`, `+ 95`, `+ 170` and increasing `crossLen` to 250."
+      }
+    ]
+  },
+  {
+    "page": 8,
+    "annotations": [
+      {
+        "location": "North/Top approach leg (Advance Warning Signs)",
+        "problem": "The sign diamonds and text blocks are overlapping and unreadable due to tight vertical spacing.",
+        "affected_function": "drawIntersectionSheet",
+        "fix": "Increase vertical sign spacing by changing the offsets to `+ 20`, `+ 95`, `+ 170` and increasing `crossLen` to 250."
+      }
+    ]
+  },
+  {
+    "page": 11,
+    "annotations": [
+      {
+        "location": "Center map (WORK AREA label)",
+        "problem": "The rotated WORK AREA label conflicts directly with the blue grid line boundaries, making it look broken and out of place on the index overview.",
+        "affected_function": "drawGeometryPlanSheet",
+        "fix": "Wrap the on-map 'WORK AREA' text drawing block in `if (!isIndexSheet) { ... }`. Add a small legend at the bottom left for the index sheet: `doc.rect(pageLeft + 10, pageBot - 20, 10, 10).fill('#FF6600'); doc.text('WORK AREA', ...);`."
+      },
+      {
+        "location": "Map grid tiles (PAGE 12/PAGE 13 labels)",
+        "problem": "The sheet number labels on the blue grid tiles are too tiny to read.",
+        "affected_function": "drawGeometryPlanSheet",
+        "fix": "Increase the box dimensions from `48x12` to `60x16` and increase the font size from `7` to `10` for the `PAGE ${vp.sheetNumber}` labels."
+      },
+      {
+        "location": "Route ends (START/END labels)",
+        "problem": "The START and END text labels are extremely tiny.",
+        "affected_function": "drawGeometryPlanSheet",
+        "fix": "In the `drawMaskedText` calls for 'START' and 'END', increase the font size from `4` to `7` and widen their bounding boxes."
+      },
+      {
+        "location": "Bottom center (Disclaimer)",
+        "problem": "The GRID TILES disclaimer is too small.",
+        "affected_function": "drawGeometryPlanSheet",
+        "fix": "Increase the font size of the disclaimer text from `5` to `8`."
+      }
+    ]
+  },
+  {
+    "page": 12,
+    "annotations": [
+      {
+        "location": "Cross-street callout boxes",
+        "problem": "The cross-street callout boxes, text, and sign graphics are all tiny and unreadable.",
+        "affected_function": "drawGeometryPlanSheet",
+        "fix": "Increase `boxW` to 100 and `boxH` to 46. Increase the font size of the street name from 6 to 8, the sign code text from 5 to 7, and enlarge the inner sign diamond from `10x10` to `14x14`."
+      },
+      {
+        "location": "Route line (Sign labels and START label)",
+        "problem": "The AT-SCALE sign labels and the START label are tiny.",
+        "affected_function": "drawGeometryPlanSheet",
+        "fix": "Increase the baseline `signSizePx` calculation from `Math.max(6, 12 / scaleFtPerPt)` to `Math.max(10, 18 / scaleFtPerPt)`. Increase the sign text font size to 6. (START label is fixed by the Page 11 fix)."
+      }
+    ]
+  },
+  {
+    "page": 13,
+    "annotations": [
+      {
+        "location": "Route line (FLAGGER and END labels)",
+        "problem": "The FLAGGER and END labels are too small to read.",
+        "affected_function": "drawGeometryPlanSheet",
+        "fix": "Increase the FLAGGER text font size from `4` to `7`. (The END label size is already addressed by the global START/END text fix)."
+      }
+    ]
+  }
+]
+```

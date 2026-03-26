@@ -1,0 +1,192 @@
+```json
+[
+  {
+    "page": 1,
+    "annotations": [
+      {
+        "location": "Middle-left, under 'PROJECT INFORMATION' table, 'Cross-Streets' row",
+        "markup_type": "circle",
+        "content": "",
+        "issue": "The text 'W R... (5 total)' is truncated and needs to be fully displayed so all cross-street names are visible."
+      },
+      {
+        "location": "Bottom-right, inside the 'LEGEND' box",
+        "markup_type": "strikethrough and circle",
+        "content": "",
+        "issue": "The 'ARROW BOARD (Type A)' entry is crossed out and circled. The engineer wants this removed from the legend, as an arrow board is not required for a single lane closure on a two-lane road."
+      }
+    ]
+  },
+  {
+    "page": 2,
+    "annotations": [
+      {
+        "location": "Top right, under 'ADVANCE WARNING AREA' (opposing approach)",
+        "markup_type": "strikethrough and circle",
+        "content": "",
+        "issue": "The W3-5 'REDUCED SPEED 40 MPH AHEAD' sign is crossed out and circled. It should be removed from the opposing approach."
+      },
+      {
+        "location": "Top center, on the opposing approach lane",
+        "markup_type": "circle and line",
+        "content": "",
+        "issue": "The flagger symbol on the opposing lane is circled with a red line drawn downward. This indicates the flagger placement, orientation, or presence needs to be corrected."
+      },
+      {
+        "location": "Bottom right, downstream of the 'WORK AREA'",
+        "markup_type": "circle",
+        "content": "",
+        "issue": "A large red circle surrounds the downstream buffer ('BUFFER: 360 FT') and downstream taper ('DN TAPER: 50 FT'). The engineer wants these elements removed, as they are typically not used in this flagger operation setup."
+      }
+    ]
+  },
+  {
+    "page": 4,
+    "annotations": [
+      {
+        "location": "Top, on the W Meadowdale Dr approach",
+        "markup_type": "circle",
+        "content": "",
+        "issue": "A large red circle surrounds the cluster of three signs (W20-1, W20-4, W20-7a). Based on the notes, only the W20-1 sign is required here; the extra signs should be removed."
+      },
+      {
+        "location": "Bottom right, on the W Meadowdale Dr approach",
+        "markup_type": "circle",
+        "content": "",
+        "issue": "A large red circle surrounds the cluster of three signs (W20-1, W20-4, W20-7a). The extra signs should be removed to leave only the required W20-1 sign."
+      }
+    ]
+  },
+  {
+    "page": 5,
+    "annotations": [
+      {
+        "location": "Top, on the W Meadowdale St approach",
+        "markup_type": "circle",
+        "content": "",
+        "issue": "A red circle surrounds the cluster of three signs. The extra signs (W20-4, W20-7a) should be removed, leaving only the required W20-1 sign."
+      },
+      {
+        "location": "Bottom right, on the W Meadowdale St approach",
+        "markup_type": "circle",
+        "content": "",
+        "issue": "A red circle surrounds the cluster of three signs. The extra signs (W20-4, W20-7a) should be removed."
+      }
+    ]
+  },
+  {
+    "page": 6,
+    "annotations": [
+      {
+        "location": "Top, on the N Newburgh Dr approach",
+        "markup_type": "circle",
+        "content": "",
+        "issue": "A red circle surrounds the cluster of three signs. The extra signs (W20-4, W20-7a) should be removed, leaving only the required W20-1 sign."
+      },
+      {
+        "location": "Bottom right, on the N Newburgh Dr approach",
+        "markup_type": "circle",
+        "content": "",
+        "issue": "A red circle surrounds the cluster of three signs. The extra signs (W20-4, W20-7a) should be removed."
+      }
+    ]
+  },
+  {
+    "page": 7,
+    "annotations": [
+      {
+        "location": "Top, on the W Rochester St approach",
+        "markup_type": "circle",
+        "content": "",
+        "issue": "A red circle surrounds the cluster of three signs. The extra signs (W20-4, W20-7a) should be removed, leaving only the required W20-1 sign."
+      },
+      {
+        "location": "Bottom right, on the W Rochester St approach",
+        "markup_type": "circle",
+        "content": "",
+        "issue": "A red circle surrounds the cluster of three signs. The extra signs (W20-4, W20-7a) should be removed."
+      }
+    ]
+  },
+  {
+    "page": 8,
+    "annotations": [
+      {
+        "location": "Top, on the TransAmerica Trl approach",
+        "markup_type": "circle",
+        "content": "",
+        "issue": "A red circle surrounds the cluster of three signs. The extra signs (W20-4, W20-7a) should be removed, leaving only the required W20-1 sign."
+      },
+      {
+        "location": "Bottom right, on the TransAmerica Trl approach",
+        "markup_type": "circle",
+        "content": "",
+        "issue": "A red circle surrounds the cluster of three signs. The extra signs (W20-4, W20-7a) should be removed."
+      }
+    ]
+  },
+  {
+    "page": 11,
+    "annotations": [
+      {
+        "location": "Left side of the map, near the 'END' marker",
+        "markup_type": "text and circle",
+        "content": "really tiny text",
+        "issue": "The 'END' label text is too small and needs to be enlarged for legibility."
+      },
+      {
+        "location": "Center of the map, near the 'WORK AREA' label",
+        "markup_type": "text and circle",
+        "content": "work area makes it look like its calling out the blue. rotate it or put it into a legand.",
+        "issue": "The 'WORK AREA' label orientation/placement is confusing and visually points to the blue bounding box instead of the road. It should be rotated or moved to a legend."
+      },
+      {
+        "location": "Right side of the map, near the 'START' marker",
+        "markup_type": "text and circle",
+        "content": "really tiny text",
+        "issue": "The 'START' label text is too small and needs to be enlarged."
+      },
+      {
+        "location": "Bottom center, near the grid tiles note",
+        "markup_type": "text and circle",
+        "content": "really tiny text",
+        "issue": "The text 'GRID TILES - SEE NUMBERED SHEETS FOR DETAIL' is too small and needs to be enlarged."
+      },
+      {
+        "location": "Center-right, pointing to the transverse intersection markers on the red road line",
+        "markup_type": "text and lines",
+        "content": "those are still drawn out and dont match with the road locations",
+        "issue": "The schematic markings (transverse gray bars representing intersections/nodes) drawn over the red road line do not visually align with the actual side streets on the base map. They need to be aligned correctly."
+      }
+    ]
+  },
+  {
+    "page": 12,
+    "annotations": [
+      {
+        "location": "Center of the page, along the main route",
+        "markup_type": "circles and squiggly line",
+        "content": "",
+        "issue": "Three large red circles highlight the intersection marker lines and sign icons along the main route. The engineer is pointing out that these schematic markers are misaligned with the actual cross-streets shown on the map underneath (carrying over the issue stated on page 11)."
+      }
+    ]
+  },
+  {
+    "page": 13,
+    "annotations": [
+      {
+        "location": "Left side of the page, along the main route",
+        "markup_type": "circle",
+        "content": "",
+        "issue": "A red circle highlights the transverse marker/flagger start point, indicating it is misaligned with the map geometry."
+      },
+      {
+        "location": "Right side of the page, along the main route",
+        "markup_type": "circle",
+        "content": "",
+        "issue": "A red circle highlights the transverse marker near the 'SH-55' label, indicating it is misaligned with the map geometry."
+      }
+    ]
+  }
+]
+```

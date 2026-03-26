@@ -1,0 +1,66 @@
+```json
+{
+  "signs": [
+    {
+      "code": "W20-1",
+      "face_text": [
+        "ROAD",
+        "WORK",
+        "AHEAD"
+      ],
+      "shape": "diamond",
+      "background": "orange",
+      "text_color": "black",
+      "border": "black"
+    },
+    {
+      "code": "W20-4",
+      "face_text": [
+        "ONE LANE",
+        "ROAD",
+        "AHEAD"
+      ],
+      "shape": "diamond",
+      "background": "orange",
+      "text_color": "black",
+      "border": "black"
+    },
+    {
+      "code": "W20-7a",
+      "face_text": [
+        "[Flagger Symbol Graphic]"
+      ],
+      "shape": "diamond",
+      "background": "orange",
+      "text_color": "black",
+      "border": "black"
+    },
+    {
+      "code": "W3-5",
+      "face_text": [
+        "[Up Arrow Symbol]",
+        "SPEED",
+        "LIMIT",
+        "45"
+      ],
+      "shape": "diamond",
+      "background": "orange (with a white rectangle insert for the speed limit)",
+      "text_color": "black",
+      "border": "black"
+    },
+    {
+      "code": "G20-2",
+      "face_text": [
+        "END",
+        "ROAD WORK"
+      ],
+      "shape": "rectangle",
+      "background": "orange",
+      "text_color": "black",
+      "border": "black"
+    }
+  ]
+}
+```
+
+*(Note: In the provided Part 6 PDF, the W20-7a word sign is noted as being located in the separate "Standard Highway Signs" publication, so the visual figure illustrated in the document [W20-7] utilizes the Flagger Symbol. Additionally, the W3-5 sign illustrates the "Speed Limit Ahead" symbol [an up arrow above a white speed limit sign] rather than the older "REDUCED SPEED AHEAD" text.)*

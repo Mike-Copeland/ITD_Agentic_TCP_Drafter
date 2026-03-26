@@ -1,0 +1,148 @@
+{
+  "pages": [
+    {
+      "page_number": 1,
+      "page_type": "Cover Sheet & General Notes",
+      "visual_description": "Clean, structured page containing Project Information, Sheet Index, General Notes, and a Legend. Title block at the bottom with a watermark.",
+      "issues": [
+        {
+          "element": "Project Information Box - Cross-Streets Row",
+          "severity": "minor",
+          "function": "drawCoverSheet",
+          "line_range": "532-534",
+          "current_behavior": "The cross-streets list is aggressively truncated to 52 characters (e.g., 'W Chinden Blvd, US-26, POW-MIA Mem Hwy, Star Rd, W I...'), leaving a large amount of empty white space in the column.",
+          "proposed_fix": "Change the substring truncation limit from `52` to `85` and the length check from `55` to `88`. Example: `c => c.name).join(', ').length > 88 ? ctx.crossStreets.map(c => c.name).join(', ').substring(0, 85) + ...`",
+          "why": "The box is wide enough (360 points) to accommodate significantly more text, improving project clarity without risking layout overflow."
+        }
+      ],
+      "looks_good": [
+        "Legend elements are perfectly aligned and distinct.",
+        "General Notes text wrapping respects the boundaries perfectly.",
+        "Title block layout is clean and professional."
+      ]
+    },
+    {
+      "page_number": 2,
+      "page_type": "Typical Application (TA-10)",
+      "visual_description": "Schematic of a single lane closure with flaggers. Displays warning areas, buffers, work zone, channelizing devices, and sign placements along the route.",
+      "issues": [
+        {
+          "element": "Sign Diamond Text Overflow",
+          "severity": "critical",
+          "function": "drawSignDiamond",
+          "line_range": "224-229",
+          "current_behavior": "The text for long signs (like 'REDUCED SPEED 45 MPH AHEAD') is drawn physically inside the 16x16 warning diamond, causing it to spill out completely over the borders and become unreadable.",
+          "proposed_fix": "Remove the multiline description text from the sign face. Instead, draw just the `code` inside the diamond. \nReplace L224-229 with:\n`doc.fontSize(6).fillColor('black');`\n`doc.text(code, x - 14, y - 3, { width: 28, align: 'center', lineBreak: false });`\n(Keep the code/label text that prints *below* the sign at L237).",
+          "why": "This matches standard CAD traffic control conventions (code inside symbol, description below) and instantly fixes all text overflow issues inside diamonds across all schematic sheets."
+        },
+        {
+          "element": "Dimension Lines Overlapping Arrows",
+          "severity": "major",
+          "function": "drawDimLine",
+          "line_range": "189-192",
+          "current_behavior": "When a zone is short (e.g., a 100 FT taper), `mid - gap` evaluates to a negative relative position, causing the dimension lines to be drawn backwards over the arrowheads, creating an ink blob.",
+          "proposed_fix": "Add a spatial check. Replace L189-190 with:\n`if (x2 - x1 > gap * 2) {`\n`  doc.moveTo(x1, y).lineTo(mid - gap, y).stroke();`\n`  doc.moveTo(mid + gap, y).lineTo(x2, y).stroke();`\n`} else {`\n`  doc.moveTo(x1, y).lineTo(x2, y).stroke();`\n`  doc.save().rect(mid - gap + 2, y - 5, (gap - 2) * 2, 10).fill('white').restore();`\n`}`",
+          "why": "Ensures the dimension line correctly handles short segments by drawing a continuous line and applying a white mask for the text, avoiding reversed lines."
+        }
+      ],
+      "looks_good": [
+        "Device spacing along the tapers and work area is visually even.",
+        "Zone labeling ('ADVANCE WARNING AREA', 'BUFFER', etc.) stays clear of the primary schematic."
+      ]
+    },
+    {
+      "page_number": 3,
+      "page_type": "Site-Specific Work Zone Layout",
+      "visual_description": "Satellite basemap overlay with START/END pins, a scale bar, a north arrow, and site info boxes.",
+      "issues": [],
+      "looks_good": [
+        "The white masks behind the scale bar and north arrow ensure they remain readable against dark satellite imagery.",
+        "The dynamic bounding box for the cross-streets list accurately captures the array size."
+      ]
+    },
+    {
+      "page_number": 4,
+      "page_type": "Intersection Details (Pages 4-8)",
+      "visual_description": "Close-up CAD diagrams of intersections showing lane lines, turn lanes, crosswalks, sign placement, and traffic control notes.",
+      "issues": [
+        {
+          "element": "Traffic Control Notes Box Overflow",
+          "severity": "major",
+          "function": "drawIntersectionSheet",
+          "line_range": "1442 & 1458",
+          "current_behavior": "On state/US highway intersections (which require 7 lines of notes), the text reaches the bottom edge of the box and overflows. Box height is hardcoded to 120.",
+          "proposed_fix": "Increase the box heights. At L1442: `doc.lineWidth(0.5).rect(noteX, noteY, 530, 145).stroke();`\nAt L1458: `doc.lineWidth(0.5).rect(600, noteY, 400, 145).stroke();`",
+          "why": "Provides enough padding for the enhanced 7-point highway note list so text doesn't touch the bottom border."
+        },
+        {
+          "element": "Enhanced Sign Warning Text Overlap",
+          "severity": "minor",
+          "function": "drawIntersectionSheet",
+          "line_range": "1466-1467",
+          "current_behavior": "The red 'ENHANCED' text in the right box is hardcoded at `noteY + 80` and `noteY + 96`. If the road name is long, the first line wraps and collides with the second line.",
+          "proposed_fix": "Increase the vertical spacing to account for potential wrapping. Change `noteY + 80` to `noteY + 85` and `noteY + 96` to `noteY + 110`.",
+          "why": "Prevents critical MUTCD warning text from overlapping itself when cross-street names are lengthy."
+        }
+      ],
+      "looks_good": [
+        "The masking logic that hides the mainline edge lines and centerlines inside the intersection box creates a very authentic, clean CAD look."
+      ]
+    },
+    {
+      "page_number": 9,
+      "page_type": "Traffic Data & Queue Analysis",
+      "visual_description": "Four analytical data boxes (Traffic Data, Queue Length, Crash History, Bridge Data) and a recommended work windows box at the bottom.",
+      "issues": [],
+      "looks_good": [
+        "The two-column layout is perfectly balanced.",
+        "Color-coding (Green for Adequate, Red for Warning) instantly communicates queue capacity issues clearly."
+      ]
+    },
+    {
+      "page_number": 12,
+      "page_type": "Geometry Plan Sheets (Pages 12-14)",
+      "visual_description": "Accurate 2D map tracing the GPS polyline. Shows road edges, centerlines, cross-street stubs, and sign placements with leaders.",
+      "issues": [
+        {
+          "element": "Cross-Street Callout Box Text Overlap",
+          "severity": "major",
+          "function": "drawGeometryPlanSheet",
+          "line_range": "1875-1886",
+          "current_behavior": "Inside the white callout boxes for intersecting roads, the road name text overlaps with the top point of the orange warning diamond.",
+          "proposed_fix": "Increase box height and adjust vertical offsets. L1875: `const boxH = 40;`\nL1882: `doc.save().translate(lx - (isRoundabout ? 15 : 0), boxTop + 22).rotate(45);`\nL1886: `doc.text(signCode, boxLeft + 2, boxTop + 30, ...)`",
+          "why": "Gives the text and the diamond room to breathe, completely eliminating the vertical collision."
+        },
+        {
+          "element": "Sign Leader Label Overlap",
+          "severity": "minor",
+          "function": "drawSignWithLeader",
+          "line_range": "110-113",
+          "current_behavior": "The text label below the sign on geometry plan sheets (e.g., 'ROAD WORK AHEAD') sits at `endY + 11`, which overlaps the bottom tip of the 18x18 rotated sign diamond.",
+          "proposed_fix": "Push the text mask and text down by 2 points.\nL110: `doc.rect(endX - labelW / 2, endY + 13, labelW, 8).fill('white');`\nL112: `doc.text(shortLabel, endX - labelW / 2, endY + 14, ...)`",
+          "why": "Ensures the descriptive text sits fully beneath the diamond geometry."
+        }
+      ],
+      "looks_good": [
+        "The 2D collision avoidance logic for the cross-street labels works brilliantly—none of the callout boxes overlap each other.",
+        "The 'WORK AREA' red shading accurately conforms to the curved road geometry with a clean boundary."
+      ]
+    },
+    {
+      "page_number": 15,
+      "page_type": "Sign Schedule & Quantities",
+      "visual_description": "Data table listing all signs, sizes, quantities, and locations. Footer contains channelizing device counts.",
+      "issues": [],
+      "looks_good": [
+        "Zebra-striping on the table rows makes it highly readable.",
+        "Column widths are well-proportioned to the content."
+      ]
+    }
+  ],
+  "overall_visual_grade": "B",
+  "top_3_priorities": [
+    "Remove multi-line description text from the face of sign diamonds (drawSignDiamond) to fix severe text overflow.",
+    "Fix dimension line gap calculations (drawDimLine) so short taper lengths don't draw overlapping backwards arrows.",
+    "Increase the height of intersection detail note boxes (drawIntersectionSheet) so 7-line highway notes don't overflow the bottom border."
+  ],
+  "stamp_ready_visually": false
+}
