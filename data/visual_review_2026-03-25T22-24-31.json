@@ -1,0 +1,137 @@
+{
+  "pages": [
+    {
+      "page_number": 1,
+      "page_type": "Cover Sheet",
+      "visual_description": "Contains the title block, project information box, sheet index, and a symbology legend with clear MUTCD icons.",
+      "issues": [
+        {
+          "element": "Project Information Box - Cross-Streets",
+          "severity": "minor",
+          "function": "drawCoverSheet",
+          "line_range": "458-459",
+          "current_behavior": "A very long list of cross-streets bleeds past the right border of the Project Information box and overlaps with the Sheet Index due to the `lineBreak: false` property on the rendering loop.",
+          "proposed_fix": "    ['Cross-Streets:', ctx.crossStreets.length > 0 ? (ctx.crossStreets.map(c => c.name).join(', ').length > 60 ? ctx.crossStreets.map(c => c.name).join(', ').substring(0, 57) + '...' : ctx.crossStreets.map(c => c.name).join(', ')) : 'None detected'],",
+          "why": "Truncates excessively long cross-street string arrays so they fit neatly inside the fixed-width data bounds of the Project Information box."
+        }
+      ],
+      "looks_good": [
+        "Legend block is exceptionally well-formatted with highly recognizable CAD symbology",
+        "General Notes text wrapping looks highly professional and structured"
+      ]
+    },
+    {
+      "page_number": 2,
+      "page_type": "Typical Application (TA-10)",
+      "visual_description": "A schematic of a single-lane closure showing flagger symbols, dimension lines, and an array of warning signs placed in a linear progression.",
+      "issues": [
+        {
+          "element": "W3-5 Sign Graphic",
+          "severity": "major",
+          "function": "drawTASheet",
+          "line_range": "766-777",
+          "current_behavior": "The W3-5 sign is explicitly drawn at a fixed coordinate even though it was already injected into the `primary_approach` array by the generator, causing a double-draw overlapping artifact on the last sign.",
+          "proposed_fix": "  if (ctx.speedMph !== ctx.wzSpeedMph) {\n    doc.lineWidth(1).strokeColor('black');\n    // R2-1 SPEED LIMIT (white regulatory rectangle)\n    const slX = zones.bufferStart;\n    doc.rect(slX - 8, roadY2 + 60, 16, 24).fillAndStroke('#ffffff', 'black');\n    doc.fontSize(3.5).fillColor('black').text('R2-1', slX - 6, roadY2 + 62, { lineBreak: false });\n    doc.fontSize(3).text('SPEED', slX - 6, roadY2 + 68, { lineBreak: false });\n    doc.text('LIMIT', slX - 6, roadY2 + 72, { lineBreak: false });\n    doc.fontSize(7).font('Helvetica-Bold').text(`${ctx.wzSpeedMph}`, slX - 6, roadY2 + 76, { lineBreak: false });\n    doc.font('Helvetica');\n  }",
+          "why": "Removes the hardcoded W3-5 graphic to prevent it from rendering directly on top of the dynamically placed W3-5 from the approach array."
+        },
+        {
+          "element": "Primary Approach Signs",
+          "severity": "critical",
+          "function": "drawTASheet",
+          "line_range": "736-744",
+          "current_behavior": "Sign labels overlap horizontally into an unreadable black blob because they are drawn at the same Y elevation in close horizontal proximity.",
+          "proposed_fix": "  priSigns.forEach((sign, i) => {\n    const x = zones.priWarningStart + 20 + i * priStep;\n    const staggerY = i % 2 === 0 ? 0 : 40;\n    drawSignDiamond(doc, x, roadY2 + 70 + staggerY, sign.sign_code, sign.label);\n    if (i < priCount - 1) {\n      const interDist = sign.distance_ft - priSigns[i + 1]!.distance_ft;\n      drawDimLine(doc, x, zones.priWarningStart + 20 + (i + 1) * priStep, roadY2 + 52, `${Math.abs(interDist)} FT`);\n    }\n  });",
+          "why": "Staggers the vertical placement of advance warning signs to prevent their multi-line text labels from overlapping with neighboring labels."
+        },
+        {
+          "element": "Opposing Approach Signs",
+          "severity": "critical",
+          "function": "drawTASheet",
+          "line_range": "755-763",
+          "current_behavior": "Sign labels overlap horizontally into an unreadable blob on the opposing side of the schematic.",
+          "proposed_fix": "    const oppStep = oppCount > 1 ? (zones.oppWarningEnd - zones.oppWarningStart - 40) / (oppCount - 1) : 0;\n    oppSigns.forEach((sign, i) => {\n      const x = zones.oppWarningStart + 20 + i * oppStep;\n      const staggerY = i % 2 === 0 ? 0 : -40;\n      drawSignDiamond(doc, x, roadY1 - 145 + staggerY, sign.sign_code, sign.label);\n      if (i < oppCount - 1) {\n        const interDist = sign.distance_ft - oppSigns[i + 1]!.distance_ft;\n        drawDimLine(doc, x, zones.oppWarningStart + 20 + (i + 1) * oppStep, roadY1 - 115, `${Math.abs(interDist)} FT`);\n      }\n    });",
+          "why": "Staggers the vertical placement of opposing advance warning signs to prevent text overlap."
+        },
+        {
+          "element": "Dimension Lines",
+          "severity": "minor",
+          "function": "drawTASheet",
+          "line_range": "784-789",
+          "current_behavior": "Adjacent dimension lines (Taper, Buffer, Work Area) share the same Y axis, causing their text labels to nearly collide.",
+          "proposed_fix": "  drawDimLine(doc, zones.transitionStart, zones.transitionEnd, dimY, taperLabel);\n  drawDimLine(doc, zones.bufferStart, zones.bufferEnd, dimY + 12, `BUFFER: ${bufferFt} FT`);\n  drawDimLine(doc, zones.activityStart, zones.activityEnd, dimY, 'WORK AREA');\n  if (isTwoWayFlagger) {\n    drawDimLine(doc, zones.dnBufferStart, zones.dnBufferEnd, dimY + 12, `BUFFER: ${bufferFt} FT`);\n  }\n  drawDimLine(doc, zones.dnTransitionStart, zones.dnTransitionEnd, dimY, `DN TAPER: ${ctx.blueprint.downstream_taper.length_ft} FT`);",
+          "why": "Alternates the vertical position of adjacent dimension lines to ensure adequate white space around the text labels."
+        }
+      ],
+      "looks_good": [
+        "Lane lines and flagger symbols look impeccably clean",
+        "Color contrast of channelizing devices vs road is excellent"
+      ]
+    },
+    {
+      "page_number": 5,
+      "page_type": "Intersection Detail",
+      "visual_description": "Displays the main horizontal road, but the cross street is completely missing. Only notes and the mainline edge/centerlines are shown.",
+      "issues": [
+        {
+          "element": "Cross-Street Geometry Rendering",
+          "severity": "critical",
+          "function": "drawIntersectionSheet",
+          "line_range": "972-973",
+          "current_behavior": "T-west and T-east intersections evaluate to false for both `hasNorth` and `hasSouth`, resulting in the cross-street not being drawn at all.",
+          "proposed_fix": "  const hasNorth = geo.type === 'T-north' || geo.type === 'T-west' || geo.type === '4-way' || geo.type === 'Y' || !geo.type.startsWith('T-');\n  const hasSouth = geo.type === 'T-south' || geo.type === 'T-east' || geo.type === '4-way' || geo.type === 'Y' || !geo.type.startsWith('T-');",
+          "why": "Ensures that all T-intersections securely map to a visible leg on the horizontal mainline, fixing the bug where the road was completely omitted on pages 5, 6, 7, and 8."
+        }
+      ],
+      "looks_good": [
+        "Notes boxes layout is very structured",
+        "Intersection Title/Subtitle hierarchy is clear"
+      ]
+    },
+    {
+      "page_number": 12,
+      "page_type": "Geometry Plan (Index)",
+      "visual_description": "A zoomed-out overview of the real-world road shape with intersecting callouts, gridded tiles, and highly clustered sign icons.",
+      "issues": [
+        {
+          "element": "Sign Leader Line Staggering Logic",
+          "severity": "critical",
+          "function": "drawSignWithLeader",
+          "line_range": "78-90",
+          "current_behavior": "Signs are stacked horizontally when clustered, causing their leader lines and multi-line text labels to overlap into a dense, solid block of black text.",
+          "proposed_fix": "function drawSignWithLeader(\n  doc: Doc, x: number, y: number, signCode: string, label: string,\n  side: 'left' | 'right', leaderLen = 40, staggerY = 0\n) {\n  const dir = side === 'right' ? 1 : -1;\n  const endX = x + dir * leaderLen;\n  const endY = y - 20 - staggerY;\n\n  doc.lineWidth(0.6).strokeColor('#333');\n  doc.moveTo(x, y).lineTo(endX, endY).stroke();\n\n  const arrowLen = 5;\n  const arrowAngle = Math.atan2(endY - y, endX - x);\n  doc.moveTo(x, y)",
+          "why": "Introduces a vertical offset (`staggerY`) to the leader line's destination coordinate, allowing clustered signs to cleanly fan out vertically into the white space margin."
+        },
+        {
+          "element": "Primary Approach Sign Callers",
+          "severity": "critical",
+          "function": "drawGeometryPlanSheet",
+          "line_range": "1445-1446",
+          "current_behavior": "Passes the stagger value into the `leaderLen` parameter instead of utilizing a vertical offset, causing the severe horizontal overlap seen on the left side of the index sheet.",
+          "proposed_fix": "    const stagger = si * 35;\n    drawSignWithLeader(doc, edgePg.px, edgePg.py, sign.sign_code, sign.label, 'right', leaderLenPx, stagger);",
+          "why": "Applies the vertical stagger properly to separate the clustered warning signs on the right shoulder."
+        },
+        {
+          "element": "Opposing Approach Sign Callers",
+          "severity": "critical",
+          "function": "drawGeometryPlanSheet",
+          "line_range": "1459-1460",
+          "current_behavior": "Passes the stagger value into the `leaderLen` parameter instead of utilizing a vertical offset.",
+          "proposed_fix": "    const stagger = si * 35;\n    drawSignWithLeader(doc, edgePg.px, edgePg.py, sign.sign_code, sign.label, 'left', leaderLenPx, stagger);",
+          "why": "Applies the vertical stagger properly to separate the clustered warning signs on the left shoulder."
+        }
+      ],
+      "looks_good": [
+        "Accurate rendering of real-world road curves using the GPS alignment geometry",
+        "Cross-street callout boxes and their collision avoidance logic function flawlessly",
+        "Work Area contrasting shading layer with precise boundaries"
+      ]
+    }
+  ],
+  "overall_visual_grade": "B",
+  "top_3_priorities": [
+    "Fix horizontal overlapping of sign labels on the Geometry Plan by implementing vertical `staggerY` in `drawSignWithLeader`.",
+    "Fix T-west/T-east intersection sheets rendering blank by correcting the boolean visibility checks in `drawIntersectionSheet`.",
+    "Fix sign label overlap on the TA-10 Sheet by dynamically staggering the Y coordinates for adjacent Warning Signs in the iteration loops."
+  ],
+  "stamp_ready_visually": false
+}

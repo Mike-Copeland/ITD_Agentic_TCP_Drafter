@@ -98,12 +98,12 @@ const PLOT = {
  */
 function drawSignWithLeader(
   doc: Doc, x: number, y: number, signCode: string, label: string,
-  side: 'left' | 'right', leaderLen = 40,
+  side: 'left' | 'right', leaderLen = 40, staggerY = 0,
 ) {
-  // Leader line direction
+  // Leader line direction with vertical stagger
   const dir = side === 'right' ? 1 : -1;
   const endX = x + dir * leaderLen;
-  const endY = y - 20; // Angle upward
+  const endY = y - 20 - staggerY; // Angle upward + stagger
 
   // Leader line (from road edge to sign graphic)
   doc.lineWidth(0.6).strokeColor('#333');
@@ -181,7 +181,9 @@ function getSignSize(speedMph: number, roadName: string, funcClassCode = 99, aad
 
 // Determine if a cross-street is a state/US highway (needs enhanced treatment)
 function isHighway(name: string): boolean {
-  return /\b(ID|SH|US|I|SR|State Hwy|Highway|Hwy|Interstate)[\s-]*\d+/i.test(name);
+  // Match numbered routes (SH-44, US-20, I-84) AND unnumbered highways (Emmett Hwy)
+  return /\b(ID|SH|US|I|SR|State Hwy|Highway|Hwy|Interstate)[\s-]*\d+/i.test(name)
+    || /\b(Highway|Hwy)\b/i.test(name);
 }
 
 // Extract the numeric road identifier for deduplication
@@ -533,11 +535,14 @@ function drawCoverSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: Dr
   doc.text(ntsText, 1164 - doc.widthOfString(ntsText) - 30, 40, { lineBreak: false });
   doc.fillColor('black');
 
-  // Project Info Box
+  // Project Info Box — dynamic height to prevent overflow
   const bx = 50, by = 130, bw = 500, lh = 20;
-  doc.lineWidth(1).strokeColor('black').rect(bx, by, bw, 240).stroke();
-  doc.fontSize(12).text("PROJECT INFORMATION", bx + 10, by + 8, { underline: true });
-  let row = by + 30;
+  // Truncate cross-street names to prevent overflow
+  const csStr = ctx.crossStreets.length > 0
+    ? (ctx.crossStreets.map(c => c.name).join(', ').length > 55
+      ? ctx.crossStreets.map(c => c.name).join(', ').substring(0, 52) + `... (${ctx.crossStreets.length} total)`
+      : ctx.crossStreets.map(c => c.name).join(', '))
+    : 'None detected';
   const info = [
     ['Road:', ctx.roadName || 'Not identified'],
     ['Operation:', ctx.operationType],
@@ -548,24 +553,13 @@ function drawCoverSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: Dr
     ['End:', ctx.endCoords ? `${ctx.endCoords.lat.toFixed(5)}, ${ctx.endCoords.lng.toFixed(5)}` : 'N/A'],
     ['Channelizing:', ctx.blueprint.taper.device_type],
     ['Project Duration:', ctx.duration],
-    ['Lane Configuration:', ctx.totalLanes > 0 ? `${ctx.totalLanes} lanes${ctx.hasTWLTL ? ' (with center turn lane)' : ''}${ctx.isDivided ? ' (divided)' : ''}` : 'Unknown — verify on-site'],
-    ['Typical Application:', `${ctx.taCode} — ${ctx.taDescription}`],
-    ['AADT:', ctx.aadt > 0 ? `${ctx.aadt.toLocaleString()} vpd${ctx.truckPct > 0 ? ` (${ctx.truckPct.toFixed(1)}% trucks)` : ''}` : 'Not available'],
-    ['Cross-Streets:', ctx.crossStreets.length > 0 ? ctx.crossStreets.map(c => c.name).join(', ') : 'None detected'],
+    ['Lane Config:', ctx.totalLanes > 0 ? `${ctx.totalLanes} lanes${ctx.hasTWLTL ? ' (TWLTL)' : ''}${ctx.isDivided ? ' (divided)' : ''}` : 'Unknown'],
+    ['Typical App:', `${ctx.taCode} — ${ctx.taDescription}`],
+    ['AADT:', ctx.aadt > 0 ? `${ctx.aadt.toLocaleString()} vpd${ctx.truckPct > 0 ? ` (${ctx.truckPct.toFixed(1)}% trucks)` : ''}` : 'N/A'],
+    ['Cross-Streets:', csStr],
   ];
-  doc.fontSize(9);
-  for (const [label, value] of info) {
-    doc.font('Helvetica-Bold').text(label!, bx + 10, row, { lineBreak: false });
-    doc.font('Helvetica').text(String(value), bx + 130, row, { width: bw - 140, lineBreak: false });
-    row += lh;
-  }
 
-  // Sheet Index
-  const ix = 600, iy = 130;
-  doc.lineWidth(1).rect(ix, iy, 400, 240).stroke();
-  doc.font('Helvetica-Bold').fontSize(12).text("SHEET INDEX", ix + 10, iy + 8, { underline: true });
-  doc.font('Helvetica').fontSize(9);
-  // Filter operations compatible with road geometry (same logic as sheet generation)
+  // Build sheet names first so we can size boxes to fit both
   const compatOps = ctx.operationTypes.filter((op: string) => {
     if (op === 'Median Crossover' && ctx.hasTWLTL) return false;
     if (op === 'Median Crossover' && !ctx.isDivided && ctx.totalLanes < 4) return false;
@@ -585,13 +579,32 @@ function drawCoverSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: Dr
     ...(ctx.geoPlanSheets > 0 ? (ctx.geoPlanSheets === 1 ? ['Geometry Plan'] : Array.from({ length: ctx.geoPlanSheets }, (_, i) => `Geometry Plan (${i + 1}/${ctx.geoPlanSheets})`)) : []),
     'Sign Schedule & Quantities',
   ];
+
+  // Dynamic box height — fits both info rows AND sheet index rows
+  const topBoxH = Math.max(240, info.length * lh + 35, sheetNames.length * 16 + 45);
+  doc.lineWidth(1).strokeColor('black').rect(bx, by, bw, topBoxH).stroke();
+  doc.fontSize(12).text("PROJECT INFORMATION", bx + 10, by + 8, { underline: true });
+  let row = by + 30;
+  doc.fontSize(9);
+  for (const [label, value] of info) {
+    doc.font('Helvetica-Bold').text(label!, bx + 10, row, { lineBreak: false });
+    doc.font('Helvetica').text(String(value), bx + 130, row, { width: bw - 140, lineBreak: false });
+    row += lh;
+  }
+
+  // Sheet Index — height matches info box
+  const ix = 600, iy = 130;
+  doc.lineWidth(1).rect(ix, iy, 400, topBoxH).stroke();
+  doc.font('Helvetica-Bold').fontSize(12).text("SHEET INDEX", ix + 10, iy + 8, { underline: true });
+  doc.font('Helvetica').fontSize(9);
   sheetNames.forEach((name, i) => {
     doc.text(`Sheet ${i + 1}: ${name}`, ix + 10, iy + 32 + i * 16, { lineBreak: false });
   });
 
-  // General Notes (left column)
-  const ny = 375;
-  doc.lineWidth(1).rect(50, ny, 780, 320).stroke();
+  // General Notes (left column) — pushed below dynamic info box
+  const ny = by + topBoxH + 15;
+  const notesBoxH = Math.min(320, 690 - ny); // Fill to 690, protect title block at 700
+  doc.lineWidth(1).rect(50, ny, 780, notesBoxH).stroke();
   doc.font('Helvetica-Bold').fontSize(12).fillColor('black').text("GENERAL NOTES", 60, ny + 8, { underline: true });
   doc.font('Helvetica').fontSize(9);
   const notes = [
@@ -626,12 +639,12 @@ function drawCoverSheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: Dr
   for (const note of notes) {
     doc.text(note, 60, noteY, { width: 760 });
     noteY += note.length > 90 ? 24 : 15;
-    if (noteY > ny + 310) break;
+    if (noteY > ny + notesBoxH - 10) break;
   }
 
-  // Symbology Legend (right column)
+  // Symbology Legend (right column) — same height as notes
   const lx = 850, ly = ny;
-  doc.lineWidth(1).rect(lx, ly, 324, 320).stroke();
+  doc.lineWidth(1).rect(lx, ly, 324, notesBoxH).stroke();
   doc.font('Helvetica-Bold').fontSize(12).fillColor('black').text("LEGEND", lx + 10, ly + 8, { underline: true });
   doc.font('Helvetica');
   let legendY = ly + 34;
@@ -776,7 +789,7 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
 
   // Zone labels — positioned ABOVE signs to avoid interference
   doc.fontSize(8).fillColor('#333');
-  const zoneLabelY = roadY1 - 65;
+  const zoneLabelY = roadY1 - 240;
   doc.lineWidth(0.5).strokeColor('#999');
 
   const drawZoneLabel = (x1: number, x2: number, label1: string, label2?: string) => {
@@ -1012,8 +1025,9 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
   const waX1 = zones.activityStart;
   const waX2 = zones.activityEnd;
   doc.save();
+  doc.fontSize(8);
   const waW = doc.widthOfString("WORK AREA");
-  doc.rect(waX1 + (waX2 - waX1) / 2 - waW / 2 - 3, waLabelY - 2, waW + 6, 12).fill('white');
+  doc.rect(waX1 + (waX2 - waX1) / 2 - waW / 2 - 5, waLabelY - 3, waW + 10, 14).fill('white');
   doc.restore();
   doc.fillColor('black').fontSize(8).text("WORK AREA", waX1, waLabelY, { width: waX2 - waX1, align: 'center', lineBreak: false });
 
@@ -1030,15 +1044,14 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
   }
   doc.lineTo(breakX - zigW, breakY2).stroke();
 
-  // END ROAD WORK sign — orange warning style
+  // END ROAD WORK sign — orange rectangle (correct shape per MUTCD)
   doc.lineWidth(1).strokeColor('black');
-  doc.save().translate(zones.terminationEnd - 5, roadY2 + 20).rotate(45);
-  doc.rect(-12, -12, 24, 24).fillAndStroke('#FF8C00', 'black');
-  doc.restore();
-  doc.fontSize(3.5).fillColor('black');
-  doc.text('G20-2', zones.terminationEnd - 18, roadY2 + 12, { lineBreak: false });
-  doc.text('END ROAD', zones.terminationEnd - 18, roadY2 + 35, { lineBreak: false });
-  doc.text('WORK', zones.terminationEnd - 12, roadY2 + 41, { lineBreak: false });
+  doc.rect(zones.terminationEnd - 23, roadY2 + 16, 36, 18).fillAndStroke('#FF8C00', 'black');
+  doc.fontSize(4).fillColor('black');
+  doc.text('END ROAD', zones.terminationEnd - 23, roadY2 + 19, { width: 36, align: 'center', lineBreak: false });
+  doc.text('WORK', zones.terminationEnd - 23, roadY2 + 26, { width: 36, align: 'center', lineBreak: false });
+  doc.fontSize(3.5);
+  doc.text('G20-2', zones.terminationEnd - 23, roadY2 + 38, { width: 36, align: 'center', lineBreak: false });
   doc.fillColor('black');
 
   // === SHARED: Signs, dimensions, notes ===
@@ -1049,7 +1062,8 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
   const priStep = priCount > 1 ? (zones.priWarningEnd - zones.priWarningStart - 40) / (priCount - 1) : 0;
   priSigns.forEach((sign, i) => {
     const x = zones.priWarningStart + 20 + i * priStep;
-    drawSignDiamond(doc, x, roadY2 + 70, sign.sign_code, sign.label);
+    const staggerY = i % 2 === 0 ? 0 : 40;
+    drawSignDiamond(doc, x, roadY2 + 70 + staggerY, sign.sign_code, sign.label);
     if (i < priCount - 1) {
       // Show inter-sign distance (distance between consecutive signs), not cumulative
       const interDist = sign.distance_ft - priSigns[i + 1]!.distance_ft;
@@ -1069,7 +1083,8 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
     const oppStep = oppCount > 1 ? (zones.oppWarningEnd - zones.oppWarningStart - 40) / (oppCount - 1) : 0;
     oppSigns.forEach((sign, i) => {
       const x = zones.oppWarningStart + 20 + i * oppStep;
-      drawSignDiamond(doc, x, roadY1 - 145, sign.sign_code, sign.label);
+      const staggerY = i % 2 === 0 ? 0 : -40;
+      drawSignDiamond(doc, x, roadY1 - 145 + staggerY, sign.sign_code, sign.label);
       if (i < oppCount - 1) {
         const interDist = sign.distance_ft - oppSigns[i + 1]!.distance_ft;
         drawDimLine(doc, x, zones.oppWarningStart + 20 + (i + 1) * oppStep, roadY1 - 115, `${Math.abs(interDist)} FT`);
@@ -1077,18 +1092,9 @@ function drawTASheet(doc: Doc, sheetNum: number, totalSheets: number, ctx: DrawC
     });
   }
 
-  // Speed signs
+  // Speed signs — W3-5 is already in the sign array, only draw R2-1 separately
   if (ctx.speedMph !== ctx.wzSpeedMph) {
     doc.lineWidth(1).strokeColor('black');
-    // W3-5 REDUCED SPEED (orange diamond)
-    const rsX = zones.transitionStart - 50;
-    doc.save().translate(rsX, roadY2 + 72).rotate(45);
-    doc.rect(-10, -10, 20, 20).fillAndStroke('#FF8C00', 'black');
-    doc.restore();
-    doc.fontSize(3.5).fillColor('black');
-    doc.text('W3-5', rsX - 12, roadY2 + 64, { lineBreak: false });
-    doc.text('REDUCED', rsX - 12, roadY2 + 70, { lineBreak: false });
-    doc.text('SPEED', rsX - 12, roadY2 + 76, { lineBreak: false });
     // R2-1 SPEED LIMIT (white regulatory rectangle)
     const slX = zones.bufferStart;
     doc.rect(slX - 8, roadY2 + 60, 16, 24).fillAndStroke('#ffffff', 'black');
@@ -1191,6 +1197,7 @@ function drawSiteLayoutSheet(doc: Doc, sheetNum: number, totalSheets: number, ct
   }
 
   // Cross-street list (with bounding box)
+  let disclaimerY = imgY + imgH + 125;
   if (ctx.crossStreets.length > 0) {
     const csY = imgY + imgH + 45;
     const boxHeight = 25 + ctx.crossStreets.length * 15;
@@ -1201,10 +1208,11 @@ function drawSiteLayoutSheet(doc: Doc, sheetNum: number, totalSheets: number, ct
     ctx.crossStreets.forEach((cs, i) => {
       doc.text(`${i + 1}. ${cs.name} — See Sheet ${4 + i} for detail`, imgX + 20, csY + 16 + i * 14, { lineBreak: false });
     });
+    disclaimerY = Math.max(disclaimerY, csY - 10 + boxHeight + 10);
   }
 
   doc.fillColor('#666').fontSize(7);
-  doc.text("Route polyline and markers provided by Google Maps Platform. Verify on-site before construction.", imgX, imgY + imgH + 125, { width: imgW, align: 'center' });
+  doc.text("Route polyline and markers provided by Google Maps Platform. Verify on-site before construction.", imgX, disclaimerY, { width: imgW, align: 'center' });
 
   // North Arrow (inside map, upper-left with white BG mask)
   const naX = imgX + 20, naY = imgY + 20;
@@ -1389,13 +1397,15 @@ function drawIntersectionSheet(doc: Doc, sheetNum: number, totalSheets: number, 
   const mainLen = 450, crossLen = 200;
   const geo = cs.geometry || { type: '4-way', hasSignal: false, hasStopSign: false, turnLanes: false, approachAngle: 0, legs: 4 };
 
-  const hasNorth = geo.type === 'T-north' || geo.type === '4-way' || geo.type === 'Y' || !geo.type.startsWith('T-');
-  const hasSouth = geo.type === 'T-south' || geo.type === '4-way' || geo.type === 'Y' || !geo.type.startsWith('T-');
+  // Normalize geo.type to lowercase for case-insensitive matching
+  const geoType = (geo.type || '4-way').toLowerCase();
+  const hasNorth = geoType === 't-north' || geoType === 't-west' || geoType === '4-way' || geoType === 'y' || !geoType.startsWith('t-');
+  const hasSouth = geoType === 't-south' || geoType === 't-east' || geoType === '4-way' || geoType === 'y' || !geoType.startsWith('t-');
 
   // Geometry type label
-  const geoLabel = geo.type === '4-way' ? '4-WAY INTERSECTION' :
-    geo.type.startsWith('T-') ? `T-INTERSECTION (${geo.type.replace('T-', '').toUpperCase()})` :
-    geo.type === 'Y' ? 'Y-INTERSECTION' : geo.type === 'roundabout' ? 'ROUNDABOUT / CIRCULAR INTERSECTION' : 'INTERSECTION';
+  const geoLabel = geoType === '4-way' ? '4-WAY INTERSECTION' :
+    geoType.startsWith('t-') ? `T-INTERSECTION (${geoType.replace('t-', '').toUpperCase()})` :
+    geoType === 'y' ? 'Y-INTERSECTION' : geoType === 'roundabout' ? 'ROUNDABOUT / CIRCULAR INTERSECTION' : 'INTERSECTION';
   doc.fontSize(8).fillColor('#666').text(geoLabel, 0, 60, { align: 'center' });
 
   // === ROUNDABOUT: Use circular template ===
@@ -1627,12 +1637,27 @@ function drawIntersectionSheet(doc: Doc, sheetNum: number, totalSheets: number, 
   doc.text('>>> PRIMARY', cx - mainLen / 2, cy + mainHW + 8, { lineBreak: false });
   doc.text('OPPOSING <<<', cx + mainLen / 2 - 60, cy - mainHW - 14, { lineBreak: false });
 
-  // 6. ADVANCE WARNING SIGNS (Standard US Right-Hand Shoulder Placement)
-  // North Leg (traffic moving down): Right shoulder is on the left (-X)
-  if (hasNorth) drawSignDiamond(doc, cx - crossHW - 60, cy - crossLen + 40, 'W20-1', 'ROAD WORK\nAHEAD');
+  // 6. ADVANCE WARNING SIGNS — full series for flagger operations
+  const isFlagOp = ['TA-10', 'TA-11'].includes(ctx.taCode);
+  if (hasNorth) {
+    drawSignDiamond(doc, cx - crossHW - 60, cy - crossLen + 20, 'W20-1', 'ROAD WORK\nAHEAD');
+    if (isFlagOp) {
+      drawSignDiamond(doc, cx - crossHW - 60, cy - crossLen + 60, 'W20-4', 'ONE LANE\nROAD AHEAD');
+      drawSignDiamond(doc, cx - crossHW - 60, cy - crossLen + 100, 'W20-7a', 'FLAGGER\nAHEAD');
+    }
+  }
+  if (hasSouth) {
+    drawSignDiamond(doc, cx + crossHW + 60, cy + crossLen - 20, 'W20-1', 'ROAD WORK\nAHEAD');
+    if (isFlagOp) {
+      drawSignDiamond(doc, cx + crossHW + 60, cy + crossLen - 60, 'W20-4', 'ONE LANE\nROAD AHEAD');
+      drawSignDiamond(doc, cx + crossHW + 60, cy + crossLen - 100, 'W20-7a', 'FLAGGER\nAHEAD');
+    }
+  }
 
-  // South Leg (traffic moving up): Right shoulder is on the right (+X)
-  if (hasSouth) drawSignDiamond(doc, cx + crossHW + 60, cy + crossLen - 40, 'W20-1', 'ROAD WORK\nAHEAD');
+  // Stop bars on mainline (always present at signalized intersections or highways)
+  doc.lineWidth(4).strokeColor('black');
+  doc.moveTo(cx - mainLen / 2 + 20, cy + mainHW - 2).lineTo(cx - crossHW - R - 5, cy + mainHW - 2).stroke();
+  doc.moveTo(cx + crossHW + R + 5, cy - mainHW + 2).lineTo(cx + mainLen / 2 - 20, cy - mainHW + 2).stroke();
 
   // Determine intersection significance
   const isHwy = isHighway(cs.name);
@@ -2090,8 +2115,9 @@ function drawGeometryPlanSheet(
     const pg = toPage(pt.x, pt.y);
     if (pg.px < pageLeft - 10 || pg.px > pageRight + 10) continue;
 
-    // Determine cross-street direction from geometry type
+    // Determine cross-street direction from geometry type (case-insensitive)
     const geo = cs.geometry;
+    const csGeoType = (geo?.type || '4-way').toLowerCase();
     const perpRad = (pt.heading + 90) * Math.PI / 180;
 
     // Cross-street road stub length (in real-world feet, scaled to page)
@@ -2099,8 +2125,8 @@ function drawGeometryPlanSheet(
     const stubWidthFt = 24; // Typical 2-lane cross-street width
 
     // Draw cross-street on both sides unless T-intersection
-    const drawNorth = !geo || geo.type === '4-way' || geo.type === 'T-north' || geo.type === 'T-east';
-    const drawSouth = !geo || geo.type === '4-way' || geo.type === 'T-south' || geo.type === 'T-west';
+    const drawNorth = csGeoType === '4-way' || csGeoType === 't-north' || csGeoType === 't-east' || csGeoType === 'y' || !csGeoType.startsWith('t-');
+    const drawSouth = csGeoType === '4-way' || csGeoType === 't-south' || csGeoType === 't-west' || csGeoType === 'y' || !csGeoType.startsWith('t-');
 
     // Cross-street edge lines (thicker for visual weight)
     doc.lineWidth(1.2).strokeColor('#888888');
@@ -2108,7 +2134,7 @@ function drawGeometryPlanSheet(
 
     if (drawNorth) {
       // North/East leg — perpendicular from main road edge outward
-      const startR = halfW + 2; // Start just outside main road edge
+      const startR = halfW; // Flush with road edge — no gap
       const endR = halfW + stubLenFt;
       // Left edge of cross-street
       const s1 = toPage(pt.x + startR * Math.sin(perpRad) - crossHalfW * Math.cos(perpRad),
@@ -2132,7 +2158,7 @@ function drawGeometryPlanSheet(
 
     if (drawSouth) {
       // South/West leg — opposite direction
-      const startR = halfW + 2;
+      const startR = halfW; // Flush — no gap
       const endR = halfW + stubLenFt;
       const s1 = toPage(pt.x - startR * Math.sin(perpRad) - crossHalfW * Math.cos(perpRad),
                          pt.y - startR * Math.cos(perpRad) + crossHalfW * Math.sin(perpRad));
@@ -2187,8 +2213,10 @@ function drawGeometryPlanSheet(
       doc.closePath().stroke();
       doc.restore();
 
-      // "WORK AREA" label centered in the zone
-      const wzMidSta = (wzStartSta + wzEndSta) / 2;
+      // "WORK AREA" label centered in the VISIBLE portion of the zone
+      const visWzStart = Math.max(wzStartSta, viewportStartSta);
+      const visWzEnd = Math.min(wzEndSta, viewportEndSta);
+      const wzMidSta = (visWzStart + visWzEnd) / 2;
       const wzMidPt = alignment.getCoordinatesAtStation(wzMidSta);
       const wzMidPg = toPage(wzMidPt.x, wzMidPt.y);
       doc.save();
@@ -2202,7 +2230,8 @@ function drawGeometryPlanSheet(
     }
   }
 
-  // === TCP DEVICES WITH LEADER LINES (Professional CAD standard) ===
+  // === TCP DEVICES — only on detail sheets, NOT the index overview ===
+  if (!isIndexSheet) {
   // Fix A+C: Signs placed at road EDGE with leaders extending into margin
   const leaderLenPx = 60;
 
@@ -2220,9 +2249,9 @@ function drawGeometryPlanSheet(
     const edgeX = pt.x + halfW * Math.sin(edgePerpRad);
     const edgeY = pt.y + halfW * Math.cos(edgePerpRad);
     const edgePg = toPage(edgeX, edgeY);
-    // Stagger leader lengths to spread labels vertically
-    const stagger = si * 25;
-    drawSignWithLeader(doc, edgePg.px, edgePg.py, sign.sign_code, sign.label, 'right', leaderLenPx + stagger);
+    // Stagger vertically to spread labels apart
+    const stagger = si * 35;
+    drawSignWithLeader(doc, edgePg.px, edgePg.py, sign.sign_code, sign.label, 'right', leaderLenPx, stagger);
   }
 
   // Opposing approach signs (left shoulder, leader to left)
@@ -2238,8 +2267,8 @@ function drawGeometryPlanSheet(
     const edgeX = pt.x + halfW * Math.sin(edgePerpRad);
     const edgeY = pt.y + halfW * Math.cos(edgePerpRad);
     const edgePg = toPage(edgeX, edgeY);
-    const stagger = si * 25;
-    drawSignWithLeader(doc, edgePg.px, edgePg.py, sign.sign_code, sign.label, 'left', leaderLenPx + stagger);
+    const stagger = si * 35;
+    drawSignWithLeader(doc, edgePg.px, edgePg.py, sign.sign_code, sign.label, 'left', leaderLenPx, stagger);
   }
 
   // Flagger positions (TA-10) — only draw if station falls within this viewport
@@ -2273,6 +2302,8 @@ function drawGeometryPlanSheet(
     }
   }
 
+  } // end if (!isIndexSheet) — TCP devices/signs/flaggers
+
   // === END CLIPPING ===
   doc.restore();
 
@@ -2304,6 +2335,18 @@ function drawGeometryPlanSheet(
     doc.text('GRID TILES — SEE NUMBERED SHEETS FOR DETAIL', pageLeft, pageBot - 5, { width: pageRight - pageLeft, align: 'center', lineBreak: false });
   }
 
+  // Helper: draw text with white bounding box mask (used by both index and detail sheets)
+  const drawMaskedText = (text: string, x: number, y: number, w: number, fontSize: number, color: string, bold = false) => {
+    const h = fontSize + 2;
+    doc.rect(x, y - 1, w, h).fill('white');
+    if (bold) doc.font('Helvetica-Bold');
+    doc.fontSize(fontSize).fillColor(color);
+    doc.text(text, x, y, { width: w, align: 'center', lineBreak: false });
+    if (bold) doc.font('Helvetica');
+  };
+
+  // Station ticks, road labels, cross-street labels — detail sheets only
+  if (!isIndexSheet) {
   // Station tick marks (Professional CAD — perpendicular to tangent, STATION_TICK style)
   doc.lineWidth(PLOT.STATION_TICK.lineWidth).strokeColor(PLOT.STATION_TICK.color);
   for (let sta = Math.ceil(viewportStartSta / 100) * 100; sta <= viewportEndSta; sta += 100) {
@@ -2328,16 +2371,6 @@ function drawGeometryPlanSheet(
   }
 
   // === ROAD LABELS + INTERSECTION SIGNS (CAD-standard collision avoidance) ===
-
-  // Helper: draw text with white bounding box mask behind it
-  const drawMaskedText = (text: string, x: number, y: number, w: number, fontSize: number, color: string, bold = false) => {
-    const h = fontSize + 2;
-    doc.rect(x, y - 1, w, h).fill('white');
-    if (bold) doc.font('Helvetica-Bold');
-    doc.fontSize(fontSize).fillColor(color);
-    doc.text(text, x, y, { width: w, align: 'center', lineBreak: false });
-    if (bold) doc.font('Helvetica');
-  };
 
   // Main road label — offset to bottom-left quarter of alignment (away from intersections)
   const mainLabelSta = viewportStartSta + (viewportEndSta - viewportStartSta) * 0.15;
@@ -2422,6 +2455,8 @@ function drawGeometryPlanSheet(
     }
     doc.font('Helvetica');
   }
+
+  } // end if (!isIndexSheet) — station ticks, labels, cross-street callouts
 
   // Start/End pin markers — only on index sheet, or detail sheets at the actual start/end of the route
   if (isIndexSheet) {

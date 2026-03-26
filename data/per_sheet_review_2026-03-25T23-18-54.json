@@ -1,0 +1,288 @@
+[
+  {
+    "sheet_number": 1,
+    "visual_description": "The 'GENERAL NOTES' title and box are drawn starting too high, causing them to physically overlap the text for 'AADT' and 'Cross-Streets' at the bottom of the 'PROJECT INFORMATION' list. Additionally, depending on the number of sheets, the 'SHEET INDEX' text can overflow its box vertically and overlap with the General Notes box.",
+    "confirmed_issues": [
+      {
+        "issue": "Boxes overflow and overwritten text. The Project Info box text overlaps with General Notes.",
+        "function": "drawCoverSheet",
+        "line_range": "358-393",
+        "fix": "  // Filter operations compatible with road geometry (same logic as sheet generation)\n  const compatOps = ctx.operationTypes.filter((op: string) => {\n    if (op === 'Median Crossover' && ctx.hasTWLTL) return false;\n    if (op === 'Median Crossover' && !ctx.isDivided && ctx.totalLanes < 4) return false;\n    if (op === 'Double Lane Closure' && ctx.totalLanes < 3) return false;\n    return true;\n  });\n  const sheetNames = [\n    'Cover Sheet & General Notes',\n    ...compatOps.map((op: string) => {\n      const ta = MUTCD.selectTA(op, ctx.totalLanes, parseInt(ctx.funcClass) || 99, ctx.isDivided, ctx.aadt, ctx.terrain);\n      return `${ta.code}: ${op}`;\n    }),\n    'Site-Specific Work Zone Layout',\n    ...ctx.crossStreets.map(cs => `Intersection Detail: ${cs.name}`),\n    'Traffic Data & Queue Analysis',\n    'Special Considerations',\n    ...(ctx.geoPlanSheets > 0 ? (ctx.geoPlanSheets === 1 ? ['Geometry Plan'] : Array.from({ length: ctx.geoPlanSheets }, (_, i) => `Geometry Plan (${i + 1}/${ctx.geoPlanSheets})`)) : []),\n    'Sign Schedule & Quantities',\n  ];\n\n  const topBoxH = Math.max(240, info.length * lh + 35, sheetNames.length * 16 + 40);\n  doc.lineWidth(1).strokeColor('black').rect(bx, by, bw, topBoxH).stroke();\n  doc.fontSize(12).text(\"PROJECT INFORMATION\", bx + 10, by + 8, { underline: true });\n  let row = by + 30;\n  doc.fontSize(9);\n  for (const [label, value] of info) {\n    doc.font('Helvetica-Bold').text(label!, bx + 10, row, { lineBreak: false });\n    doc.font('Helvetica').text(String(value), bx + 130, row, { width: bw - 140, lineBreak: false });\n    row += lh;\n  }\n\n  // Sheet Index — height matches info box\n  const ix = 600, iy = 130;\n  doc.lineWidth(1).rect(ix, iy, 400, topBoxH).stroke();\n  doc.font('Helvetica-Bold').fontSize(12).text(\"SHEET INDEX\", ix + 10, iy + 8, { underline: true });\n  doc.font('Helvetica').fontSize(9);\n  sheetNames.forEach((name, i) => {\n    doc.text(`Sheet ${i + 1}: ${name}`, ix + 10, iy + 32 + i * 16, { lineBreak: false });\n  });"
+      }
+    ],
+    "disputed_issues": []
+  },
+  {
+    "sheet_number": 2,
+    "visual_description": "The page shows a 'TYPICAL APPLICATION — TA-10: LANE CLOSURE USING FLAGGERS' schematic. Visually confirming the engineer's feedback: 1) The 'WORK AREA' text in the center has a white background box that is too small, causing the 'W' and 'A' to spill over into the crosshatch lines. 2) The row of rectangular zone labels ('ADVANCE WARNING AREA', 'TRANSITION', etc.) at the top completely intersects the W20-series signs on the right side of the page, causing overlapping/unreadable text. 3) On the far right, below the road, the 'END ROAD WORK' (G20-2) sign is drawn as an orange diamond instead of its correct regulatory rectangular shape.",
+    "confirmed_issues": [
+      {
+        "issue": "The 'WORK AREA' white background box is too small because the text width is being measured before the correct font size is applied.",
+        "function": "drawTASheet",
+        "line_range": "785-788",
+        "fix": "doc.save();\n  doc.fontSize(8);\n  const waW = doc.widthOfString(\"WORK AREA\");\n  doc.rect(waX1 + (waX2 - waX1) / 2 - waW / 2 - 4, waLabelY - 2, waW + 8, 12).fill('white');\n  doc.restore();"
+      },
+      {
+        "issue": "The zone label row is positioned at `roadY1 - 65`, which places it directly over the opposing warning signs which peak around `roadY1 - 200`. It needs to be moved higher up the page.",
+        "function": "drawTASheet",
+        "line_range": "624-627",
+        "fix": "// Zone labels — positioned ABOVE signs to avoid interference\n  doc.fontSize(8).fillColor('#333');\n  const zoneLabelY = roadY1 - 240;\n  doc.lineWidth(0.5).strokeColor('#999');"
+      },
+      {
+        "issue": "The END ROAD WORK sign (G20-2) is incorrectly drawn as an orange diamond rotated 45 degrees, rather than an orange rectangle with text contained inside.",
+        "function": "drawTASheet",
+        "line_range": "792-801",
+        "fix": "// END ROAD WORK sign — orange rectangle\n  doc.lineWidth(1).strokeColor('black');\n  doc.rect(zones.terminationEnd - 23, roadY2 + 16, 36, 18).fillAndStroke('#FF8C00', 'black');\n  doc.fontSize(4).fillColor('black');\n  doc.text('END ROAD', zones.terminationEnd - 23, roadY2 + 20, { width: 36, align: 'center', lineBreak: false });\n  doc.text('WORK', zones.terminationEnd - 23, roadY2 + 26, { width: 36, align: 'center', lineBreak: false });\n  doc.fontSize(3.5);\n  doc.text('G20-2', zones.terminationEnd - 23, roadY2 + 38, { width: 36, align: 'center', lineBreak: false });\n  doc.fillColor('black');"
+      }
+    ],
+    "disputed_issues": []
+  },
+  {
+    "sheet_number": 3,
+    "visual_description": "A 'SITE-SPECIFIC WORK ZONE LAYOUT' sheet with a central satellite map. Below the map on the right side, there is a bounding box titled 'INTERSECTIONS WITHIN WORK ZONE:'. Inside the box, a list of 6 cross-streets is displayed. Overlapping the 5th and 6th list items ('5. S Hamlin Ln...' and '6. Emmett Hwy...') is the gray disclaimer text 'Route polyline and markers provided by Google Maps Platform. Verify on-site before construction.', making both the list and the disclaimer difficult to read.",
+    "confirmed_issues": [
+      {
+        "issue": "The Google Maps disclaimer text has a static Y-coordinate that overlaps the dynamic cross-streets list when the list contains multiple items.",
+        "function": "drawSiteLayoutSheet",
+        "line_range": "1009-1022",
+        "fix": "  let disclaimerY = imgY + imgH + 125;\n\n  // Cross-street list (with bounding box)\n  if (ctx.crossStreets.length > 0) {\n    const csY = imgY + imgH + 45;\n    const boxHeight = 25 + ctx.crossStreets.length * 15;\n    doc.lineWidth(0.5).strokeColor('#999').rect(imgX, csY - 10, imgW, boxHeight).stroke();\n    doc.fontSize(9).fillColor('black').font('Helvetica-Bold');\n    doc.text('INTERSECTIONS WITHIN WORK ZONE:', imgX + 10, csY);\n    doc.font('Helvetica').fontSize(8);\n    ctx.crossStreets.forEach((cs, i) => {\n      doc.text(`${i + 1}. ${cs.name} — See Sheet ${4 + i} for detail`, imgX + 20, csY + 16 + i * 14, { lineBreak: false });\n    });\n    disclaimerY = Math.max(disclaimerY, csY - 10 + boxHeight + 10);\n  }\n\n  doc.fillColor('#666').fontSize(7);\n  doc.text(\"Route polyline and markers provided by Google Maps Platform. Verify on-site before construction.\", imgX, disclaimerY, { width: imgW, align: 'center' });"
+      }
+    ],
+    "disputed_issues": []
+  },
+  {
+    "sheet_number": 4,
+    "visual_description": "A schematic of a 4-way intersection (SH-44 and W State St). There is a signal icon on the top right corner with a 'TURN LANE' label. The vertical road (W State St) has solid black stop bars drawn on its approaches to the intersection. The horizontal road (SH-44) does not have any stop bars. W20-1 'ROAD WORK AHEAD' signs are shown on the cross street (top and bottom approaches), and the notes table confirms 'W20-1 Qty: 2'.",
+    "confirmed_issues": [
+      {
+        "issue": "Missing stop bars on SH-44 when a signal is present at the intersection.",
+        "function": "drawIntersectionSheet",
+        "line_range": "1184-1189",
+        "fix": "  // 4. STOP BARS & CROSSWALKS\n  if (geo.hasSignal || isHighway(cs.name)) {\n    doc.lineWidth(5).strokeColor('black');\n    if (hasNorth) doc.moveTo(cx - crossHW, cy - mainHW - R).lineTo(cx, cy - mainHW - R).stroke();\n    if (hasSouth) doc.moveTo(cx, cy + mainHW + R).lineTo(cx + crossHW, cy + mainHW + R).stroke();\n    if (geo.hasSignal) {\n      doc.moveTo(cx - crossHW - R, cy).lineTo(cx - crossHW - R, cy + mainHW).stroke();\n      doc.moveTo(cx + crossHW + R, cy - mainHW).lineTo(cx + crossHW + R, cy).stroke();\n    }\n\n    doc.lineWidth(2).dash(6, { space: 6 }).strokeColor('#666');"
+      },
+      {
+        "issue": "Only showing W20-1 signs on the cross-street. For a flagger operation at a signalized intersection (signal on flash), the full flagging series (W20-1, W20-4, W20-7a) should be displayed on all active approaches.",
+        "function": "drawIntersectionSheet",
+        "line_range": "1251-1300",
+        "fix": "  // Determine intersection significance\n  const isHwy = isHighway(cs.name);\n  const isFlaggerOp = ['TA-10', 'TA-11'].includes(ctx.taCode);\n  const showFullSeries = isFlaggerOp && (geo.hasSignal || isHwy);\n\n  // 6. ADVANCE WARNING SIGNS (Standard US Right-Hand Shoulder Placement)\n  // North Leg (traffic moving down): Right shoulder is on the left (-X)\n  if (hasNorth) {\n    drawSignDiamond(doc, cx - crossHW - 60, cy - crossLen + 20, 'W20-1', 'ROAD WORK\\nAHEAD');\n    if (showFullSeries) {\n      drawSignDiamond(doc, cx - crossHW - 60, cy - crossLen + 60, 'W20-4', 'ONE LANE\\nROAD AHEAD');\n      drawSignDiamond(doc, cx - crossHW - 60, cy - crossLen + 100, 'W20-7a', 'FLAGGER\\nAHEAD');\n    }\n  }\n\n  // South Leg (traffic moving up): Right shoulder is on the right (+X)\n  if (hasSouth) {\n    drawSignDiamond(doc, cx + crossHW + 60, cy + crossLen - 20, 'W20-1', 'ROAD WORK\\nAHEAD');\n    if (showFullSeries) {\n      drawSignDiamond(doc, cx + crossHW + 60, cy + crossLen - 60, 'W20-4', 'ONE LANE\\nROAD AHEAD');\n      drawSignDiamond(doc, cx + crossHW + 60, cy + crossLen - 100, 'W20-7a', 'FLAGGER\\nAHEAD');\n    }\n  }\n\n  const isDriveway = /chevron|gas|station|driveway|parking|lot/i.test(cs.name) && !/state\\s*park|national|public|forest|county/i.test(cs.name);\n  const intType = isHwy ? 'STATE/US HIGHWAY INTERSECTION' : isDriveway ? 'COMMERCIAL ACCESS POINT' : 'LOCAL ROAD INTERSECTION';\n\n  // Notes for this intersection — classification as subtitle\n  const noteX = 50, noteY = 560;\n  doc.lineWidth(0.5).rect(noteX, noteY, 530, 120).stroke();\n  doc.font('Helvetica-Bold').fontSize(10).fillColor(isHwy ? '#cc0000' : 'black');\n  doc.text(`${intType} — TRAFFIC CONTROL NOTES`, noteX + 10, noteY + 6);\n  doc.font('Helvetica').fontSize(9).fillColor('black');\n\n  const intNotes = isHwy ?[\n    `1. THIS IS A STATE/US HIGHWAY INTERSECTION — requires enhanced traffic control measures.`,\n    `2. Place W20-1 \"ROAD WORK AHEAD\" signs on ${cs.name} approaches at minimum ${getABCSpacing(ctx.speedMph, ctx.terrain, ctx.funcClass).a} ft from intersection.`,\n    `3. CONSIDER ADDITIONAL FLAGGER at this intersection to manage cross-traffic from ${cs.name}.`,\n    `4. Coordinate with ITD Traffic Operations if ${cs.name} carries significant traffic volume.`,\n    `5. Sight distance at this intersection must accommodate ${ctx.speedMph} MPH mainline AND cross-street traffic.`,\n    '6. Do not place channelizing devices where they block cross-street sight triangles.',\n    '7. Consider advance warning signs on cross-street at greater distances due to higher approach speeds.',\n  ] :[\n    `1. Place W20-1 \"ROAD WORK AHEAD\" signs on ${cs.name} approaches at minimum ${getABCSpacing(ctx.speedMph, ctx.terrain, ctx.funcClass).a} ft from intersection.`,\n    '2. Maintain access to and from cross-street at all times unless otherwise approved.',\n    '3. If cross-street traffic volume is significant, consider an additional flagger at this intersection.',\n    '4. Cross-street signing shall be covered or removed when work zone is not active.',\n    `5. Sight distance at this intersection must accommodate ${ctx.speedMph} MPH mainline traffic.`,\n    '6. Do not place channelizing devices where they block cross-street sight triangles.',\n  ];\n  intNotes.forEach((n, i) => doc.text(n, noteX + 10, noteY + 22 + i * 16, { width: 510 }));\n\n  // Sign detail for this intersection\n  doc.lineWidth(0.5).rect(600, noteY, 400, 120).stroke();\n  doc.font('Helvetica-Bold').fontSize(10).text('SIGNS REQUIRED AT THIS INTERSECTION:', 610, noteY + 6);\n  doc.font('Helvetica').fontSize(9);\n  const signQty = (hasNorth ? 1 : 0) + (hasSouth ? 1 : 0);\n  \n  if (showFullSeries) {\n    doc.text(`W20-1, W20-4, W20-7a Series — Qty: ${signQty} sets (one per approach)`, 610, noteY + 28, { width: 380 });\n  } else {\n    doc.text(`W20-1 \"ROAD WORK AHEAD\" — Qty: ${signQty} (one per cross-street approach)`, 610, noteY + 28, { width: 380 });\n  }\n  \n  const intSignSize = getSignSize(ctx.speedMph, ctx.roadName);\n  doc.text(`Sign Size: ${intSignSize} diamond${isHighway(ctx.roadName) ? ' (ITD State/US Highway minimum)' : ''}`, 610, noteY + 44, { width: 380 });\n  doc.text(`Mounting: Post-mounted, 7 ft minimum height to bottom of sign`, 610, noteY + 60, { width: 380 });\n  if (isHwy && !showFullSeries) {\n    doc.font('Helvetica-Bold').fillColor('#cc0000');\n    doc.text(`ENHANCED: Consider W20-4 \"ONE LANE ROAD AHEAD\" on ${cs.name} approaches`, 610, noteY + 80, { width: 380 });\n    doc.text(`ENHANCED: Additional flagger may be required per MUTCD 6H.01`, 610, noteY + 96, { width: 380 });\n    doc.fillColor('black');\n  } else if (showFullSeries) {\n    doc.font('Helvetica-Bold').fillColor('#cc0000');\n    doc.text(`ENHANCED: Flagger control required for all approaches while signal is on flash.`, 610, noteY + 80, { width: 380 });\n    doc.fillColor('black');\n  }"
+      }
+    ],
+    "disputed_issues": [
+      {
+        "issue": "The intersection should be grounded in real data — look up how busy the cross street is, use Street View or satellite imagery to determine turn lanes, traffic controls, etc.",
+        "reason": "The AI system relies on OpenStreetMap (OSM) data and provided geospatial inputs at generation time; it cannot dynamically scrape Street View or live satellite feeds. Because data limitations exist, the plans are inherently marked 'PRELIMINARY — NOT FOR CONSTRUCTION' to mandate manual field verification by the engineer."
+      }
+    ]
+  },
+  {
+    "sheet_number": 5,
+    "visual_description": "The page is titled 'INTERSECTION DETAIL: W MOON VALLEY RD' and subtitled 'T-INTERSECTION (WEST)'. However, the drawing only shows the horizontal mainline road (SH-44) with no vertical or intersecting cross-street drawn. Additionally, the 'SIGNS REQUIRED AT THIS INTERSECTION' box incorrectly lists 'W20-1 ROAD WORK AHEAD — Qty: 0'.",
+    "confirmed_issues": [
+      {
+        "issue": "Cross-street geometry and signs fail to render for T-intersections due to case-sensitivity bug when parsing geo.type (e.g., 'T-West' instead of 'T-west')",
+        "function": "drawIntersectionSheet",
+        "line_range": "1002-1015",
+        "fix": "  const cx = 612, cy = 340;\n  const mainLen = 450, crossLen = 200;\n  const geo = cs.geometry || { type: '4-way', hasSignal: false, hasStopSign: false, turnLanes: false, approachAngle: 0, legs: 4 };\n  const geoType = (geo.type || '4-way').toLowerCase();\n\n  // T-west/T-east map to north/south legs for the schematic (horizontal mainline)\n  const hasNorth = geoType === 't-north' || geoType === 't-west' || geoType === '4-way' || geoType === 'y' || !geoType.startsWith('t-');\n  const hasSouth = geoType === 't-south' || geoType === 't-east' || geoType === '4-way' || geoType === 'y' || !geoType.startsWith('t-');\n\n  // Geometry type label\n  const geoLabel = geoType === '4-way' ? '4-WAY INTERSECTION' :\n    geoType.startsWith('t-') ? `T-INTERSECTION (${geoType.replace('t-', '').toUpperCase()})` :\n    geoType === 'y' ? 'Y-INTERSECTION' : geoType === 'roundabout' ? 'ROUNDABOUT / CIRCULAR INTERSECTION' : 'INTERSECTION';\n  doc.fontSize(8).fillColor('#666').text(geoLabel, 0, 60, { align: 'center' });\n\n  // === ROUNDABOUT: Use circular template ===\n  if (geoType === 'roundabout') {"
+      }
+    ],
+    "disputed_issues": [
+      {
+        "issue": "Not showing the full sign sequence",
+        "reason": "The engineer is misinterpreting the blank schematic and Qty: 0 as a lack of sign data. Once the geometry type case sensitivity bug is fixed, the intersection leg will draw with the correct W20-1 sign placement, and the quantity will correctly update to 1. For a standard local T-intersection, a single W20-1 sign per approach meets the MUTCD baseline requirement, so a 'full sign sequence' (like those found on highways) is not expected here."
+      }
+    ]
+  },
+  {
+    "sheet_number": 6,
+    "visual_description": "The page displays the 'INTERSECTION DETAIL: S SHORT RD' with the subtitle 'T-INTERSECTION (WEST)'. However, the diagram shows a straight, continuous horizontal roadway (the mainline). The intersecting leg (which should branch out as a 'T') is completely missing. No masking or intersecting road edges are drawn.",
+    "confirmed_issues": [
+      {
+        "issue": "Intersection geometry missing for 'T-west' due to case-sensitivity bug. The variable `geo.type` likely holds a mixed-case string like 'T-West' or 'T-WEST', causing strict checks like `geo.type === 'T-west'` to fail, resulting in both `hasNorth` and `hasSouth` evaluating to false.",
+        "function": "drawIntersectionSheet",
+        "line_range": "905-915",
+        "fix": "  // T-west/T-east map to north/south legs for the schematic (horizontal mainline)\n  const gType = String(geo.type).toLowerCase();\n  const hasNorth = gType === 't-north' || gType === 't-west' || gType === '4-way' || gType === 'y' || !gType.startsWith('t-');\n  const hasSouth = gType === 't-south' || gType === 't-east' || gType === '4-way' || gType === 'y' || !gType.startsWith('t-');\n\n  // Geometry type label\n  const geoLabel = gType === '4-way' ? '4-WAY INTERSECTION' :\n    gType.startsWith('t-') ? `T-INTERSECTION (${gType.replace('t-', '').toUpperCase()})` :\n    gType === 'y' ? 'Y-INTERSECTION' : gType === 'roundabout' ? 'ROUNDABOUT / CIRCULAR INTERSECTION' : 'INTERSECTION';\n  doc.fontSize(8).fillColor('#666').text(geoLabel, 0, 60, { align: 'center' });\n\n  // === ROUNDABOUT: Use circular template ===\n  if (gType === 'roundabout') {"
+      }
+    ],
+    "disputed_issues": []
+  },
+  {
+    "sheet_number": 7,
+    "visual_description": "The page titled 'INTERSECTION DETAIL: W SHULTZ CT' indicates the geometry is a 'T-INTERSECTION (WEST)'. However, the mainline roadway is drawn with completely solid, continuous edge lines and dashed centerlines. There is no cross-street geometry (no vertical lines, curb returns, or masks) drawn on either side of the main road.",
+    "confirmed_issues": [
+      {
+        "issue": "Intersection geometry fails to render because the geometry type check is case-sensitive. If the upstream data provides 'T-West' instead of exactly 'T-west', both hasNorth and hasSouth evaluate to false, causing no intersecting legs to be drawn.",
+        "function": "drawIntersectionSheet",
+        "line_range": "874-880",
+        "fix": "<<<<\n  // T-west/T-east map to north/south legs for the schematic (horizontal mainline)\n  const hasNorth = geo.type === 'T-north' || geo.type === 'T-west' || geo.type === '4-way' || geo.type === 'Y' || !geo.type.startsWith('T-');\n  const hasSouth = geo.type === 'T-south' || geo.type === 'T-east' || geo.type === '4-way' || geo.type === 'Y' || !geo.type.startsWith('T-');\n\n  // Geometry type label\n  const geoLabel = geo.type === '4-way' ? '4-WAY INTERSECTION' :\n    geo.type.startsWith('T-') ? `T-INTERSECTION (${geo.type.replace('T-', '').toUpperCase()})` :\n    geo.type === 'Y' ? 'Y-INTERSECTION' : geo.type === 'roundabout' ? 'ROUNDABOUT / CIRCULAR INTERSECTION' : 'INTERSECTION';\n====\n  // T-west/T-east map to north/south legs for the schematic (horizontal mainline)\n  const gType = String(geo.type).toLowerCase();\n  const hasNorth = gType === 't-north' || gType === 't-west' || gType === '4-way' || gType === 'y' || !gType.startsWith('t-');\n  const hasSouth = gType === 't-south' || gType === 't-east' || gType === '4-way' || gType === 'y' || !gType.startsWith('t-');\n\n  // Geometry type label\n  const geoLabel = gType === '4-way' ? '4-WAY INTERSECTION' :\n    gType.startsWith('t-') ? `T-INTERSECTION (${String(geo.type).replace(/^T-/i, '').toUpperCase()})` :\n    gType === 'y' ? 'Y-INTERSECTION' : gType === 'roundabout' ? 'ROUNDABOUT / CIRCULAR INTERSECTION' : 'INTERSECTION';\n>>>>"
+      }
+    ],
+    "disputed_issues": []
+  },
+  {
+    "sheet_number": 8,
+    "visual_description": "The page displays the intersection detail for 'S HAMLIN LN', labeled as a 'T-INTERSECTION (WEST)'. The main road (SH-44) is drawn horizontally with solid edge lines and a dashed centerline, but the perpendicular cross-street lines and intersection geometry are completely missing. Only the continuous mainline is visible.",
+    "confirmed_issues": [
+      {
+        "issue": "Intersection geometry is completely missing due to case-sensitive strict equality checks on `geo.type`. When `geo.type` evaluates to an uppercase variant (e.g. 'T-WEST'), it fails the `geo.type === 'T-west'` check, resulting in both `hasNorth` and `hasSouth` evaluating to false, thus drawing no cross-street. It requires a normalized `.toLowerCase()` check.",
+        "function": "drawIntersectionSheet",
+        "line_range": "1118-1133",
+        "fix": "  const cx = 612, cy = 340;\n  const mainLen = 450, crossLen = 200;\n  const geo = cs.geometry || { type: '4-way', hasSignal: false, hasStopSign: false, turnLanes: false, approachAngle: 0, legs: 4 };\n  const gType = (geo.type || '').toLowerCase();\n\n  // T-west/T-east map to north/south legs for the schematic (horizontal mainline)\n  const hasNorth = gType === 't-north' || gType === 't-west' || gType === '4-way' || gType === 'y' || !gType.startsWith('t-');\n  const hasSouth = gType === 't-south' || gType === 't-east' || gType === '4-way' || gType === 'y' || !gType.startsWith('t-');\n\n  // Geometry type label\n  const geoLabel = gType === '4-way' ? '4-WAY INTERSECTION' :\n    gType.startsWith('t-') ? `T-INTERSECTION (${gType.replace('t-', '').toUpperCase()})` :\n    gType === 'y' ? 'Y-INTERSECTION' : gType === 'roundabout' ? 'ROUNDABOUT / CIRCULAR INTERSECTION' : 'INTERSECTION';\n  doc.fontSize(8).fillColor('#666').text(geoLabel, 0, 60, { align: 'center' });\n\n  // === ROUNDABOUT: Use circular template ===\n  if (gType === 'roundabout') {"
+      },
+      {
+        "issue": "The same case-sensitive `geo.type` bug exists when rendering cross-street stubs on the Geometry Plan, which causes cross-streets to vanish on those sheets as well. (Proactive fix to prevent identical failures downstream)",
+        "function": "drawGeometryPlanSheet",
+        "line_range": "1517-1523",
+        "fix": "    // Cross-street road stub length (in real-world feet, scaled to page)\n    const stubLenFt = Math.max(150, halfW * 4);\n    const stubWidthFt = 24; // Typical 2-lane cross-street width\n\n    // Draw cross-street on both sides unless T-intersection\n    const gType = (geo?.type || '').toLowerCase();\n    const drawNorth = !geo || gType === '4-way' || gType === 't-north' || gType === 't-east' || !gType.startsWith('t-');\n    const drawSouth = !geo || gType === '4-way' || gType === 't-south' || gType === 't-west' || !gType.startsWith('t-');"
+      }
+    ],
+    "disputed_issues": []
+  },
+  {
+    "sheet_number": 9,
+    "visual_description": "The page shows a schematic of a 4-way intersection for 'Emmett Hwy' crossing the main road (SH-44). Only W20-1 'ROAD WORK AHEAD' signs are shown on the Emmett Hwy approaches, and the intersection is classified as a 'LOCAL ROAD INTERSECTION'. The 'SIGNS REQUIRED AT THIS INTERSECTION' box lists a quantity of 2 for W20-1 signs.",
+    "confirmed_issues": [
+      {
+        "issue": "Only showing W20-1 signs on cross-streets for flagging operations. If the main route uses flaggers, the cross-street approaches should also display the full flagger warning series (W20-1, W20-4, W20-7a).",
+        "function": "drawIntersectionSheet",
+        "line_range": "810-816",
+        "fix": "  // 6. ADVANCE WARNING SIGNS (Standard US Right-Hand Shoulder Placement)\n  const isFlagger = ['TA-10', 'TA-11'].includes(ctx.taCode);\n  \n  // North Leg (traffic moving down): Right shoulder is on the left (-X)\n  if (hasNorth) {\n    drawSignDiamond(doc, cx - crossHW - 60, cy - crossLen + 40, 'W20-1', 'ROAD WORK\\nAHEAD');\n    if (isFlagger) {\n      drawSignDiamond(doc, cx - crossHW - 60, cy - crossLen + 85, 'W20-4', 'ONE LANE\\nROAD AHEAD');\n      drawSignDiamond(doc, cx - crossHW - 60, cy - crossLen + 130, 'W20-7a', 'FLAGGER\\nAHEAD');\n    }\n  }\n\n  // South Leg (traffic moving up): Right shoulder is on the right (+X)\n  if (hasSouth) {\n    drawSignDiamond(doc, cx + crossHW + 60, cy + crossLen - 40, 'W20-1', 'ROAD WORK\\nAHEAD');\n    if (isFlagger) {\n      drawSignDiamond(doc, cx + crossHW + 60, cy + crossLen - 85, 'W20-4', 'ONE LANE\\nROAD AHEAD');\n      drawSignDiamond(doc, cx + crossHW + 60, cy + crossLen - 130, 'W20-7a', 'FLAGGER\\nAHEAD');\n    }\n  }"
+      },
+      {
+        "issue": "The sign requirement quantity text does not reflect the addition of the full flagger sign series.",
+        "function": "drawIntersectionSheet",
+        "line_range": "848-850",
+        "fix": "  const signQty = (hasNorth ? 1 : 0) + (hasSouth ? 1 : 0);\n  const isFlaggerText = ['TA-10', 'TA-11'].includes(ctx.taCode);\n  if (isFlaggerText) {\n    doc.text(`Flagger Series (W20-1, W20-4, W20-7a) — Qty: ${signQty} sets`, 610, noteY + 28, { width: 380 });\n  } else {\n    doc.text(`W20-1 \"ROAD WORK AHEAD\" — Qty: ${signQty} (one per cross-street approach)`, 610, noteY + 28, { width: 380 });\n  }"
+      },
+      {
+        "issue": "Emmett Hwy is being misclassified as a 'Local Road' rather than a Highway because the regex parser expects a route number (e.g., 'Hwy 16') and fails on unnumbered highway strings.",
+        "function": "isHighway",
+        "line_range": "113-115",
+        "fix": "function isHighway(name: string): boolean {\n  return /\\b(ID|SH|US|I|SR|State Hwy|Highway|Hwy|Interstate)[\\s-]*\\d+/i.test(name) || /\\b(Highway|Hwy|Freeway|Expressway)\\b/i.test(name);\n}"
+      }
+    ],
+    "disputed_issues": [
+      {
+        "issue": "Should look up real intersection data.",
+        "reason": "The system intentionally generates standard *schematic* typical applications for intersections rather than exact CAD drawings of every real-world intersection radius and turn lane. This is industry-standard for TCPs. However, by fixing the 'isHighway' regex (addressed above), the system will now automatically flag 'Emmett Hwy' as a high-traffic highway and append the required enhanced measures and flagger notes to the schematic."
+      }
+    ]
+  },
+  {
+    "sheet_number": 12,
+    "visual_description": "Page 12 is an Index sheet showing the entire 2.5-mile route zoomed out. There is a massive cluster of overlapping orange signs, leader lines, text labels, and white boxes representing cross-street intersections crammed into the center of the page. Due to the zoomed-out scale of the index map, all the detailed annotations (which have a fixed pixel size) overlap each other, rendering the map completely illegible.",
+    "confirmed_issues": [
+      {
+        "issue": "Detailed annotations (signs, flaggers, cross-street labels, station ticks) are drawn on the zoomed-out Index sheet, causing massive overlapping and illegibility.",
+        "function": "drawGeometryPlanSheet",
+        "line_range": "1198-1250",
+        "fix": "Wrap the TCP devices and flagger annotations in an `if (!isIndexSheet)` block so they only render on the detailed geometry sheets."
+      },
+      {
+        "issue": "Station tick marks are drawn every 100 feet across a 13,000-foot route on a single index page, creating a solid bar of ink.",
+        "function": "drawGeometryPlanSheet",
+        "line_range": "1282-1301",
+        "fix": "Wrap the station tick rendering loop in an `if (!isIndexSheet)` block so they are suppressed on the overview index map."
+      },
+      {
+        "issue": "Cross-street labels and the main road label are rendered at fixed pixel sizes on the zoomed-out map, overlapping with grid tiles and each other in a massive cluster.",
+        "function": "drawGeometryPlanSheet",
+        "line_range": "1312-1386",
+        "fix": "Wrap both the main road label and the cross-street intersection label blocks in `if (!isIndexSheet)` to keep the index map clean and legible."
+      }
+    ],
+    "disputed_issues": []
+  },
+  {
+    "sheet_number": 13,
+    "visual_description": "The page displays the GEOMETRY PLAN for the first segment of the route. On the left, the primary approach warning signs are heavily clustered together, with all their leader lines pointing to the exact same black dot at the start of the alignment, causing overlapping and unreadable labels. Along the middle of the road, the blue cross-street label boxes are positioned directly on the road horizontally, their leader lines crisscross confusingly, and the text inside these boxes overlaps awkwardly with the sign diamonds.",
+    "confirmed_issues": [
+      {
+        "issue": "Primary and opposing approach signs are stacked at the same point because their stations are clamped to 0 or the end of the road. The work area calculation does not leave enough room for advance warning signs along the polyline.",
+        "function": "drawGeometryPlanSheet",
+        "line_range": "1324-1326",
+        "fix": "  const bufferFt = getBufferSpaceFt(ctx.speedMph);\n  const maxPriDist = ctx.blueprint.primary_approach.length > 0 ? Math.max(...ctx.blueprint.primary_approach.map(s => s.distance_ft)) : 0;\n  const maxOppDist = ctx.blueprint.opposing_approach.length > 0 ? Math.max(...ctx.blueprint.opposing_approach.map(s => s.distance_ft)) : 0;\n  const taperStartSta = maxPriDist;\n  const wzStartSta = taperStartSta + ctx.taperLengthFt + bufferFt;\n  const dnTaperEndSta = alignment.totalLengthFt - maxOppDist;\n  const wzEndSta = dnTaperEndSta - ctx.blueprint.downstream_taper.length_ft - bufferFt;"
+      },
+      {
+        "issue": "Primary signs map to a hardcoded offset based on taperLengthFt rather than the newly calculated taperStartSta.",
+        "function": "drawGeometryPlanSheet",
+        "line_range": "1361-1364",
+        "fix": "  const visiblePrimary = ctx.blueprint.primary_approach\n    .map(sign => ({ ...sign, sta: taperStartSta - sign.distance_ft }))\n    .filter(s => s.sta >= viewportStartSta && s.sta <= viewportEndSta)\n    .sort((a, b) => a.sta - b.sta);"
+      },
+      {
+        "issue": "Opposing signs map to a hardcoded offset based on the end of the alignment and are clamped, causing them to stack.",
+        "function": "drawGeometryPlanSheet",
+        "line_range": "1378-1381",
+        "fix": "  const visibleOpposing = ctx.blueprint.opposing_approach\n    .map(sign => ({ ...sign, sta: dnTaperEndSta + sign.distance_ft }))\n    .filter(s => s.sta >= viewportStartSta && s.sta <= viewportEndSta)\n    .sort((a, b) => a.sta - b.sta);"
+      },
+      {
+        "issue": "Flagger symbols use the hardcoded taper lengths instead of the newly calculated station locations.",
+        "function": "drawGeometryPlanSheet",
+        "line_range": "1395-1416",
+        "fix": "  if (['TA-10', 'TA-11'].includes(ctx.taCode)) {\n    const fSta1 = taperStartSta;\n    if (fSta1 >= viewportStartSta && fSta1 <= viewportEndSta) {\n      const fPt1 = alignment.getCoordinatesAtStation(fSta1);\n      const fPerp1 = (fPt1.heading + 90) * Math.PI / 180;\n      const f1x = fPt1.x + (halfW + 8) * Math.sin(fPerp1);\n      const f1y = fPt1.y + (halfW + 8) * Math.cos(fPerp1);\n      const fg1 = toPage(f1x, f1y);\n      doc.lineWidth(PLOT.TTC_DEVICE.lineWidth).strokeColor('#cc0000');\n      doc.circle(fg1.px, fg1.py, 3).fillAndStroke('#cc0000', '#660000');\n      doc.lineWidth(0.4).strokeColor('#333');\n      doc.moveTo(fg1.px, fg1.py).lineTo(fg1.px + 30, fg1.py - 12).stroke();\n      doc.fontSize(4).fillColor('#cc0000').text('FLAGGER', fg1.px + 15, fg1.py - 20, { lineBreak: false });\n    }\n\n    const dnSta = dnTaperEndSta;\n    if (dnSta >= viewportStartSta && dnSta <= viewportEndSta) {\n      const fPt2 = alignment.getCoordinatesAtStation(dnSta);\n      const fPerp2 = (fPt2.heading - 90) * Math.PI / 180;\n      const f2x = fPt2.x + (halfW + 8) * Math.sin(fPerp2);\n      const f2y = fPt2.y + (halfW + 8) * Math.cos(fPerp2);\n      const fg2 = toPage(f2x, f2y);\n      doc.lineWidth(PLOT.TTC_DEVICE.lineWidth).strokeColor('#cc0000');\n      doc.circle(fg2.px, fg2.py, 3).fillAndStroke('#cc0000', '#660000');\n      doc.lineWidth(0.4).strokeColor('#333');\n      doc.moveTo(fg2.px, fg2.py).lineTo(fg2.px - 30, fg2.py - 12).stroke();\n      doc.fontSize(4).fillColor('#cc0000').text('FLAGGER', fg2.px - 45, fg2.py - 20, { lineBreak: false });\n    }\n  }"
+      },
+      {
+        "issue": "Cross-street callout boxes are incorrectly pushed horizontally along the road instead of vertically away from the road, causing them to render on top of the road surface and tangling their leader lines.",
+        "function": "drawGeometryPlanSheet",
+        "line_range": "1449-1463",
+        "fix": "    const side = csIdx % 2 === 0 ? 1 : -1;\n    let lx = pg.px;\n    let ly = pg.py + side * csLeaderOffset;\n\n    // 2D Collision Resolution — push labels apart until no overlap\n    for (let attempts = 0; attempts < 6; attempts++) {\n      let collided = false;\n      for (const p of placedLabels) {\n        if (Math.abs(lx - p.px) < 90 && Math.abs(ly - p.py) < 40) {\n          ly = p.py + (side === 1 ? 42 : -42);\n          collided = true;\n          break;\n        }\n      }\n      if (!collided) break;\n    }"
+      },
+      {
+        "issue": "The sign code text inside the cross-street callout box is positioned exactly at the bottom tip of the sign diamond, creating a messy overlap.",
+        "function": "drawGeometryPlanSheet",
+        "line_range": "1468-1476",
+        "fix": "    // Unified white callout box (name + sign diamond + code)\n    const boxW = 86, boxH = 38;\n    const boxLeft = lx - boxW / 2;\n    const boxTop = ly - boxH / 2;\n    doc.lineWidth(0.8).rect(boxLeft, boxTop, boxW, boxH).fillAndStroke('white', 'black');\n\n    // Street name\n    const nameText = cs.name.length > 18 ? cs.name.substring(0, 16).toUpperCase() + '...' : cs.name.toUpperCase();\n    doc.font('Helvetica-Bold').fontSize(6).fillColor('#0066cc');\n    doc.text(nameText, boxLeft + 2, boxTop + 4, { width: boxW - 4, align: 'center', lineBreak: false });\n\n    // Sign diamond + code inside the box\n    const isRoundabout = cs.geometry?.type === 'roundabout';\n    const signCode = isRoundabout ? 'W2-6' : 'W20-1';\n    doc.save().translate(lx - (isRoundabout ? 15 : 0), boxTop + 18).rotate(45);\n    doc.rect(-5, -5, 10, 10).fillAndStroke('#FF8C00', 'black');\n    doc.restore();\n    doc.font('Helvetica-Bold').fontSize(5).fillColor('black');\n    doc.text(signCode, boxLeft + 2, boxTop + 28, { width: boxW - 4, align: 'center', lineBreak: false });"
+      }
+    ],
+    "disputed_issues": []
+  },
+  {
+    "sheet_number": 14,
+    "visual_description": "On page 14 (Geometry Plan), the main road has a continuous red work zone fill, but there are several clear visual artifacts. First, at the far right edge of the page, the text 'WORK AREA' is drawn with a white background mask that cuts a weird gap right through the road line. Second, at the 'EMMETT HWY' and 'S HAMLIN LN' intersections, the grey perpendicular cross-street lines do not actually connect to the main road; they start slightly outside the main road edge, leaving a noticeable 2-pixel gap. Finally, the black leader lines pointing to the cross-street sign boxes anchor directly to the center of the main road, slicing right through the red work zone instead of stopping at the edge of the road.",
+    "confirmed_issues": [
+      {
+        "issue": "The 'WORK AREA' label is placed at the global midpoint of the entire route rather than the midpoint of the visible viewport, causing it to fall on the edge of the page and create a weird white gap masking the road.",
+        "function": "drawGeometryPlanSheet",
+        "line_range": "1228-1238",
+        "fix": "      // \"WORK AREA\" label centered in the visible zone for this sheet\n      const visibleWzStart = Math.max(wzStartSta, viewportStartSta);\n      const visibleWzEnd = Math.min(wzEndSta, viewportEndSta);\n      if (visibleWzEnd > visibleWzStart) {\n        const wzMidSta = (visibleWzStart + visibleWzEnd) / 2;\n        const wzMidPt = alignment.getCoordinatesAtStation(wzMidSta);\n        const wzMidPg = toPage(wzMidPt.x, wzMidPt.y);\n        doc.save();\n        doc.translate(wzMidPg.px, wzMidPg.py);\n        doc.rotate(-(wzMidPt.heading - 90)); // Rotate to follow road\n        doc.rect(-28, -5, 56, 10).fill('white');\n        doc.font('Helvetica-Bold').fontSize(6).fillColor('#cc0000');\n        doc.text('WORK AREA', -26, -3, { width: 52, align: 'center', lineBreak: false });\n        doc.font('Helvetica');\n        doc.restore();\n      }"
+      },
+      {
+        "issue": "Cross-street line stubs leave a gap because they are programmed to start 2px outside the main road edge instead of connecting flush with the pavement.",
+        "function": "drawGeometryPlanSheet",
+        "line_range": "1163-1165",
+        "fix": "    if (drawNorth) {\n      // North/East leg — perpendicular from main road edge outward\n      const startR = halfW; // Start exactly at main road edge\n      const endR = halfW + stubLenFt;"
+      },
+      {
+        "issue": "South-facing cross-street line stubs also leave a 2px gap because they start outside the main road edge.",
+        "function": "drawGeometryPlanSheet",
+        "line_range": "1182-1184",
+        "fix": "    if (drawSouth) {\n      // South/West leg — opposite direction\n      const startR = halfW; // Start exactly at main road edge\n      const endR = halfW + stubLenFt;"
+      },
+      {
+        "issue": "Intersection leader lines point to the exact centerline of the main road, visually cutting through the work zone area.",
+        "function": "drawGeometryPlanSheet",
+        "line_range": "1386-1389",
+        "fix": "    // Thick leader line from road edge to callout box\n    const edgePerpRad = (pt.heading + (side === 1 ? -90 : 90)) * Math.PI / 180;\n    const edgePg = toPage(pt.x + halfW * Math.sin(edgePerpRad), pt.y + halfW * Math.cos(edgePerpRad));\n    \n    doc.lineWidth(1.2).strokeColor('#000');\n    doc.moveTo(edgePg.px, edgePg.py).lineTo(lx, ly).stroke();\n    doc.circle(edgePg.px, edgePg.py, 2).fillAndStroke('#000', '#000');"
+      }
+    ],
+    "disputed_issues": []
+  },
+  {
+    "sheet_number": 15,
+    "visual_description": "The page displays the final segment of the route on the geometry plan. Multiple warning signs (W20-1, W20-4, W20-7a) and a FLAGGER symbol are clustered and overlapping at the exact same station at the road edge. Additionally, the black road edge lines and dashed centerline abruptly terminate and vanish midway across the page, leaving a gap where only the grey pavement fill is visible.",
+    "confirmed_issues": [
+      {
+        "issue": "Signs are all showing being at the same point",
+        "function": "drawGeometryPlanSheet",
+        "line_range": "visiblePrimary and visibleOpposing filters",
+        "fix": "Remove the hard clamping `Math.max(0, ...)` and `Math.min(alignment.totalLengthFt, ...)` in the station calculations for `visiblePrimary` and `visibleOpposing`. \n\n```typescript\n  // Primary approach signs\n  const visiblePrimary = ctx.blueprint.primary_approach\n    .map(sign => ({ ...sign, sta: ctx.taperLengthFt - sign.distance_ft }))\n    .filter(s => s.sta >= viewportStartSta && s.sta <= viewportEndSta)\n    .sort((a, b) => a.sta - b.sta);\n\n  // Opposing approach signs\n  const visibleOpposing = ctx.blueprint.opposing_approach\n    .map(sign => ({ ...sign, sta: alignment.totalLengthFt - ctx.blueprint.downstream_taper.length_ft + sign.distance_ft }))\n    .filter(s => s.sta >= viewportStartSta && s.sta <= viewportEndSta)\n    .sort((a, b) => a.sta - b.sta);\n```"
+      },
+      {
+        "issue": "weird gaps in the road.",
+        "function": "drawGeometryPlanSheet",
+        "line_range": "toPage arrow function",
+        "fix": "The missing lines are caused by PDFKit dropping `doc.stroke()` paths if any point in the array exceeds the maximum coordinate limits (which happens when distant route endpoints are zoomed in). Add proportional clamping to `toPage` to keep coordinates within safe bounds while preserving line angles.\n\n```typescript\n  const toPage = (ux: number, uy: number) => {\n    const dx = ux - midPt.x;\n    const dy = uy - midPt.y;\n    const rx = dx * Math.cos(rotRad) - dy * Math.sin(rotRad);\n    const ry = dx * Math.sin(rotRad) + dy * Math.cos(rotRad);\n    let px = pageCx + rx / scaleFtPerPt;\n    let py = pageCy - ry / scaleFtPerPt;\n    \n    // Proportional clamping to prevent PDF rendering glitches from massive coordinates\n    const maxBound = 15000;\n    const cx = px - pageCx;\n    const cy = py - pageCy;\n    const dist = Math.hypot(cx, cy);\n    if (dist > maxBound) {\n      px = pageCx + (cx / dist) * maxBound;\n      py = pageCy + (cy / dist) * maxBound;\n    }\n    return { px, py };\n  };\n```"
+      }
+    ],
+    "disputed_issues": []
+  }
+]
