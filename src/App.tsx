@@ -7,6 +7,7 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { GoogleGenAI, ThinkingLevel, Type } from '@google/genai';
 import mutcdRules from './lib/mutcd_rules.json';
+import { getConfig } from './config';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -76,7 +77,8 @@ export default function App() {
         if (!speedLimitFound) {
           // Roads API speed limits require premium tier — use Gemini Flash with coordinates
           try {
-            const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || (import.meta as any).env.VITE_GEMINI_API_KEY });
+            const cfg = await getConfig();
+            const ai = new GoogleGenAI({ apiKey: cfg.geminiApiKey });
             const response = await ai.models.generateContent({
               model: 'gemini-3-flash-preview',
               contents: `What is the posted speed limit on the road nearest to GPS ${coords.lat}, ${coords.lng} in Idaho? Idaho state highways are typically 55-65 MPH, US highways 55-65 MPH, interstates 65-80 MPH, local roads 25-45 MPH. Return ONLY the integer MPH.`,
@@ -181,8 +183,8 @@ export default function App() {
     setLoadingState(1);
 
     try {
-      const apiKey = process.env.GEMINI_API_KEY || (import.meta as any).env.VITE_GEMINI_API_KEY;
-      const ai = new GoogleGenAI({ apiKey });
+      const cfg = await getConfig();
+      const ai = new GoogleGenAI({ apiKey: cfg.geminiApiKey });
 
       // ---------------------------------------------------------
       // PILLAR 1: OMNISCIENT SENSORY PAYLOAD (PROMISE.ALL)

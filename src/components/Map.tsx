@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { APIProvider, Map as GoogleMap, AdvancedMarker, Pin, useMap } from '@vis.gl/react-google-maps';
 import { Loader2 } from 'lucide-react';
+import { getConfig } from '../config';
 
 // Monkey-patch WebGL context creation so canvas.toDataURL() works on Google Maps.
 // Must run before any canvas is created — preserveDrawingBuffer prevents the GPU
@@ -27,12 +28,8 @@ interface MapProps {
   captureRef?: React.MutableRefObject<(() => string | null) | null>;
 }
 
-const API_KEY =
-  process.env.GOOGLE_MAPS_PLATFORM_KEY ||
-  (import.meta as any).env?.VITE_GOOGLE_MAPS_PLATFORM_KEY ||
-  (globalThis as any).GOOGLE_MAPS_PLATFORM_KEY ||
-  '';
-const hasValidKey = Boolean(API_KEY) && API_KEY !== 'YOUR_API_KEY';
+// API key loaded async from backend /api/config
+let _cachedMapsKey = process.env.GOOGLE_MAPS_PLATFORM_KEY || (import.meta as any).env?.VITE_GOOGLE_MAPS_PLATFORM_KEY || '';
 
 function PolylineComponent({ startCoords, endCoords }: { startCoords: any, endCoords: any }) {
   const map = useMap();
@@ -92,26 +89,40 @@ function MapCaptureWiring({ captureRef }: { captureRef?: React.MutableRefObject<
 }
 
 export default function Map({ startCoords, endCoords, onPinDrop, captureRef }: MapProps) {
-  if (!hasValidKey) {
+  const [mapsKey, setMapsKey] = useState(_cachedMapsKey);
+  const [loading, setLoading] = useState(!_cachedMapsKey);
+
+  useEffect(() => {
+    if (!_cachedMapsKey) {
+      getConfig().then(cfg => {
+        _cachedMapsKey = cfg.mapsApiKey;
+        setMapsKey(cfg.mapsApiKey);
+        setLoading(false);
+      });
+    }
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="h-full w-full flex items-center justify-center bg-zinc-900 border border-white/10 rounded-xl">
+        <Loader2 className="w-8 h-8 animate-spin text-emerald-400" />
+        <span className="ml-2 text-zinc-400">Loading map...</span>
+      </div>
+    );
+  }
+
+  if (!mapsKey) {
     return (
       <div className="h-full w-full flex flex-col items-center justify-center bg-zinc-900 border border-white/10 rounded-xl p-6 text-center">
         <h2 className="text-xl font-bold text-white mb-4">Google Maps API Key Required</h2>
-        <p className="text-zinc-400 mb-2"><strong>Step 1:</strong> <a href="https://console.cloud.google.com/google/maps-apis/credentials" target="_blank" rel="noopener" className="text-emerald-400 hover:underline">Get an API Key</a></p>
-        <p className="text-zinc-400 mb-4"><strong>Step 2:</strong> Add your key as a secret in AI Studio:</p>
-        <ul className="text-left text-zinc-400 space-y-2 mb-4 list-disc pl-6">
-          <li>Open <strong>Settings</strong> (⚙️ gear icon, <strong>top-right corner</strong>)</li>
-          <li>Select <strong>Secrets</strong></li>
-          <li>Type <code>GOOGLE_MAPS_PLATFORM_KEY</code> as the secret name, press <strong>Enter</strong></li>
-          <li>Paste your API key as the value, press <strong>Enter</strong></li>
-        </ul>
-        <p className="text-zinc-500 text-sm">The app rebuilds automatically after you add the secret.</p>
+        <p className="text-zinc-400">Contact your administrator for API access.</p>
       </div>
     );
   }
 
   return (
     <div className="h-full w-full rounded-xl overflow-hidden shadow-2xl border border-white/10 relative">
-      <APIProvider apiKey={API_KEY} version="weekly">
+      <APIProvider apiKey={mapsKey} version="weekly">
         <GoogleMap
           defaultCenter={startCoords || defaultCenter}
           defaultZoom={startCoords ? 14 : 6}

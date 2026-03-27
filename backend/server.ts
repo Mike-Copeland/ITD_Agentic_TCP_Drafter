@@ -1140,6 +1140,34 @@ app.post('/api/generate-plan', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
+// Config endpoint — serves API keys to the frontend at runtime
+// (keys stored securely in Cloud Run env vars, not baked into frontend bundle)
+// ---------------------------------------------------------------------------
+app.get('/api/config', (_req, res) => {
+  res.json({
+    geminiApiKey: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || '',
+    mapsApiKey: process.env.GOOGLE_MAPS_PLATFORM_KEY || '',
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Serve frontend static files (production: Vite build output)
+// ---------------------------------------------------------------------------
+const frontendDist = path.join(__dirname, '..', 'frontend-dist');
+if (fs.existsSync(frontendDist)) {
+  app.use(express.static(frontendDist));
+  // SPA fallback — serve index.html for all non-API routes (Express 5 compatible)
+  app.use((req, res, next) => {
+    if (!req.path.startsWith('/api') && req.method === 'GET') {
+      res.sendFile(path.join(frontendDist, 'index.html'));
+    } else {
+      next();
+    }
+  });
+  console.log(`[ITD Backend] Serving frontend from ${frontendDist}`);
+}
+
+// ---------------------------------------------------------------------------
 // Start server
 // ---------------------------------------------------------------------------
 app.listen(PORT, '0.0.0.0', () => {

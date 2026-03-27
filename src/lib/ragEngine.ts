@@ -19,8 +19,9 @@ export async function retrieveMutcdRules(operationType: string, speedLimit: numb
         const mutcdData = await response.json();
 
         // 2. Embed the query
-        const apiKey = process.env.GEMINI_API_KEY || (import.meta as any).env.VITE_GEMINI_API_KEY;
-        const ai = new GoogleGenAI({ apiKey });
+        const { getConfig } = await import('../config');
+        const cfg = await getConfig();
+        const ai = new GoogleGenAI({ apiKey: cfg.geminiApiKey });
         const searchQuery = `Temporary Traffic Control layout rules and MUTCD Typical Application (TA) for ${operationType} on a highway with a speed limit of ${speedLimit} mph. Critical Site Context: ${siteContext}`;
 
         const embedResponse = await ai.models.embedContent({
